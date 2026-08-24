@@ -51,6 +51,7 @@ from __future__ import annotations
 import argparse
 import csv
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -103,9 +104,17 @@ def main():
                    help="a motion contributes to a joint's average only if its "
                         "fit for that joint reached this R²")
     p.add_argument("--agg", choices=["mean", "median"], default="mean")
+    p.add_argument("--motions", default=None,
+                   help="regex restricting which motions are aggregated, e.g. "
+                        "'^move-ego' for locomotion only. Applied BEFORE the "
+                        "--z agreement cut, so the outlier rule then judges "
+                        "each motion against the subset rather than all 54")
     p.add_argument("--symmetry", choices=["pair", "none"], default="pair",
                    help="'pair' gives each mirrored L/R actuator pair one shared "
                         "k; 'none' keeps the raw per-actuator average")
+    p.add_argument("--joint-dynamics", action="store_true",
+                   help="also scale each joint's armature and damping by its k "
+                        "(passive stiffness is never scaled)")
     args = p.parse_args()
 
     mdir = Path(args.matrix)
@@ -114,6 +123,18 @@ def main():
     corr_motions, _, C = read_matrix(mdir / "_corr.csv")
     if joints != joints_r or motions != motions_r or corr_motions != motions:
         raise SystemExit(f"{mdir} matrices disagree on their rows/columns")
+
+    if args.motions:
+        sel = [i for i, m in enumerate(motions) if re.search(args.motions, m)]
+        if not sel:
+            raise SystemExit(f"--motions {args.motions!r} matched none of the "
+                             f"{len(motions)} motions")
+        # C is motion x motion, so it has to be subset on BOTH axes or the
+        # agreement cut would score each kept motion against the excluded ones.
+        motions = [motions[i] for i in sel]
+        K, R2, C = K[sel], R2[sel], C[np.ix_(sel, sel)]
+        print(f"--motions {args.motions!r}: {len(motions)} of "
+              f"{len(corr_motions)} motions")
 
     keep, mean_c, med, mad = (keep_mask(C, args.z) if args.z > 0
                               else (np.ones(len(C), bool), None, None, None))
@@ -179,7 +200,10 @@ def main():
         for n in notes:
             print(f"    {n}")
 
-    agg_csv = mdir / "_ratios_aggregate.csv"
+    # A filtered run describes a different subset, so it must not overwrite the
+    # all-motion table that the unfiltered run writes.
+    suffix = ("_" + re.sub(r"[^0-9A-Za-z]+", "", args.motions)) if args.motions else ""
+    agg_csv = mdir / f"_ratios_aggregate{suffix}.csv"
     with open(agg_csv, "w", newline="") as f:
         w = csv.writer(f)
         w.writerow(["actuator", "k_aggregate", "n_motions", "std_across_motions",
@@ -192,7 +216,8 @@ def main():
 
     print()
     write_scaled_xml(args.src, args.out, kmap,
-                     check_symmetry=(args.symmetry == "pair"))
+                     check_symmetry=(args.symmetry == "pair"),
+                     joint_dynamics=args.joint_dynamics)
 
     # How much the motion choice actually mattered: the single-clip k this
     # replaces vs the aggregate, per joint. Symmetrised the same way, so the

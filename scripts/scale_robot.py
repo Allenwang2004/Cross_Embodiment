@@ -30,6 +30,26 @@ that entirely and copy robot.xml's actuators verbatim -- e.g. when the point
 of the experiment is to isolate "can this body shape alone (same raw
 actuator strength as the adult) perform the motion" from actuator retuning.
 
+Joint armature/damping/stiffness are NOT touched here; they are inherited
+from robot.xml verbatim, so a generated body carries the adult's joint
+coefficients until something downstream rewrites them. That job belongs to
+scripts/torque_scale_actuators.py --joint-dynamics, which sets all three from
+the measured isometric law (armature x Ir, damping x sqrt(k*Ir), stiffness x
+k) against the reference body.
+
+This script used to scale them by length^3 * girth^2, the joint's own segment
+inertia. Two things were wrong with that. A joint carries its whole distal
+SUBTREE, not just its own segment, so wherever the subtree crosses a body
+group the factor is simply the wrong one -- the Neck joints, grouped under
+"torso", carry the head, which the child preset grows while shrinking the
+torso, and the factor came out 5.7x off. And it compounded: applying anything
+downstream multiplied two unrelated factors together. Removing it costs
+nothing downstream: that law writes absolute values read off the reference
+body, and the only thing it reads from a generated body is the subtree
+inertia, recovered as M[dof,dof] - armature -- so whatever armature was
+written here cancels out, leaving the result invariant to about 1e-14
+relative (float rounding on the cancellation, verified).
+
 Usage (from project root):
     uv run scripts/scale_robot.py --preset adult
     uv run scripts/scale_robot.py --preset child
@@ -84,22 +104,6 @@ def _scale_floats(text, factor):
     return " ".join(f"{float(x) * factor:.6g}" for x in text.split())
 
 
-def _local_scale(params, group):
-    """Scale factor for a joint's own local rotational inertia after
-    scaling: mass of a limb segment scales ~ length * girth^2 (volume,
-    density held constant -- see the per-geom `density=` attrs in robot.xml,
-    no explicit <inertial> override, so MuJoCo derives mass/inertia straight
-    from geom size), and inertia = mass * radius^2 with radius scaling ~
-    length, so local inertia scales ~ length^3 * girth^2. Used for
-    `armature`/joint `damping`/`stiffness` -- these represent the joint's
-    OWN passive/rotor dynamics, not the load it's supporting (see
-    compute_joint_loads for that), so they should track the joint's own
-    segment shrinking, not what it's holding up."""
-    length_scale = params[f"{group}_scale"]
-    girth_scale = params[f"{group}_girth"]
-    return (length_scale ** 3) * (girth_scale ** 2)
-
-
 def compute_joint_loads(xml_string, leg_joint_names):
     """Per-joint 'load' = mass supported * lever arm from that mass's center
     of mass to the joint's anchor point -- an approximation of the static
@@ -147,21 +151,6 @@ def compute_joint_loads(xml_string, leg_joint_names):
     return loads
 
 
-_DEFAULT_JOINT_STIFFNESS = {None: 2.0, "stiff_medium": 10.0, "stiff_medium_higher": 50.0, "stiff_high": 100.0}
-_DEFAULT_JOINT_ARMATURE = 0.01
-
-
-def _resolve_stiffness(joint):
-    """Effective stiffness for a <joint>: explicit attr > class lookup >
-    top-level <default><joint> value. robot.xml sets stiffness either
-    directly on the joint, via class="stiff_medium/_higher/_high", or leaves
-    it to the top-level default (2.0) -- resolve whichever applies so it can
-    be scaled and written back explicitly."""
-    if joint.get("stiffness") is not None:
-        return float(joint.get("stiffness"))
-    return _DEFAULT_JOINT_STIFFNESS[joint.get("class")]
-
-
 def apply_scale(tree, params, source_xml=SOURCE_XML, scale_actuators=True):
     root = tree.getroot()
 
@@ -177,9 +166,10 @@ def apply_scale(tree, params, source_xml=SOURCE_XML, scale_actuators=True):
 
         for joint in body.findall("joint"):
             # Every joint in robot.xml is at pos="0 0 0" (relative to its
-            # body's own origin) -- load-bearing for the per-joint load/
-            # inertia scaling below, which only rescales body/geom pos, not
-            # joint pos. Fail loudly if a future skeleton edit breaks this.
+            # body's own origin) -- load-bearing for the per-joint actuator
+            # load scaling below, which reads each joint's anchor and only
+            # rescales body/geom pos, never joint pos. Fail loudly if a
+            # future skeleton edit breaks this.
             jpos = joint.get("pos")
             assert jpos is None or tuple(float(v) for v in jpos.split()) == (0.0, 0.0, 0.0), (
                 f"joint {joint.get('name')!r} has non-zero pos={jpos!r} -- "
@@ -222,28 +212,6 @@ def apply_scale(tree, params, source_xml=SOURCE_XML, scale_actuators=True):
             joint_to_body_name[joint.get("name")] = body_name
     leg_joint_names = {name for name, body_name in joint_to_body_name.items()
                         if GROUP_OF_BODY.get(body_name) == "leg"}
-
-    # Joint dynamics (armature/damping/stiffness): each joint's OWN local
-    # inertia scale (length^3 * girth^2 of its own body group) -- these
-    # represent the joint's passive/rotor response, not the load it
-    # supports, so they track the joint's own segment shrinking. Preserves
-    # natural frequency sqrt(stiffness/inertia) and damping ratio
-    # damping/(2*sqrt(stiffness*inertia)) as inertia scales, instead of the
-    # joint becoming disproportionately stiff/underdamped as it shrinks.
-    # armature has no per-joint override in robot.xml (only the top-level
-    # <default><joint armature="0.01">), so this adds an explicit override.
-    for body in root.iter("body"):
-        group = GROUP_OF_BODY.get(body.get("name"))
-        if group is None:
-            continue
-        local_scale = _local_scale(params, group)
-        for joint in body.findall("joint"):
-            stiffness = _resolve_stiffness(joint) * local_scale
-            joint.set("stiffness", f"{stiffness:.6g}")
-            if joint.get("damping") is not None:
-                joint.set("damping", f"{float(joint.get('damping')) * local_scale:.6g}")
-            armature = float(joint.get("armature", _DEFAULT_JOINT_ARMATURE)) * local_scale
-            joint.set("armature", f"{armature:.6g}")
 
     if not scale_actuators:
         return

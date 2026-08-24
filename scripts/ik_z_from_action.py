@@ -39,6 +39,10 @@ Three things that must be done exactly this way
   * project_z inside the graph, not after each optimiser step. Projecting
     afterwards lets the iterate drift off the sphere and be yanked back, so the
     step the optimiser took is not the step it is scored on.
+  * the env must be built on the body the qpos belongs to (--xml). proprio is
+    limb lengths and masses as much as joint angles, so reading a child-retargeted
+    clip on the default adult body moves every latent: per-frame cosine against
+    the same clip inferred on the child body is 0.877, not 1.0.
   * obs must carry real velocities. 144 of the 358 features are
     local_body_vel + local_body_ang_vel, and zeroing them does not read as
     "no information" -- the obs BatchNorm turns them into a fixed negative
@@ -190,6 +194,13 @@ def main():
                    help="flag clips whose final MSE stays above this: at "
                         "--steps 2000 a healthy clip reaches ~1e-6..1e-7, so a "
                         "higher value means that clip stopped converging")
+    p.add_argument("--xml", default=None,
+                   help="skeleton the qpos in the record is expressed on. The obs "
+                        "come off THIS body, so a clip retargeted onto the child "
+                        "needs the child xml -- leaving it default silently reads "
+                        "child joint angles on adult limb lengths. Default is "
+                        "humenv's own body, which is bit-identical to "
+                        "assets/robots/adult/robot.xml (verified on proprio)")
     p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     p.add_argument("--model", default="facebook/metamotivo-M-1")
     p.add_argument("--save-z", default=None,
@@ -200,7 +211,8 @@ def main():
     from humenv import make_humenv
     from metamotivo.fb_cpr.huggingface import FBcprModel
 
-    env, _ = make_humenv(num_envs=1)
+    env, _ = (make_humenv(num_envs=1) if args.xml is None else
+              make_humenv(num_envs=1, task=None, xml=args.xml, state_init="Default"))
     model = FBcprModel.from_pretrained(args.model).to(args.device)
 
     paths = ([Path(args.clip)] if args.clip

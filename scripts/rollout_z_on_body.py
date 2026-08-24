@@ -100,6 +100,15 @@ OBS_SEGMENTS = {
     "body_vel":     (214, 286),  # metre / second
     "body_ang_vel": (286, 358),  # radian / second
 }
+ROOT = Path(__file__).resolve().parent.parent
+
+
+def _abs(path):
+    """Relative paths mean project-root-relative, so the script runs from anywhere."""
+    q = Path(path)
+    return q if q.is_absolute() else ROOT / q
+
+
 SCALED_BY_PARTS = {
     "pose":   ("root_h", "body_pos"),
     "length": ("root_h", "body_pos", "body_vel"),
@@ -183,13 +192,181 @@ def render_reference(xml_path, qpos_seq, width, height, camera):
     return frames
 
 
+def build_jobs(args):
+    """(z_path, ref_path, out_path) per clip, for either --z or --z-dir."""
+    if args.z:
+        if not args.out:
+            raise SystemExit("--z needs --out")
+        if args.reference_dir:
+            raise SystemExit("--reference-dir is for --z-dir; use --reference with --z")
+        return [(Path(args.z),
+                 Path(args.reference) if args.reference else None,
+                 Path(args.out))]
+
+    if not args.out_dir:
+        raise SystemExit("--z-dir needs --out-dir")
+    z_dir = _abs(args.z_dir)
+    pool = sorted(z_dir.rglob("*.npy"))
+    if not pool:
+        raise SystemExit(f"no .npy under {z_dir}")
+
+    ref_dir = _abs(args.reference_dir) if args.reference_dir else None
+    if ref_dir is not None:
+        # Sample only from clips that HAVE a reference, so --n really is the
+        # number of side-by-side videos produced rather than an upper bound.
+        keep = [p for p in pool
+                if (ref_dir / p.relative_to(z_dir)).with_suffix(".npz").exists()]
+        if not keep:
+            raise SystemExit(f"none of the {len(pool)} clips under {z_dir} have a "
+                             f"match under {ref_dir}")
+        if len(keep) < len(pool):
+            print(f"note: {len(pool) - len(keep)} of {len(pool)} clips have no "
+                  f"reference under {ref_dir} and are not sampled")
+        pool = keep
+
+    n = len(pool) if not args.n else min(args.n, len(pool))
+    idx = np.random.default_rng(args.seed).choice(len(pool), size=n, replace=False)
+    picked = [pool[i] for i in sorted(idx)]
+
+    out_root = Path(args.out_dir)
+    if len(out_root.parts) == 1 and not out_root.is_absolute():
+        out_root = ROOT / "outputs" / "rollout_z_on_body" / out_root
+    elif not out_root.is_absolute():
+        out_root = ROOT / out_root
+
+    jobs = []
+    for p in picked:
+        rel = p.relative_to(z_dir)
+        flat = rel.with_suffix("").as_posix().replace("/", "__")
+        ref = (ref_dir / rel).with_suffix(".npz") if ref_dir is not None else None
+        jobs.append((p, ref, out_root / f"{flat}.mp4"))
+    print(f"{len(picked)} of {len(pool)} clips sampled from {z_dir} "
+          f"(seed {args.seed}) -> {out_root}")
+    return jobs
+
+
+def rollout_one(model, env, env_fps, obs_mul, args, z_path, ref_path, out_path):
+    """One z file -> one mp4 + one .npz. Returns a summary row.
+
+    Split out of main() so a batch can reuse ONE model and ONE env: loading
+    FBcprModel and building humenv's render context cost more than a 300-step
+    rollout does, and paying them per clip is what made ten clips slow.
+    """
+    z_np = np.load(z_path)
+    if z_np.ndim == 1:
+        z_np = z_np[None]
+    if args.z_reduce == "mean":
+        # renormalize to the sphere of radius sqrt(d) the actor was trained on
+        z_np = z_np.mean(axis=0, keepdims=True)
+        z_np = z_np / np.linalg.norm(z_np) * np.sqrt(z_np.shape[1])
+    elif args.z_reduce == "first":
+        z_np = z_np[:1]
+    elif args.z_reduce == "last":
+        z_np = z_np[-1:]
+    z_all = torch.tensor(z_np, dtype=torch.float32, device=args.device)
+    steps = args.steps or (z_all.shape[0] if z_all.shape[0] > 1 else 300)
+    print(f"z {tuple(z_all.shape)} (|z|={np.linalg.norm(z_np, axis=1).mean():.2f}), "
+          f"rollout {steps} steps on {args.xml}")
+
+    torch.manual_seed(args.seed)
+    obs, _ = env.reset(seed=args.seed)
+    ref_qpos = np.load(ref_path)["qpos"] if ref_path is not None else None
+    if args.init_from_reference:
+        if ref_qpos is None:
+            raise SystemExit("--init-from-reference needs --reference (or "
+                             "--reference-dir, which must contain this clip)")
+        env.unwrapped.set_physics(qpos=ref_qpos[0], qvel=np.zeros(env.unwrapped.model.nv))
+        obs = env.unwrapped.get_obs()
+
+    frames, qpos_hist, qvel_hist, action_hist = [], [], [], []
+    diverged_at = None
+    for t in range(steps):
+        z_t = z_all[min(t, z_all.shape[0] - 1)].unsqueeze(0)
+        # Only the actor's view is rescaled. env.step still receives the real
+        # physics, and qpos/qvel are recorded unscaled, so the saved rollout
+        # stays comparable with runs that did not use --obs-scale.
+        proprio = obs["proprio"] if obs_mul is None else obs["proprio"] * obs_mul
+        obs_t = torch.tensor(proprio, dtype=torch.float32, device=args.device).unsqueeze(0)
+        with torch.no_grad():
+            action = model.act(obs_t, z_t, mean=True)
+        action_np = action.cpu().numpy().ravel()
+        try:
+            obs, _, terminated, truncated, info = env.step(action_np)
+        except ValueError as e:
+            # humenv raises on mjWARN_BADQACC. A body the frozen adult actor
+            # cannot stabilise diverges rather than merely falling over, and
+            # that IS the result -- keep the frames up to that point instead
+            # of losing the whole run.
+            print(f"  DIVERGED at t={t} ({t / env_fps:.2f}s): {e}")
+            diverged_at = t
+            break
+        action_hist.append(action_np.copy())
+        qpos_hist.append(info["qpos"].copy())
+        qvel_hist.append(info["qvel"].copy())
+        frames.append(env.render())
+        if terminated or truncated:
+            print(f"  episode ended at t={t}")
+            break
+
+    if not qpos_hist:
+        # Diverged on step 0: there is nothing to write, and in a batch this
+        # must not take the other clips down with it.
+        print(f"  no frames produced, skipping {out_path.name}")
+        return {"clip": out_path.stem, "frames": 0, "diverged_at": diverged_at,
+                "pelvis_z_end": float("nan"), "xy_disp": float("nan")}
+
+    qpos = np.stack(qpos_hist)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if ref_qpos is not None:
+        ref_frames = render_reference(args.xml, ref_qpos, args.width, args.height, args.camera)
+        n = min(len(ref_frames), len(frames))
+        video = [np.concatenate([ref_frames[i], frames[i]], axis=1) for i in range(n)]
+    else:
+        video = frames
+    imageio.mimsave(out_path, video, fps=args.fps)
+
+    np.savez(out_path.with_suffix(".npz"), qpos=qpos, qvel=np.stack(qvel_hist),
+             action=np.stack(action_hist).astype(np.float32), fps=args.fps)
+
+    xy = float(np.linalg.norm(qpos[-1, :2] - qpos[0, :2]))
+    print(f"wrote {len(video)} frames -> {out_path}"
+          + (f" (physics diverged at t={diverged_at})" if diverged_at is not None else ""))
+    print(f"wrote rollout state -> {out_path.with_suffix('.npz')}")
+    print(f"pelvis z: start {qpos[0, 2]:.3f} end {qpos[-1, 2]:.3f} "
+          f"min {qpos[:, 2].min():.3f} | xy displacement {xy:.3f} m")
+    if ref_qpos is not None:
+        n = min(len(ref_qpos), len(qpos))
+        print(f"reference xy displacement "
+              f"{np.linalg.norm(ref_qpos[n - 1, :2] - ref_qpos[0, :2]):.3f} m")
+    return {"clip": out_path.stem, "frames": len(video), "diverged_at": diverged_at,
+            "pelvis_z_end": float(qpos[-1, 2]), "xy_disp": xy}
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--z", required=True, help="(T,256) or (1,256) .npy context vector(s)")
+    src = parser.add_mutually_exclusive_group(required=True)
+    src.add_argument("--z", help="(T,256) or (1,256) .npy context vector(s)")
+    src.add_argument("--z-dir",
+                     help="a TREE of .npy z files instead of one: --n of them are "
+                          "sampled at random (--seed picks which) and rolled out in "
+                          "one process, reusing a single model and env")
+    parser.add_argument("--n", type=int, default=10,
+                        help="--z-dir: how many clips to sample. 0 = every clip")
     parser.add_argument("--xml", required=True, help="MJCF of the body to roll out on")
-    parser.add_argument("--out", required=True, help="output .mp4 path")
+    parser.add_argument("--out", default=None, help="--z: output .mp4 path")
+    parser.add_argument("--out-dir", default=None,
+                        help="--z-dir: where the mp4s go. A bare name with no '/' is "
+                             "placed under outputs/rollout_z_on_body/, so "
+                             "`--out-dir child_ik` writes there. Each clip is named "
+                             "after its path under --z-dir with '/' turned into '__', "
+                             "so clips from different tasks cannot collide")
     parser.add_argument("--reference", default=None,
                         help="optional qpos .npz to play back side by side on --xml")
+    parser.add_argument("--reference-dir", default=None,
+                        help="--z-dir: reference tree mirroring --z-dir's layout. Each "
+                             "clip pairs with <reference-dir>/<same relative path>.npz, "
+                             "and clips with no reference there are not sampled")
     parser.add_argument("--init-from-reference", action="store_true",
                         help="start the physics from the reference's frame 0 (qvel=0) instead "
                              "of humenv's default standing reset")
@@ -215,7 +392,9 @@ def main():
                         help="the body whose size the actor was trained on")
     parser.add_argument("--model", default="facebook/metamotivo-M-1")
     parser.add_argument("--device", default="cpu")
-    parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--seed", type=int, default=0,
+                        help="seeds the env and torch, and with --z-dir also picks "
+                             "WHICH clips are sampled, so a run is reproducible")
     parser.add_argument("--torch-threads", type=int, default=1,
                         help="thread count changes float32 reduction order and so changes the "
                              "trajectory; pinned to 1 like metamotivo_motion_rollout.py")
@@ -228,21 +407,7 @@ def main():
     if args.torch_threads > 0:
         torch.set_num_threads(args.torch_threads)
 
-    z_np = np.load(args.z)
-    if z_np.ndim == 1:
-        z_np = z_np[None]
-    if args.z_reduce == "mean":
-        # renormalize to the sphere of radius sqrt(d) the actor was trained on
-        z_np = z_np.mean(axis=0, keepdims=True)
-        z_np = z_np / np.linalg.norm(z_np) * np.sqrt(z_np.shape[1])
-    elif args.z_reduce == "first":
-        z_np = z_np[:1]
-    elif args.z_reduce == "last":
-        z_np = z_np[-1:]
-    z_all = torch.tensor(z_np, dtype=torch.float32, device=args.device)
-    steps = args.steps or (z_all.shape[0] if z_all.shape[0] > 1 else 300)
-    print(f"z {tuple(z_all.shape)} (|z|={np.linalg.norm(z_np, axis=1).mean():.2f}), "
-          f"rollout {steps} steps on {args.xml}")
+    jobs = build_jobs(args)
 
     if args.obs_scale == "none":
         obs_mul = None
@@ -281,70 +446,26 @@ def main():
     # clip's frames are the same clock -- 300 steps == 10 s == 300 ref frames.
     env_fps = env.unwrapped.metadata["render_fps"]
 
-    torch.manual_seed(args.seed)
-    obs, _ = env.reset(seed=args.seed)
-    ref_qpos = np.load(args.reference)["qpos"] if args.reference else None
-    if args.init_from_reference:
-        if ref_qpos is None:
-            raise SystemExit("--init-from-reference needs --reference")
-        env.unwrapped.set_physics(qpos=ref_qpos[0], qvel=np.zeros(env.unwrapped.model.nv))
-        obs = env.unwrapped.get_obs()
+    rows = []
+    try:
+        for i, (z_path, ref_path, out_path) in enumerate(jobs):
+            if len(jobs) > 1:
+                print(f"\n[{i + 1}/{len(jobs)}] {z_path.name}")
+            rows.append(rollout_one(model, env, env_fps, obs_mul, args,
+                                    z_path, ref_path, out_path))
+    finally:
+        env.close()
 
-    frames, qpos_hist, qvel_hist, action_hist = [], [], [], []
-    diverged_at = None
-    for t in range(steps):
-        z_t = z_all[min(t, z_all.shape[0] - 1)].unsqueeze(0)
-        # Only the actor's view is rescaled. env.step still receives the real
-        # physics, and qpos/qvel are recorded unscaled, so the saved rollout
-        # stays comparable with runs that did not use --obs-scale.
-        proprio = obs["proprio"] if obs_mul is None else obs["proprio"] * obs_mul
-        obs_t = torch.tensor(proprio, dtype=torch.float32, device=args.device).unsqueeze(0)
-        with torch.no_grad():
-            action = model.act(obs_t, z_t, mean=True)
-        action_np = action.cpu().numpy().ravel()
-        try:
-            obs, _, terminated, truncated, info = env.step(action_np)
-        except ValueError as e:
-            # humenv raises on mjWARN_BADQACC. A body the frozen adult actor
-            # cannot stabilise diverges rather than merely falling over, and
-            # that IS the result -- keep the frames up to that point instead
-            # of losing the whole run.
-            print(f"  DIVERGED at t={t} ({t / env_fps:.2f}s): {e}")
-            diverged_at = t
-            break
-        action_hist.append(action_np.copy())
-        qpos_hist.append(info["qpos"].copy())
-        qvel_hist.append(info["qvel"].copy())
-        frames.append(env.render())
-        if terminated or truncated:
-            print(f"  episode ended at t={t}")
-            break
-    env.close()
-
-    qpos = np.stack(qpos_hist)
-    out_path = Path(args.out)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-
-    if ref_qpos is not None:
-        ref_frames = render_reference(args.xml, ref_qpos, args.width, args.height, args.camera)
-        n = min(len(ref_frames), len(frames))
-        video = [np.concatenate([ref_frames[i], frames[i]], axis=1) for i in range(n)]
-    else:
-        video = frames
-    imageio.mimsave(out_path, video, fps=args.fps)
-
-    np.savez(out_path.with_suffix(".npz"), qpos=qpos, qvel=np.stack(qvel_hist),
-             action=np.stack(action_hist).astype(np.float32), fps=args.fps)
-
-    print(f"wrote {len(video)} frames -> {out_path}"
-          + (f" (physics diverged at t={diverged_at})" if diverged_at is not None else ""))
-    print(f"wrote rollout state -> {out_path.with_suffix('.npz')}")
-    print(f"pelvis z: start {qpos[0, 2]:.3f} end {qpos[-1, 2]:.3f} "
-          f"min {qpos[:, 2].min():.3f} | xy displacement "
-          f"{np.linalg.norm(qpos[-1, :2] - qpos[0, :2]):.3f} m")
-    if ref_qpos is not None:
-        n = min(len(ref_qpos), len(qpos))
-        print(f"reference xy displacement {np.linalg.norm(ref_qpos[n - 1, :2] - ref_qpos[0, :2]):.3f} m")
+    if len(rows) > 1:
+        ok = [r for r in rows if r["frames"]]
+        div = [r for r in rows if r["diverged_at"] is not None]
+        print(f"\n{len(rows)} clips -> {jobs[0][2].parent}")
+        print(f"  {len(div)} diverged, {len(rows) - len(ok)} produced no frames")
+        print(f"\n  {'clip':44s} {'frames':>7s} {'pelvis_z':>9s} {'xy_m':>7s}  diverged")
+        for r in rows:
+            d = "" if r["diverged_at"] is None else f"t={r['diverged_at']}"
+            print(f"  {r['clip'][:44]:44s} {r['frames']:>7d} "
+                  f"{r['pelvis_z_end']:>9.3f} {r['xy_disp']:>7.3f}  {d}")
 
 
 if __name__ == "__main__":
