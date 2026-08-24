@@ -1,25 +1,26 @@
-"""Reads datasets/crossenbodiment-1-datasets/manifest.jsonl (see
-scripts/build_dataset.py).
+"""Reads a manifest.jsonl written by scripts/build_dataset.py.
 
-NOTE -- retargeted_motion has been REMOVED from this dataset.
-The bilevel system (model/bilevel/) produces the reference motion at runtime as
-a differentiable function of p, so a pre-baked copy is not just redundant, it
-is the thing the design exists to replace. The 540 baked .npz files (78 MB here
-plus 78 MB in data/) were deleted along with the manifest field.
+Two datasets exist and they are not interchangeable:
 
-Consequence for this LEGACY path: __getitem__ now always returns
-qpos_ref=None, so losses.functional_equivalence returns 0.0 and the D term in
-model/simple/train.py's objective is identically zero. What remains being optimized is
-lambda_z * ||z_beta - z0||^2 + lambda_phys * L_phys. That is a real change to
-the baseline's behaviour, and the constructor says so out loud rather than
-letting the loss quietly collapse (990 of the original 1530 rows already had
-retargeted_motion=None, so a silent D=0 was always easy to miss here).
+`datasets/crossenbodiment-10bodies` (current)
+    540 clips x 10 bodies = 5400 rows, built over the per-body artifacts from
+    docs/new_body.md. Every row carries a retargeted_motion, so qpos_ref is
+    real and the D term in model/simple/train.py's objective is live. The rows
+    also carry `morphology_label` / `target_xml`, because beta now VARIES --
+    a trainer has to roll each row out on its own body's MJCF, not on one
+    global cfg.target_xml.
 
-To run the old baseline as it was, regenerate the references first:
-    uv run scripts/qpos_retarget.py --input_dir data/origin_motion \\
-        --output_dir data/retargeted_motion \\
-        --target_xml assets/robots/child/robot.xml
-    uv run scripts/build_dataset.py
+`datasets/crossenbodiment-1-datasets` (legacy, what the published baseline used)
+    1530 rows, all `child`, and retargeted_motion was deleted from it in favour
+    of model/bilevel's runtime retargeting -- so qpos_ref is None for every row,
+    functional_equivalence returns 0.0, and D is identically zero there. The
+    constructor says so out loud rather than letting the loss quietly collapse.
+    Its task balance is also 1000:10 (`move-ego--90-2` alone holds 1000 of the
+    1530 rows); those 990 extra trials are exactly the rows that never had a
+    retargeted_motion.
+
+Rebuild the current one with:
+    uv run scripts/build_dataset.py --force
 """
 
 import json
@@ -77,6 +78,21 @@ class CrossEmbodimentDataset:
     def __len__(self):
         return len(self.rows)
 
+    def bodies(self) -> list:
+        """Distinct morphology labels present, in manifest order."""
+        seen = {}
+        for r in self.rows:
+            seen.setdefault(r.get("morphology_label", "child"), None)
+        return list(seen)
+
+    def indices_by_body(self) -> dict:
+        """{label: [row index, ...]} -- one vectorized env per body means the
+        sampler has to draw within a body, not across all rows."""
+        out = {}
+        for i, r in enumerate(self.rows):
+            out.setdefault(r.get("morphology_label", "child"), []).append(i)
+        return out
+
     def __getitem__(self, idx):
         row = self.rows[idx]
         z0 = np.load(self.dataset_dir / row["origin_z"]).reshape(-1).astype(np.float32)
@@ -92,6 +108,12 @@ class CrossEmbodimentDataset:
         return {
             "reward_name": row["reward_name"],
             "trial": row["trial"],
+            # Which body this row is FOR. Absent from the legacy single-body
+            # manifest, where it was always "child"; a multi-body trainer must
+            # group by it, since rolling a row out on the wrong MJCF silently
+            # scores the adapter against a body it was not asked about.
+            "morphology_label": row.get("morphology_label"),
+            "target_xml": row.get("target_xml"),
             "z0": z0,
             "beta": beta,
             "qpos_ref": qpos_ref,

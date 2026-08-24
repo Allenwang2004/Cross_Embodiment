@@ -116,13 +116,28 @@ adult 就等於在問「adult 做這個動作時的 z」，那是 `data/infer_or
 **`--z0_dir data/origin_z`** 會多寫一份 `cosine_summary.csv`（欄位 `clip,T,cos_mean,cos_min,cos_max`），
 比對逐幀 z 與該段動作原本的 reward-inferred z0（shape `(1, 256)`）。這個數字說的是**換身體讓推論退化了多少**。
 
-| | clips | cos_mean 中位 | 範圍 | cos_mean > 0.5 的 clip |
-|---|---|---|---|---|
-| child | 540 | 0.3571 | −0.044 – 0.919 | 190 |
-| tall_slim | 540 | 0.4738 | −0.003 – 0.955 | 263 |
+11 具身體全部跑完（每具都是 540 clips），按 cos_mean 中位排序：
 
-tall_slim 明顯較高，與它身形離 adult 較近一致。**這個數字低不代表跑錯**——它量的就是身體差異本身；
-child 中位只有 0.36 是預期的。
+| body | root height scale | cos_mean 中位 | cos_mean > 0.5 的 clip |
+|---|---|---|---|
+| pear_shaped | 0.9891 | 0.5318 | 284 |
+| athletic | 1.0027 | 0.5258 | 283 |
+| elderly | 0.8981 | 0.5203 | 276 |
+| short_stocky | 0.8522 | 0.4999 | 270 |
+| teen | 0.8347 | 0.4938 | 267 |
+| tall_slim | 1.1192 | 0.4738 | 263 |
+| petite | 0.7833 | 0.4657 | 257 |
+| long_limbed | 1.1169 | 0.4628 | 260 |
+| giant | 1.2216 | 0.4138 | 242 |
+| short_limbed | 0.6539 | 0.4106 | 228 |
+| child | 0.6110 | 0.3571 | 190 |
+
+（root height scale = `target_h / source_h`，兩個 `skeleton.json` 的 root rest height 之比，
+就是 `qpos_retarget.py` 開頭印的那個數字。）
+
+**這個數字低不代表跑錯**——它量的就是身體差異本身。排序大致跟「離 adult 多遠」一致：
+`pear_shaped` / `athletic` 幾乎同高同比例，落在 0.53；`child`（0.36）和 `short_limbed`（0.41）
+是身形離 adult 最遠的兩具，也是最低的兩具。
 
 > ⚠️ **`--device` 預設是 `cpu`。** 這裡用 `cuda`（540 段約一分半）。CPU 也會跑出結果，但如同
 > `docs/scripts.md` 對執行緒數的警告，浮點歸約順序不同會有 ~1e-5 的漂移。要跨身體比較 z
@@ -183,20 +198,53 @@ print(f"偏差 >5%: {(abs(q-1)>.05).sum()}   >10%: {(abs(q-1)>.10).sum()}")
 PY
 ```
 
-實跑結果：
+> ⚠️ **這一步要排在 Step 6 之後跑。** `_ratios_aggregate.csv` 是 Step 6 的
+> `torque_aggregate_motion_k.py` 寫進 matrix 目錄的；Step 4 只產 `_k_matrix.csv` /
+> `_r2_matrix.csv` / `_corr.*`。實際順序是 **4 → 6 → 5**。
 
-| | k 中位 | 實測/幾何預測 | 偏差>5% | 跨 54 段離散度（leg / arm / torso） |
-|---|---|---|---|---|
-| child | 0.2134 | 0.9997 `[0.879, 1.089]` | 4/48 | 0.2% / 0.2% / **25.9%** |
-| tall_slim | 0.7579 | 1.0012 `[0.988, 1.035]` | **0/48** | 0.4% / 0.6% / **3.1%** |
+11 具全部實跑：
+
+| body | k 中位 | 獨立擬合 | 實測/幾何預測 | 偏差>5% | >10% | torso 鏈最大 CV |
+|---|---|---|---|---|---|---|
+| child | 0.2134 | 48/69 | 0.9997 `[0.879, 1.089]` | 4 | 1 | 118.7% (`Chest_y`) |
+| petite | 0.4096 | 12/69 | 0.9976 `[0.925, 1.033]` | 1 | 0 | 37.3% (`Chest_y`) |
+| elderly | 0.5182 | 48/69 | 1.0029 `[0.898, 1.048]` | 1 | 1 | 42.5% (`Chest_y`) |
+| teen | 0.6197 | 48/69 | 0.9998 `[0.941, 1.026]` | 1 | 0 | 23.4% (`Chest_y`) |
+| short_limbed | 0.6406 | 45/69 | 0.9988 `[0.894, 1.049]` | 1 | 1 | 36.9% (`Chest_y`) |
+| long_limbed | 0.6479 | 48/69 | 1.0014 `[0.978, 1.047]` | 0 | 0 | 9.7% (`Spine_z`) |
+| tall_slim | 0.7579 | 48/69 | 1.0012 `[0.988, 1.035]` | 0 | 0 | 7.8% (`Torso_x`) |
+| pear_shaped | 0.8348 | 48/69 | 0.9999 `[0.912, 1.023]` | 1 | 0 | 25.0% (`Chest_y`) |
+| athletic | 1.3812 | 48/69 | 0.9988 `[0.983, 1.106]` | 1 | 1 | 19.8% (`Chest_y`) |
+| short_stocky | 1.4547 | 48/69 | 0.9987 `[0.960, 1.025]` | 0 | 0 | 15.4% (`Torso_x`) |
+| giant | 1.9310 | 48/69 | 1.0007 `[0.978, 1.092]` | 1 | 0 | 17.9% (`Chest_y`) |
+
+（torso CV 是 `torque_ratio_across_motions.py` 自己那個 `spread = std/|mean|` 統計量，取軀幹鏈上最差的
+單一關節，不是群組平均——所以跟這份文件舊版的「群組離散度」欄不是同一個定義，數字不能直接對照。）
 
 判讀：
 
-- **實測 k 幾乎等於幾何預測**（`k_predicted_subtree`，即質量×力臂比；等比例縮放下就是 s⁴）。兩具身體的中位都是 1.00。
-- **腿、臂、頭跨動作離散度 <1%** → k 確實是身體性質。
-- **torso 鏈是唯一的例外**。child 的 25.9% 來自軀幹關節重力訊號太弱、擬合是雜訊（`Chest_y` 只有 19 段動作能用、單 clip R²=0.003）。tall_slim 的 k≈0.76 離 1 較近、訊號較強，所以只有 3.1%。**如果新身體的 torso 離散度也衝到 20% 以上，那幾個關節的 k 不要相信，靠 `--r2-min` 讓它回退到幾何預測。**
+- **實測 k 幾乎等於幾何預測**（`k_predicted_subtree`，即質量×力臂比；等比例縮放下就是 s⁴）。
+  11 具的中位全部落在 **0.9976–1.0029**，最大偏離 0.3%。k 本身跨了 9 倍（0.21 到 1.93），
+  這個結論在整個範圍上都成立。
+- **偏差>5% 的關節每具最多 4 個（48 個獨立擬合中），>10% 最多 1 個。**
+- **torso 鏈仍然是唯一的例外**，而且離散度跟 k 離 1 的距離相關：`child`（k=0.21）118.7%、
+  `elderly` 42.5%、`petite` 37.3%，而 `tall_slim`（k=0.76）只有 7.8%。**torso CV 衝到 20% 以上時，
+  那幾個關節的 k 不要相信，靠 `--r2-min` 讓它回退到幾何預測。**
 
-既然兩具身體都證實了這件事，**新身體其實可以跳過 Step 4**，直接用 `k_predicted_subtree`（兩個 MJCF 各跑一次 `mj_forward` 就有）。但 Step 2（重定向）和 Step 3（z 推論）訓練本身就要，省不掉。
+### `petite` 的 12/69 不是資料品質問題
+
+`petite` 的「獨立擬合」只有 12/69，其他身體都是 45–48。這**不是**擬合失敗——它的 R² 通過率
+0.990 還比 child 的 0.971 高。原因是 `petite` 的 β 讓腿和臂兩組**長度與粗細同值**
+（`leg_scale = leg_girth = arm_scale = arm_girth = 0.80`），那兩條鏈就是純等比例縮放，
+重力力矩比精確等於 `0.80⁴ = 0.4096`，實測值**逐位元命中**幾何預測，`std_across_motions = 0.000000`
+（47 段動作）。落在這條線上的 57 個關節是 24 腿 + 24 臂 + 9 軀幹/頭。
+
+Step 5 的檢查式用 `~np.isclose(km, kp)` 排除「回退到幾何預測」的關節以免循環論證，但它同時也把
+**完全吻合**的關節排掉了。所以 β 越接近等比例的身體，這個分母就越小。看 `n_motions` 才是判斷有沒有
+真的回退的依據——11 具全部 `n_motions == 0` 的關節數是 **0**，沒有任何一個關節是真的沒資料。
+
+> Step 4 只花 **4.5 秒**（不是原本預期的重活），而且 Step 6 的 `--matrix` 本來就要讀它的輸出，
+> 所以**不要跳過**。順便還能拿到上面這張表的驗收數字。
 
 ---
 
@@ -308,3 +356,53 @@ uv run scripts/write_body_splits.py --robots assets/robots    # split 會被覆�
 
 那兩個 `child/` 底下的舊檔仍帶著 stiffness `0.1346×`（照抄舊 src），而現在的 src 是 `1.0000×`。
 它們代表的是「只縮 actuator」那條已被取代的路線，**沒有重新產生**——要用的話得先決定它們還算不算數。
+
+---
+
+## 11 具身體全部跑完 Step 1–6（2026-08-24）
+
+在此之前只有 `child` 和 `tall_slim` 走過這條流程。其餘 9 具
+（`athletic` `elderly` `giant` `long_limbed` `pear_shaped` `petite` `short_limbed`
+`short_stocky` `teen`）已補齊，現在 `assets/robots/` 底下 adult 以外的 11 具狀態一致：
+
+| 產物 | 狀態 |
+|---|---|
+| `assets/robots/<body>/skeleton.json` | 11/11 |
+| `data/<body>/retargeting_motion/` | 11/11，每具 54 dirs / 540 npz |
+| `data/<body>/infer_retargeting_z/` | 11/11，每具 540 npy + `cosine_summary.csv` |
+| `outputs/torque_ratio_across_motions/gravity/<body>/` | 11/11 |
+| `assets/robot_torque/<body>/robot_torque_full.xml` | 11/11 |
+
+Step 6 的驗收 9 具全綠：`armature`/`damping`/`stiffness` 對法則誤差 `0.00e+00`、
+ζ 中位 1.000、27 組鏡像全對、`dt·√(Kp/I)` 最大 0.234（需 < 2）。
+Froude 時鐘照預期跟著 s_eff 走：
+
+| body | k 中位 | Ir 中位 | τ 中位 | ω_n 中位 | dt·√(Kp/I) |
+|---|---|---|---|---|---|
+| petite | 0.4096 | 0.3277 | 0.894 | 1.118 | 0.204 |
+| elderly | 0.5182 | 0.4553 | 0.923 | 1.083 | 0.210 |
+| teen | 0.6197 | 0.5501 | 0.942 | 1.061 | 0.190 |
+| short_limbed | 0.6406 | 0.6202 | 0.984 | 1.016 | 0.162 |
+| long_limbed | 0.6479 | 0.6074 | 0.973 | 1.027 | 0.234 |
+| pear_shaped | 0.8348 | 0.7229 | 0.970 | 1.031 | 0.180 |
+| athletic | 1.3812 | 1.6013 | 1.045 | 0.957 | 0.171 |
+| short_stocky | 1.4547 | 1.3680 | 1.010 | 0.990 | 0.147 |
+| giant | 1.9310 | 2.2514 | 1.086 | 0.921 | 0.173 |
+
+`giant` 的 τ=1.086 / ω_n=0.921（時鐘比 adult 慢 9%）與 `petite` 的 0.894 / 1.118（快 12%）
+是兩端，都是 √s_eff 直接跑出來的，沒有被設計成任何值。
+
+### 這批資料餵給誰
+
+`scripts/build_dataset.py` 把 `data/<body>/retargeting_motion` 與 `assets/robots/<body>/parameter.json`
+組成 `datasets/crossenbodiment-10bodies`（540 clips × 10 bodies = 5400 列，8 train / 2 test）。
+它用 symlink 而不是複製，所以那 2.9 GB 只存在一份。`model/simple/train.py` 直接吃這個 manifest，
+每個 update 抽一具身體。
+
+### 沒做的兩件事
+
+- **`data/<body>/ik_retargeting_action/` 與 `ik_retargeting_z/`**：只有 `child` 有。那是
+  `ik_action_from_qpos.py` / `ik_z_from_action.py` 那條路線的產物，不在這份 runbook 的四樣
+  交付物裡，所以沒有為其他 10 具產生。
+- **`fit_cross_body_z_map.py`**：它是 Step 3 資料的下游消費者，不是流程本身。要跑的話記得
+  每具身體給不同的 `--out-dir`，預設路徑沒有身體維度會互相覆蓋。

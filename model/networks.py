@@ -25,9 +25,9 @@ class LatentAdapter(nn.Module):
     exactly 16.0 = sqrt(256), and metamotivo's FBModel.project_z enforces it
     (metamotivo/fb/model.py:126) because the model was trained with norm_z=True.
     Without this the frozen actor is fed an off-manifold z it has never seen.
-    Defaults to False so model/simple/train.py's existing behaviour and its trained
-    checkpoints in model/checkpoints/ are bit-for-bit unchanged; the bilevel
-    path (model/bilevel/config.py: project_z) turns it on.
+    Defaults to False, which is what model/simple/train.py has always run with;
+    the bilevel path (model/bilevel/config.py: project_z) turns it on. Worth
+    revisiting for the simple path now that z_beta is its only control channel.
     """
 
     def __init__(self, beta_dim, z_dim, hidden_dims=(256, 512, 512, 256),
@@ -54,7 +54,10 @@ class ActionHead(nn.Module):
     """Residual correction on top of the frozen actor's raw action mean,
     conditioned on beta -- accounts for the target body's different
     actuator/limb response even though the action space size is unchanged
-    (robot_<label>.xml keeps the same actuator names/gear ratios)."""
+    (robot_<label>.xml keeps the same actuator names/gear ratios).
+
+    Used by model/bilevel/policy.py only. model/simple/train.py dropped it: it
+    steers the frozen actor through z_beta alone."""
 
     def __init__(self, action_dim, beta_dim, hidden_dims=(128, 128)):
         super().__init__()

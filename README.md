@@ -380,10 +380,11 @@ model/simple/       舊的單階段 REINFORCE pipeline（baseline，保持可執
   train_explore.py  純運動學的 action-residual 探索實驗
   config.py         TrainConfig / config_explore.py ExploreConfig
   evaluate.py       舊 checkpoint 的 held-out 評估
-  baseline.py       零訓練的對照基準
-  diagnose_single_task.py  單 task 過擬合診斷
+  baseline.py       零訓練的對照基準（--obs-scale auto 是配對的對照組）
+  diagnose_single_task.py  單 (clip, body) 過擬合診斷
 
-（`losses.py`、`dataset.py`、`networks.py`、`kinematics.py` 留在 `model/` 頂層，新舊系統共用）
+（`losses.py`、`dataset.py`、`networks.py`、`kinematics.py`、`obs_scale.py` 留在 `model/` 頂層，
+新舊系統與 scripts/ 共用）
 
 scripts/
   rollout_video.py       單段動作的左右對照影片 ← 驗收用這個
@@ -393,6 +394,27 @@ scripts/
 docs/proposal.md         完整設計。§0.6 有 87 條名詞解釋，§11 是實作後的實測修正
 ```
 
-**保留為 baseline、不改造**（都在 `model/simple/`）：`train.py`、`train_explore.py`、`evaluate.py`、`baseline.py`。
+**保留為 baseline**（都在 `model/simple/`）：`train.py`、`train_explore.py`、`evaluate.py`、`baseline.py`。
 它們的 docstring 記錄了付過代價的發現（為何 `exploration_std=0.05` 而非 0.2、為何拿掉 `R_task`、
 為何 `total_loss` 不是進度訊號）。新系統必須贏過它們。
+
+simple 路徑後來收斂成 **z-only**：`ActionHead` 拿掉了，只訓練 `LatentAdapter`，而 actor 看到的 obs
+會先經過 `model/obs_scale.py` 的逐身體尺度正規化（等同 `rollout_z_on_body.py --obs-scale auto`，
+預設開啟，`cfg.obs_scale = "none"` 可關掉做 ablation）。物理與 D/L_phys 一律跑在真實身體上。
+對照組是 `uv run model/simple/baseline.py --obs-scale auto`。
+
+`z_beta` 現在會投影回半徑 √256 的 FB 球面（`cfg.adapter_project_z`）—— metamotivo 只在**產生** z 時
+呼叫 `project_z`，`actor()` 完全不做，所以離開球面的 z 是照單全收的。配套地 `lambda_z` 從
+`||z_beta − z0||²` 換成 `1 − cos(z_beta, z0)`，跟 `model/bilevel/ppo.py` 同一形式：半徑既然由構造固定，
+Euclidean 形式會有一部分在罰一個動不了的距離。
+
+**資料集與身體軸。** `scripts/build_dataset.py` 產 `datasets/crossenbodiment-10bodies`：
+540 clips × 10 具身體 = 5400 列，**8 train / 2 test**（held-out 是 `giant` 與 `short_stocky`，
+挑的是外插而非內插）。整個目錄只有 2.4 MB —— 用 symlink 指到 `data/` 與 `assets/robots/`，
+沒有複製任何資料。每一列都帶該身體自己的 `retargeted_motion`，所以**D 項活了**
+（舊的單身體 dataset 每列 `qpos_ref=None`，D 恆等於零）。
+
+**一個 update 一具身體**：`cfg.body_order="cycle"` 輪流走 8 具，該 batch 共用那具身體的
+env / fk model / obs multiplier。advantage 的 baseline 是**逐身體**的 EMA —— cost 的尺度是身體性質
+（`giant` 和 `petite` 同樣品質的 rollout 不會給同一個 L_phys），共用一個全域 baseline 會讓 advantage
+主要在編碼「這個 update 是哪具身體」。`evaluate.py` 也是逐身體 rollout，並按 train/test 身體分組報告。

@@ -18,46 +18,18 @@ constant z instead, which is the apples-to-apples comparison against how
 --obs-scale: showing the actor an adult-sized body
 --------------------------------------------------
 The obs is 358 features and its DIMENSION does not change with the body -- a
-scaled skeleton keeps humenv's 24 rigid bodies, so no reshaping is needed to run
-the child. What changes is the units. Measured on move-ego--90-2, adult vs child
-at qvel=0:
+scaled skeleton keeps humenv's 24 rigid bodies -- but the features carrying a
+METRE shrink with it, and the actor's obs normalizer is a BatchNorm holding
+adult-scale running statistics. `--obs-scale` divides every length-carrying
+feature by its ratio so the child's obs reads as an adult's. The ratio is PER
+BODY, not one number, and `--obs-scale-parts` picks whether linear velocity is
+rescaled too: model/obs_scale.py has the full derivation and the measured
+numbers, and is the single implementation shared with model/simple/train.py.
 
-    root_h_obs             1 dim    child/adult 0.6188   cos 1.0000
-    local_body_pos        69 dims               0.6657   cos 0.9965
-    local_body_rot_obs   144 dims               1.0000   cos 1.0000
-
-The rotations are bit-identical, because the retarget copies every hinge angle
-verbatim; only the features carrying a METRE move, and they move by very nearly
-one scalar -- cos 0.9965 says the child's pose vector points the same way and is
-simply shorter. So the mismatch the frozen actor sees is a units mismatch, not a
-different pose, and it is worth being able to switch off: the obs normalizer is
-a BatchNorm holding adult-scale running statistics, so those 70 features arrive
-at a systematic offset rather than merely "smaller".
-
---obs-scale divides every length-carrying feature by its ratio, which is what
-makes the child's obs read as an adult's. The ratio is PER BODY, not one number:
-scale_robot.py scales legs / arms / torso / head independently (child uses 0.62 /
-0.65 / 0.75 / 1.05), so the pelvis-to-body distance scales by 0.6200 in the legs,
-0.7500 up the torso, 0.7847 at the head, and along a 0.7181 -> 0.6676 gradient
-down the arm as the chain leaves the torso. A single scalar taken from the rest
-pelvis height would be 0.6110 -- below every one of them, and 28% wrong at the
-head. `--obs-scale <float>` still forces the uniform version, as the ablation.
-
---obs-scale-parts picks how far to take it: `length` also rescales
-local_body_vel, the dimensionally consistent choice under a kinematic retarget
-(same angles, same clock, so linear velocity carries the same metre as position
-while angular velocity does not); `pose` rescales only the static features and
-leaves all 144 velocity dims alone, which is the right choice if the motion is
-gravity-driven, where speeds scale like sqrt(L) rather than L.
-
-This is a canonicalisation, and it removes part of the problem rather than
-solving it: it tells the actor the body is adult-sized when it is not, so the
-motions it commands are calibrated for adult limb lengths. Its use is as a
-BASELINE -- run with and without to split "how much of the gap is pure scale"
-from "how much is real dynamics" -- not as the default. model/simple/train.py
-deliberately does the opposite, feeding raw child obs and letting the adapter
-learn the compensation, because canonicalised obs would leave beta nothing to
-explain.
+Here it is an ABLATION, off by default -- run with and without to split "how
+much of the gap is pure scale" from "how much is real dynamics". In
+model/simple/train.py it is on by default instead, because there z_beta is the
+only control channel and should not be spent re-deriving a unit conversion.
 
 Usage (from project root):
     uv run scripts/rollout_z_on_body.py \
@@ -77,6 +49,7 @@ played back kinematically (no physics), RIGHT = this physical rollout.
 
 import argparse
 import os
+import sys
 from pathlib import Path
 
 os.environ.setdefault("MUJOCO_GL", "egl")
@@ -89,90 +62,17 @@ import torch
 from humenv import make_humenv
 from metamotivo.fb_cpr.huggingface import FBcprModel
 
-
-# humenv/env.py:compute_humanoid_self_obs_v2 concatenates an OrderedDict in this
-# order over 24 rigid bodies; local_body_pos drops the root's own 3, and
-# local_body_rot_obs is 6D tan-norm rather than quaternions.
-OBS_SEGMENTS = {
-    "root_h":       (0, 1),      # metre
-    "body_pos":     (1, 70),     # metre
-    "body_rot":     (70, 214),   # unitless
-    "body_vel":     (214, 286),  # metre / second
-    "body_ang_vel": (286, 358),  # radian / second
-}
 ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from model.obs_scale import build_obs_multiplier
 
 
 def _abs(path):
     """Relative paths mean project-root-relative, so the script runs from anywhere."""
     q = Path(path)
     return q if q.is_absolute() else ROOT / q
-
-
-SCALED_BY_PARTS = {
-    "pose":   ("root_h", "body_pos"),
-    "length": ("root_h", "body_pos", "body_vel"),
-}
-
-
-def body_scale_ratios(xml: str, ref_xml: str) -> np.ndarray:
-    """(24,) per-body length ratio of --xml against the reference body.
-
-    One scalar is NOT enough. scale_robot.py scales four groups independently
-    and assets/robots/child/parameter.json uses leg 0.62, torso 0.75, arm 0.65,
-    head 1.05, so the distance from the pelvis to each body scales by a
-    different amount -- measured 0.6200 for every leg body, 0.7500 for the torso
-    chain, 0.7847 for the head, and a gradient 0.7181 -> 0.6676 down the arm as
-    the chain leaves the torso and accumulates arm segments. The rest pelvis
-    height ratio alone is 0.6110, below all of them and 28% wrong at the head.
-
-    Measuring at the rest pose is enough because the ratios barely move: across
-    100 frames of move-ego--90-2 the leg and torso ratios are constant to
-    0.0000 (single-scale chains) and the mixed arm/head chains hold to a std of
-    0.005, differing from their rest value by at most 0.019.
-
-    Index 0 is the root, whose local_body_pos is identically zero and carries no
-    length of its own; it gets the rest pelvis height ratio instead, which is
-    what phi0_retarget scaled the root translation by.
-    """
-    out = []
-    for path in (ref_xml, xml):
-        m = mujoco.MjModel.from_xml_path(str(path))
-        d = mujoco.MjData(m)
-        d.qpos[:] = m.qpos0
-        mujoco.mj_forward(m, d)
-        pos = d.xpos[1:25].copy()
-        out.append((pos - pos[0], float(m.qpos0[2])))
-    (pa, ha), (pb, hb) = out
-    ratios = np.ones(24)
-    ratios[0] = hb / ha
-    na, nb = np.linalg.norm(pa, axis=1), np.linalg.norm(pb, axis=1)
-    ok = na > 1e-9
-    ratios[1:][ok[1:]] = (nb[1:] / na[1:])[ok[1:]]
-    return ratios
-
-
-def obs_rescaler(ratios: np.ndarray, parts: str) -> np.ndarray:
-    """(358,) multiplier making this body's length features read as the
-    reference body's. Every feature carrying a metre is divided by its OWN
-    body's ratio; rotations and angular velocities are left at 1.0.
-
-    body_pos covers bodies 1..23 (the root's own offset is dropped by humenv),
-    while body_vel covers all 24 -- the sensors are world-frame velocities, not
-    root-relative ones, so the root has a real velocity to rescale. That makes
-    the velocity term the approximate one: a body's world velocity mixes the
-    root's translation with its own local motion, and those two carry different
-    ratios. Use --obs-scale-parts pose to leave it out.
-    """
-    scaled = SCALED_BY_PARTS[parts]
-    mul = np.ones(358)
-    if "root_h" in scaled:
-        mul[0] = 1.0 / ratios[0]
-    if "body_pos" in scaled:
-        mul[1:70] = 1.0 / np.repeat(ratios[1:24], 3)
-    if "body_vel" in scaled:
-        mul[214:286] = 1.0 / np.repeat(ratios[0:24], 3)
-    return mul
 
 
 def render_reference(xml_path, qpos_seq, width, height, camera):
@@ -409,24 +309,8 @@ def main():
 
     jobs = build_jobs(args)
 
-    if args.obs_scale == "none":
-        obs_mul = None
-    else:
-        if args.obs_scale == "auto":
-            ratios = body_scale_ratios(args.xml, args.obs_scale_ref_xml)
-            how = (f"per-body ratios {ratios.min():.4f}..{ratios.max():.4f} "
-                   f"(root {ratios[0]:.4f})")
-        else:
-            uniform = float(args.obs_scale)
-            if not uniform > 0:
-                raise SystemExit(f"--obs-scale must be positive, got {uniform}")
-            ratios = np.full(24, uniform)
-            how = f"uniform ratio {uniform:.4f}"
-        obs_mul = obs_rescaler(ratios, args.obs_scale_parts)
-        scaled = ", ".join(SCALED_BY_PARTS[args.obs_scale_parts])
-        print(f"obs rescale: {how} -> {int((obs_mul != 1.0).sum())}/358 features "
-              f"({scaled}) multiplied by {1.0 / ratios.max():.4f}"
-              f"..{1.0 / ratios.min():.4f}")
+    obs_mul = build_obs_multiplier(args.xml, args.obs_scale_ref_xml,
+                                   mode=args.obs_scale, parts=args.obs_scale_parts)
 
     model = FBcprModel.from_pretrained(args.model).to(args.device)
     model.eval()

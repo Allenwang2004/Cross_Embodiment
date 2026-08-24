@@ -1121,13 +1121,18 @@ model/bilevel/
 | `model/dataset.py` | `BETA_AXES:14`、`load_beta:18` 逐字重用 |
 | `model/kinematics.py` | `EE_BODIES:8`、`FOOT_BODIES:9`、`ROOT_BODY:10`、`quat_to_yaw:48` 重用；`batch_forward_pose:13` 作為 torch FK 的對照標準 |
 
-### 7.3 保留為 baseline，不改造
+### 7.3 保留為 baseline
 
 `model/simple/train.py`、`model/simple/train_explore.py`、`model/simple/config.py`、`model/simple/config_explore.py`、`model/simple/run_train.py`、`model/simple/diagnose_single_task.py`、`model/simple/evaluate.py`、`model/simple/baseline.py`。
 
-它們的 docstring 記錄了付過代價的發現：為何 `exploration_std=0.05` 而非 0.2（`config.py:35-38`）、為何拿掉 `R_task`（`train.py:12-26`）、為何 `total_loss` 不是進度訊號（`train.py:190-196`）、task-composition 混淆（`diagnose_single_task.py`）。
+它們的 docstring 記錄了付過代價的發現：為何 `exploration_std=0.05` 而非 0.2（`config.py`）、為何拿掉 `R_task`（`train.py`）、為何 `total_loss` 不是進度訊號、task-composition 混淆（`diagnose_single_task.py`）。
 
-為了保持樹乾淨，這些檔案已移到 `model/simple/`（`uv run model/simple/train.py` 等），但**保持可執行** — 新系統得贏過它們，而且你會需要那個對照。共用模組（`losses.py`、`dataset.py`、`networks.py`、`kinematics.py`）仍留在 `model/` 頂層，因為 bilevel 也 import 它們。
+為了保持樹乾淨，這些檔案已移到 `model/simple/`（`uv run model/simple/train.py` 等），並**保持可執行** — 新系統得贏過它們，而且你會需要那個對照。共用模組（`losses.py`、`dataset.py`、`networks.py`、`kinematics.py`、`obs_scale.py`）留在 `model/` 頂層，因為 bilevel 與 scripts 也 import 它們。
+
+> **已改造兩處**（原文寫「不改造」，實際做了）：
+> 1. **拿掉 `ActionHead`** — simple 路徑現在只訓練 `LatentAdapter`，`z_β` 是操控凍結 actor 的唯一通道。舊 checkpoint 帶 `action_head` 鍵，`evaluate.py` 會直接拒絕而不是少一顆頭去評分。
+> 2. **`z_beta` 投影回 FB 球面** — `cfg.adapter_project_z = True`，`lambda_z` 同時從 Euclidean 換成 `1 − cos`（與 §5.5 / `bilevel/ppo.py` 同形式）。metamotivo 的 `project_z` 只在 `sample_z` / `*_inference` 產生 z 時套用，`actor()`／`_actor()` 一次都沒有，`Actor.forward` 直接 `cat([obs, z])`，所以離開球面的 z 會被原樣吃進去。偏移是各向異性的：256 維裡的通用 delta 幾乎正交於 z0，只讓半徑做二階偏移（初始化實測 `||delta||=0.064` → `||z_beta||` 15.994..16.005，0.01%）；真正的一階失效是 delta 學到**沿 z0 的徑向分量**（`delta = −0.1·z0` 直接掉到 14.4）。以前有 `ActionHead` 吸收所以看不出來。
+> 3. **actor 的 obs 做尺度正規化** — `model/obs_scale.py`（與 `scripts/rollout_z_on_body.py --obs-scale auto` 同一份實作），預設 `auto`。凍結 actor 的 obs normalizer 是帶成人統計量的 BatchNorm，不正規化的話 `z_β` 得先花力氣去抵一個單位換算。物理、qpos、D/L_phys 全部仍跑在真實身體上，只有 actor 看到的那份 obs 被縮放。`cfg.obs_scale = "none"` 回到舊行為做 ablation。
 
 > 移動時注意：checkpoint 內 pickle 的 `cfg` 指向已不存在的路徑（`assets/robots/robot_child.xml`），`model/simple/evaluate.py:89,111` 會因此爆掉。若要跑舊 baseline，需先修這條路徑。
 
@@ -1409,7 +1414,8 @@ policy forward。過程中修掉兩個實測出來的效能地雷：
 `tests/{test_torch_kin,test_retarget,test_simpool}.py`。
 新增 `scripts/audit_bodies.py`、`scripts/regen_bodies.py`。
 `model/networks.py` 加了 `project_z` 旗標（預設 False，legacy 路徑逐位元不變）、
-`RootWrenchHead`、`ValueNet`。`model/simple/train.py` 等 legacy baseline 未動。
+`RootWrenchHead`、`ValueNet`。當時 `model/simple/train.py` 等 legacy baseline 未動；
+後來 simple 路徑改為 z-only + 尺度正規化 obs，見 §7.3。
 
 `eval_bilevel.py`（held-out 評估，`f_max=0`、整段 clip、沿用 `losses.*`）尚未實作 —— 它是
 Stage 3 跑完才用得到。

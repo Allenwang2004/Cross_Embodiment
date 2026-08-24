@@ -8,9 +8,17 @@ it was never trained for" -- the reference point the trained adapter
 Uses the same task set, reward functions, and D/L_phys scoring as
 model/simple/evaluate.py so the two reports are directly comparable.
 
+--obs-scale is off by default, which keeps this the pure "frozen policy, raw
+child obs" reference the existing reports were written against. Since training
+now canonicalises the actor's obs (model/obs_scale.py), `--obs-scale auto` is
+the matched control for a trained checkpoint: the difference between the two
+baseline runs is how much of the gap is pure scale, and what the adapter has to
+beat is the scaled one.
+
 Usage (from project root):
     uv run model/simple/baseline.py
     uv run model/simple/baseline.py --render-videos --out-dir outputs/baseline
+    uv run model/simple/baseline.py --obs-scale auto --out-dir outputs/baseline_scaled
 """
 
 import argparse
@@ -35,13 +43,15 @@ from metamotivo.fb_cpr.huggingface import FBcprModel
 
 from model import losses
 from model.dataset import CrossEmbodimentDataset, load_task_list
+from model.obs_scale import build_obs_multiplier
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_TEST_TASKS = REPO_ROOT / "datasets" / "crossenbodiment-1-datasets" / "splits" / "test_tasks.txt"
 OFFICIAL_TASKS = REPO_ROOT / "docs" / "humenv_all_tasks_official.txt"
 
 
-def rollout_baseline(model, env, reward_fn, z0_t, device, steps_per_episode, record_video=False):
+def rollout_baseline(model, env, reward_fn, z0_t, device, steps_per_episode,
+                     obs_mul=None, record_video=False):
     obs, _ = env.reset()
     qpos_hist = []
     frames = [] if record_video else None
@@ -49,7 +59,8 @@ def rollout_baseline(model, env, reward_fn, z0_t, device, steps_per_episode, rec
 
     with torch.no_grad():
         for t in range(steps_per_episode):
-            obs_t = torch.tensor(obs["proprio"], dtype=torch.float32, device=device).unsqueeze(0)
+            proprio = obs["proprio"] if obs_mul is None else obs["proprio"] * obs_mul
+            obs_t = torch.tensor(proprio, dtype=torch.float32, device=device).unsqueeze(0)
             action = model.act(obs_t, z0_t, mean=True)
             action_np = action.cpu().numpy().ravel()
 
@@ -70,6 +81,8 @@ def run_baseline(dataset_dir="datasets/crossenbodiment-1-datasets",
                   target_xml="assets/robots/child/robot.xml",
                   metamotivo_repo="facebook/metamotivo-M-1",
                   tasks_file=None, trials_per_task=None, steps_per_episode=300,
+                  obs_scale="none", obs_scale_parts="length",
+                  obs_scale_ref_xml="assets/robots/adult/robot.xml",
                   out_dir="outputs/baseline", render_videos=False, device="cuda:0"):
     if tasks_file is None:
         if DEFAULT_TEST_TASKS.exists():
@@ -90,6 +103,9 @@ def run_baseline(dataset_dir="datasets/crossenbodiment-1-datasets",
     env, _ = make_humenv(
         num_envs=1, task=None, xml=str(REPO_ROOT / target_xml), state_init="Default",
     )
+
+    obs_mul = build_obs_multiplier(REPO_ROOT / target_xml, REPO_ROOT / obs_scale_ref_xml,
+                                   mode=obs_scale, parts=obs_scale_parts)
 
     d_weights = {"root": 1.0, "ee": 1.0, "contact": 1.0, "pose": 1.0, "velocity": 1.0}
 
@@ -114,7 +130,7 @@ def run_baseline(dataset_dir="datasets/crossenbodiment-1-datasets",
 
         record_video = render_videos and reward_name not in rendered_tasks
         episode = rollout_baseline(model, env, reward_fn, z0_t, device, steps_per_episode,
-                                    record_video=record_video)
+                                   obs_mul=obs_mul, record_video=record_video)
 
         d_total, d_terms = losses.functional_equivalence(
             env.unwrapped.model, episode["qpos_beta"], sample["qpos_ref"], d_weights
@@ -162,11 +178,13 @@ def run_baseline(dataset_dir="datasets/crossenbodiment-1-datasets",
     report_path = out_dir / "report.json"
     report_path.write_text(json.dumps(
         {"target_xml": target_xml, "tasks_file": str(tasks_file),
+         "obs_scale": obs_scale, "obs_scale_parts": obs_scale_parts,
          "overall": overall, "per_task": summary, "per_row": per_row},
         indent=2,
     ))
 
-    print("\n=== baseline summary (no adapter, raw z0 on robot_child.xml) ===")
+    print(f"\n=== baseline summary (no adapter, raw z0 on {target_xml}, "
+          f"obs_scale={obs_scale}) ===")
     print(f"{overall['n_tasks']} tasks, {overall['n_rows']} rows")
     print(f"r_task mean: {overall['r_task_mean']}")
     print(f"D mean:      {overall['d_total_mean']}")
@@ -186,6 +204,16 @@ def main():
                               "the full official task list")
     parser.add_argument("--trials-per-task", type=int, default=None)
     parser.add_argument("--steps-per-episode", type=int, default=300)
+    parser.add_argument("--obs-scale", default="none",
+                        help="rescale the actor's obs to a reference body size "
+                             "(model/obs_scale.py): 'none' (default -- the "
+                             "reference the existing reports use), 'auto' "
+                             "(per-body ratios, what training now does), or an "
+                             "explicit float forcing one uniform ratio. Affects "
+                             "ONLY the actor's input, never the physics or the "
+                             "D/L_phys/R_task scoring")
+    parser.add_argument("--obs-scale-parts", choices=["length", "pose"], default="length")
+    parser.add_argument("--obs-scale-ref-xml", default="assets/robots/adult/robot.xml")
     parser.add_argument("--out-dir", default="outputs/baseline")
     parser.add_argument("--render-videos", action="store_true",
                          help="save one video per task (first trial only)")
@@ -198,6 +226,9 @@ def main():
         tasks_file=args.tasks_file,
         trials_per_task=args.trials_per_task,
         steps_per_episode=args.steps_per_episode,
+        obs_scale=args.obs_scale,
+        obs_scale_parts=args.obs_scale_parts,
+        obs_scale_ref_xml=args.obs_scale_ref_xml,
         out_dir=args.out_dir,
         render_videos=args.render_videos,
         device=args.device,
