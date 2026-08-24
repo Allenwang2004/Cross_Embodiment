@@ -1,21 +1,21 @@
 """Entry point for launching training with the default config on GPU.
 
 Usage (from project root):
-    uv run model/run_train.py
-    uv run model/run_train.py --gpu 1      # run on cuda:1
-    uv run model/run_train.py --device cpu # or any explicit device string
+    uv run model/simple/run_train.py
+    uv run model/simple/run_train.py --gpu 1      # run on cuda:1
+    uv run model/simple/run_train.py --device cpu # or any explicit device string
 """
 import argparse
 import sys
 from pathlib import Path
 
-# Running this file directly (not `-m model.run_train`) puts model/ itself on
-# sys.path, not its parent -- so `model.config`/`model.train`'s absolute
-# imports can't find the `model` package unless the repo root is added too.
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+# Running this file directly (not `-m model.simple.run_train`) puts model/simple/
+# itself on sys.path, not the repo root -- so `model.simple.config`/`model.simple.train`
+# absolute imports can't find the `model` package unless the repo root is added too.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from model.config import TrainConfig
-from model.train import train
+from model.simple.config import TrainConfig
+from model.simple.train import train
 
 
 def main():

@@ -13,7 +13,7 @@ project cares about:
 Bodies split by BilevelConfig.train_bodies / heldout_bodies (mirrored into each
 parameter.json by scripts/write_body_splits.py); tasks by the existing
 datasets/.../splits/{train,test}_tasks.txt, so the task axis stays identical to
-the one model/evaluate.py and model/baseline.py used and the numbers remain
+the one model/simple/evaluate.py and model/simple/baseline.py used and the numbers remain
 comparable to outputs/{baseline,eval}/report.json.
 
 Two things this does differently from training, deliberately:

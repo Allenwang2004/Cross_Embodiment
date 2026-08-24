@@ -351,7 +351,7 @@ def load_splits(cfg) -> Tuple[Optional[List[str]], Optional[List[str]]]:
 
     Same task-level split as scripts/split_tasks.py (43/11 of the 54 official
     humenv tasks), reused so held-out numbers stay comparable with the
-    model/evaluate.py + model/baseline.py baselines in outputs/.
+    model/simple/evaluate.py + model/simple/baseline.py baselines in outputs/.
     """
     d = REPO_ROOT / cfg.splits_dir
     tr, te = d / "train_tasks.txt", d / "test_tasks.txt"

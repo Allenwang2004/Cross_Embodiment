@@ -18,8 +18,8 @@ problem in normal training. If it still doesn't move, the issue is deeper
 (e.g. reward/cost signal too weak, lr, or REINFORCE variance itself).
 
 Usage (from project root):
-    uv run model/diagnose_single_task.py
-    uv run model/diagnose_single_task.py --task-idx 0 --num-updates 100 --gpu 0
+    uv run model/simple/diagnose_single_task.py
+    uv run model/simple/diagnose_single_task.py --task-idx 0 --num-updates 100 --gpu 0
 """
 
 import argparse
@@ -28,7 +28,7 @@ import random
 import sys
 from pathlib import Path
 
-PARENT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+PARENT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if PARENT_DIR not in sys.path:
     sys.path.append(PARENT_DIR)
 
@@ -42,12 +42,12 @@ from tqdm import tqdm
 from humenv import make_humenv
 from metamotivo.fb_cpr.huggingface import FBcprModel
 
-from model.config import TrainConfig
+from model.simple.config import TrainConfig
 from model.dataset import CrossEmbodimentDataset, load_beta, load_task_list
 from model.networks import ActionHead, LatentAdapter
-from model.train import compute_batch_cost, plot_loss_curve, rollout_batch
+from model.simple.train import compute_batch_cost, plot_loss_curve, rollout_batch
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def main():

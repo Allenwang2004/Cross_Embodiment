@@ -2,7 +2,7 @@
 
 Why PPO and not the existing REINFORCE
 --------------------------------------
-model/train.py runs episode-level REINFORCE: one scalar of learning signal for
+model/simple/train.py runs episode-level REINFORCE: one scalar of learning signal for
 300 x 69 = 20700 sampled dimensions, with an EMA scalar baseline. Shortening
 the episode to a 24-step window makes that WORSE, not better -- the cost's scale
 shrinks while the score function's magnitude does not. And a scalar baseline
@@ -15,7 +15,7 @@ prior, and a single bad update destroys the prior.
 Two things are NOT estimated by the policy gradient, because they do not have to
 go through the simulator:
 
-  lambda_z anchor -- ||z_beta - z0||, kept from model/train.py:305 but in COSINE
+  lambda_z anchor -- ||z_beta - z0||, kept from model/simple/train.py:305 but in COSINE
       form. z_beta is now projected onto the sphere of radius sqrt(z_dim), so a
       Euclidean penalty would partly be penalizing a radius that is fixed by
       construction; 1 - cos is the correct distance on that manifold. Evaluated
@@ -44,7 +44,7 @@ from model.bilevel.policy import CTRL_DIM
 class PairAdvantageNormalizer:
     """Per-(clip, body) EMA of ADVANTAGE mean/std.
 
-    model/diagnose_single_task.py exists because task composition dominated the
+    model/simple/diagnose_single_task.py exists because task composition dominated the
     old signal: some (clip, body) pairs are simply much harder than others, and
     a global baseline reads that heterogeneity as advantage. Standardizing
     within a pair removes it. proposal.md R7.

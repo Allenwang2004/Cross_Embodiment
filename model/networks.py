@@ -25,7 +25,7 @@ class LatentAdapter(nn.Module):
     exactly 16.0 = sqrt(256), and metamotivo's FBModel.project_z enforces it
     (metamotivo/fb/model.py:126) because the model was trained with norm_z=True.
     Without this the frozen actor is fed an off-manifold z it has never seen.
-    Defaults to False so model/train.py's existing behaviour and its trained
+    Defaults to False so model/simple/train.py's existing behaviour and its trained
     checkpoints in model/checkpoints/ are bit-for-bit unchanged; the bilevel
     path (model/bilevel/config.py: project_z) turns it on.
     """
@@ -100,7 +100,7 @@ class ValueNet(nn.Module):
     """V(obs, z_beta, beta, phase) for the bilevel PPO lower level.
 
     Conditioning on (z_beta, beta) lets one network represent the per-(clip,
-    body) baseline directly -- model/diagnose_single_task.py exists because
+    body) baseline directly -- model/simple/diagnose_single_task.py exists because
     task-composition heterogeneity swamped the old scalar EMA baseline.
 
     `phase` = (t/H, (H-t)/H) is NOT optional. With a 24-step window the value
@@ -119,7 +119,7 @@ class ValueNet(nn.Module):
 class ActionResidual(nn.Module):
     """Residual correction on top of the frozen actor's raw action mean, with
     NO beta conditioning -- for the single-body, no-adapter, kinematics-only
-    exploration experiment (model/train_explore.py) where z is fed to the
+    exploration experiment (model/simple/train_explore.py) where z is fed to the
     frozen actor unmodified and there is no morphology descriptor to condition
     on."""
 

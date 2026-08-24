@@ -142,7 +142,7 @@
 | **KL** | 新舊策略的分布差異。健康的 PPO 每輪只有 0.01–0.05；本專案曾一度到 94（見 §11） |
 | **epoch / minibatch** | 同一批資料重複用 4 遍（epoch），每遍切成 4 小塊（minibatch）分別更新 |
 | **entropy** | 策略的隨機程度。這裡設 0，因為凍結 AI 已經提供了行為先驗 |
-| **REINFORCE** | 最原始的策略梯度法（舊系統 `model/train.py` 用的）。一整段只給一個純量訊號，訊噪比極差 |
+| **REINFORCE** | 最原始的策略梯度法（舊系統 `model/simple/train.py` 用的）。一整段只給一個純量訊號，訊噪比極差 |
 | **score function** | `∇log π(a|s)`，策略梯度的核心項。它的變異隨動作維度成長，這是舊系統的病根 |
 | **BC / behaviour cloning** | 行為複製。直接用監督式學習叫網路輸出「正確答案」。這裡的正確答案是 `a_ref` —— 能命令出參考關節角的那個 ctrl，有封閉解、零變異 |
 | **MDP** | Markov Decision Process，強化學習的標準問題形式：狀態、動作、轉移、獎勵 |
@@ -452,18 +452,18 @@ ES 是用來估這塊看不見的梯度的，所以它必須和外力退火**同
 
 ### 1.1 現有系統的四個結構性問題
 
-現行 pipeline (`model/train.py`) 是單階段的：
+現行 pipeline (`model/simple/train.py`) 是單階段的：
 
 | 問題 | 證據 |
 |---|---|
 | **Retargeting 是離線烘焙的** | `scripts/qpos_retarget.py` 是 CLI，寫出 `.npz`；`model/dataset.py:57` 訓練時只做 `np.load(...)["qpos"]`。retargeting 品質完全不參與最佳化。 |
 | **只有一個純量 scale 可調** | `scripts/qpos_retarget.py:91 retarget_qpos(qpos, scale)` 全部內容就是 `out[:, 0:3] *= scale`。唯一的 scale 來自 rest-pose pelvis 高度比 (`:172-174`)，adult→child = 0.6110。 |
 | **beta 是常數，adapter 的條件輸入零資訊** | `scripts/build_dataset.py:45 MORPHOLOGY_LABEL = "child"` 寫死，`manifest.jsonl` 全部 1530 列都是 `child`。`LatentAdapter(beta_dim=8, ...)` 的 beta 從頭到尾是同一個向量。 |
-| **65% 的訓練資料對主要 loss 沒有貢獻** | 1530 列中 **990 列** `"retargeted_motion": null` → `model/dataset.py:56` 回傳 `qpos_ref=None` → `model/losses.py:126-127 functional_equivalence` 靜默回傳 `(0.0, {})`。`model/train.py:286` 均勻取樣，所以每個 batch 約 2/3 對 D 項是死重。 |
+| **65% 的訓練資料對主要 loss 沒有貢獻** | 1530 列中 **990 列** `"retargeted_motion": null` → `model/dataset.py:56` 回傳 `qpos_ref=None` → `model/losses.py:126-127 functional_equivalence` 靜默回傳 `(0.0, {})`。`model/simple/train.py:286` 均勻取樣，所以每個 batch 約 2/3 對 D 項是死重。 |
 
 另外三個較小但會咬人的問題：
 
-- **Episode-level REINFORCE 的訊噪比**：`model/train.py:158` 把 300×69 = 20700 個抽樣維度的 log-prob 壓成一個純量，再乘上一個 episode 級的 advantage。`model/diagnose_single_task.py` 的存在本身就是在懷疑 task-composition 噪音主導了學習訊號。
+- **Episode-level REINFORCE 的訊噪比**：`model/simple/train.py:158` 把 300×69 = 20700 個抽樣維度的 log-prob 壓成一個純量，再乘上一個 episode 級的 advantage。`model/simple/diagnose_single_task.py` 的存在本身就是在懷疑 task-composition 噪音主導了學習訊號。
 - **`z_beta` 脫離 FB manifold**：所有存檔的 `z` norm 剛好 `16.0 = √256`，`metamotivo/fb/model.py:126 project_z` 強制此約束，但 `model/networks.py:36` 回傳未投影的 `z0 + α·delta`。frozen actor 從未見過離開球面的 z。
 - **既有實驗結果本身在警告**：`outputs/{baseline,eval}/report.json`（11 個 held-out task × 10 trials）顯示 adapter 把 `D` 從 40.51 降到 21.40，但 `L_phys` 從 **2.75 惡化到 3.83** — adapter 在拿物理可行性換參考動作的相似度。
 
@@ -500,7 +500,7 @@ a_ref,t = clip( 2·(q̂_{t+1} − lo)/(hi − lo) − 1 , −1, 1 )        # (69
 
 ### 1.4 為什麼新的 reward 設計沒有踩到舊的坑
 
-commit `9600539 "feat: remove reward loss"` 拿掉了 `−R_task`，理由（`model/train.py:12-26`）是 humenv 的 reward 是**針對 source body 的運動學寫的**，在目標身體上最佳化它等於逼 adapter 回頭模仿原本的身材。
+commit `9600539 "feat: remove reward loss"` 拿掉了 `−R_task`，理由（`model/simple/train.py:12-26`）是 humenv 的 reward 是**針對 source body 的運動學寫的**，在目標身體上最佳化它等於逼 adapter 回頭模仿原本的身材。
 
 **這個理由仍然成立，而且新設計不受影響**：`new.md` 的 tracking / regularization / survival reward 全部都在**目標身體自身的 FK 與動力學**上計算，沒有任何一項引用 source body 的比例。commit message 當時劃的那條界線，正好把新 reward 放在安全的一邊。
 
@@ -793,7 +793,7 @@ dF/dp  =  ∂F/∂r · ∂r/∂p                        [T1]  直接項，參考
 
 ### 5.1 演算法選擇：PPO + GAE + 兩條解析側通道
 
-**為什麼不沿用 episode-level REINFORCE**：它在 `300 × 69 = 20700` 個抽樣維度上只給一個純量學習訊號。縮短到 24 步會讓**每樣本 SNR 更差**，不是更好 — cost 的尺度縮小了，但 score function 的量級沒有。`model/diagnose_single_task.py` 的 docstring 已經懷疑 task-composition 噪音主導。per-step reward + GAE + β-conditioned value function 同時解決那個問題和 window 內的 credit assignment。
+**為什麼不沿用 episode-level REINFORCE**：它在 `300 × 69 = 20700` 個抽樣維度上只給一個純量學習訊號。縮短到 24 步會讓**每樣本 SNR 更差**，不是更好 — cost 的尺度縮小了，但 score function 的量級沒有。`model/simple/diagnose_single_task.py` 的 docstring 已經懷疑 task-composition 噪音主導。per-step reward + GAE + β-conditioned value function 同時解決那個問題和 window 內的 credit assignment。
 
 **為什麼不用 A2C**：在每 iteration 6144 個 fresh on-policy 樣本下可行，但這個架構是「強 frozen prior 上的 residual」，一次壞更新就毀掉 prior。PPO 的 clip 基本上是免費保險。
 
@@ -812,7 +812,7 @@ a ~ N([μ_ctrl, μ_wr], diag(σ)),   σ_ctrl = 0.05, σ_wrench = 0.05
 - **加上 `project_z`**（§1.1 的既有缺陷）。`16·F.normalize()` 可微，一行。
 - **單一 75 維 Gaussian，在 pre-squash 空間取樣**。worker 端套 `clip(a[:69], −1, 1)`（MuJoCo 因 `ctrllimited=true` 本來就會夾）與 `f = f_max·tanh(a[69:72])`、`m = m_max·tanh(a[72:75])`。PPO 的 log-prob 用**未 squash** 的值，所以它就是一個純 Gaussian，不需要 tanh Jacobian 修正。
 - `RootWrenchHead`：`MLP(6 + 8 + 69 → 128,128 → 6)`，輸出在 **root local frame**；主進程用上一步的 root quat 旋到 world 再寫 `xfrc_applied`。旋轉等變，比 world frame 好學太多。
-- 沿用 `model/train.py:141-143` 的技巧：呼叫 `model._normalize` / `model._actor` 而非 `@torch.no_grad()` 包住的 `model.act()`，讓梯度流進 `z_beta`。
+- 沿用 `model/simple/train.py:141-143` 的技巧：呼叫 `model._normalize` / `model._actor` 而非 `@torch.no_grad()` 包住的 `model.act()`，讓梯度流進 `z_beta`。
 
 **外力是訓練拐杖，不是交付物**：
 `f_max = 0.5·M·g`（iter 0–2000），cosine 退火到 0（iter 8000）；`m_max = 0.5·f_max·L_leg`。
@@ -839,7 +839,7 @@ phase = (t/H, (H−t)/H)
 
 ### 5.5 PPO 更新
 
-每 iteration 6144 transitions；**4 epochs × 4 minibatches**（minibatch 1536）；clip ε = 0.2；value clip 0.2；grad-norm clip **1.0**（從 `model/config.py:45` 的 5.0 降下來 — residual 架構脆弱）。
+每 iteration 6144 transitions；**4 epochs × 4 minibatches**（minibatch 1536）；clip ε = 0.2；value clip 0.2；grad-norm clip **1.0**（從 `model/simple/config.py:45` 的 5.0 降下來 — residual 架構脆弱）。
 
 **`z_beta` 在每個 minibatch forward 內用當前 adapter 從 `(β, z0)` 重新計算**，讓 PPO ratio 正確反映 adapter 的更新。**adapter 是 policy 的一部分，不能當成凍結的 context 向量。** 它每 iteration 重算，不是每 window；每個 clip 一個 `z0`（來自 `data/z/<task>/<task>_<trial>.npy`），每具身體一個 `β`，都是確定性的。探索完全來自 action Gaussian。
 
@@ -849,7 +849,7 @@ phase = (t/H, (H−t)/H)
 L = L_clip + 0.5·L_value + λ_z·mean(1 − cos(z_beta, z0)) + λ_bc(k)·mean‖μ_ctrl − a_ref‖²
 ```
 
-**`lambda_z` 如何存活**：仍然是一個直接、可微、不碰模擬器的項（就是 `model/train.py:305` 的做法，`λ_z = 0.1`）。兩點升級：
+**`lambda_z` 如何存活**：仍然是一個直接、可微、不碰模擬器的項（就是 `model/simple/train.py:305` 的做法，`λ_z = 0.1`）。兩點升級：
 
 1. 改用 **cosine 形式** `1 − ⟨ẑ_β, ẑ_0⟩`。z 已投影到球面，歐氏範數會去懲罰一個現在由建構固定的半徑 — cosine 才是該流形上正確的距離。
 2. 對 minibatch 內**唯一的 (clip, body) pair** 計算，而非 per-transition，避免被 window 數量隱性加權。
@@ -1072,7 +1072,7 @@ model/bilevel/
 
 | 檔案 | 主要 API | 說明 |
 |---|---|---|
-| `config.py` | `BilevelConfig` | 一個 dataclass 裝下全部超參數，附排程輔助（`wrench_scale(it)`、`bc_scale(it)`、`gamma_at(it)`、`lr_lower_at(it)`）。任何偏離 `model/config.py` 舊值的地方都註明了舊值與理由 |
+| `config.py` | `BilevelConfig` | 一個 dataclass 裝下全部超參數，附排程輔助（`wrench_scale(it)`、`bc_scale(it)`、`gamma_at(it)`、`lr_lower_at(it)`）。任何偏離 `model/simple/config.py` 舊值的地方都註明了舊值與理由 |
 | `data.py` | `WindowDataset.sample()` → `(clip, body, t0)`；`.build_batch()`；`.body_assignment()`；`BodySpec`；`ref_qvel_from_qpos()` | 430 clips（train split，磁碟上共 540）一次全載入 RAM（63 MB），不需 manifest、不需 build step。`body_assignment` 是**固定的** env slot → body 連續指派，避免 worker 切換 `MjModel`。`ref_qvel0` 必須走 `mj_differentiatePos`，free joint 的 `qvel[3:6]` 是 body-local 角速度 |
 
 **上層（p）**
@@ -1123,13 +1123,13 @@ model/bilevel/
 
 ### 7.3 保留為 baseline，不改造
 
-`model/train.py`、`model/train_explore.py`、`model/config.py`、`model/config_explore.py`、`model/run_train.py`、`model/diagnose_single_task.py`、`model/evaluate.py`、`model/baseline.py`。
+`model/simple/train.py`、`model/simple/train_explore.py`、`model/simple/config.py`、`model/simple/config_explore.py`、`model/simple/run_train.py`、`model/simple/diagnose_single_task.py`、`model/simple/evaluate.py`、`model/simple/baseline.py`。
 
 它們的 docstring 記錄了付過代價的發現：為何 `exploration_std=0.05` 而非 0.2（`config.py:35-38`）、為何拿掉 `R_task`（`train.py:12-26`）、為何 `total_loss` 不是進度訊號（`train.py:190-196`）、task-composition 混淆（`diagnose_single_task.py`）。
 
-想要乾淨的樹可以移到 `model/legacy/`，但**必須保持可執行** — 新系統得贏過它們，而且你會需要那個對照。
+為了保持樹乾淨，這些檔案已移到 `model/simple/`（`uv run model/simple/train.py` 等），但**保持可執行** — 新系統得贏過它們，而且你會需要那個對照。共用模組（`losses.py`、`dataset.py`、`networks.py`、`kinematics.py`）仍留在 `model/` 頂層，因為 bilevel 也 import 它們。
 
-> 移動時注意：checkpoint 內 pickle 的 `cfg` 指向已不存在的路徑（`assets/robots/robot_child.xml`），`model/evaluate.py:89,111` 會因此爆掉。若要跑舊 baseline，需先修這條路徑。
+> 移動時注意：checkpoint 內 pickle 的 `cfg` 指向已不存在的路徑（`assets/robots/robot_child.xml`），`model/simple/evaluate.py:89,111` 會因此爆掉。若要跑舊 baseline，需先修這條路徑。
 
 ### 7.4 保留供評估、不擴充
 
@@ -1200,7 +1200,7 @@ Pelvis 帶 `euler="90 0 0"`、rest quaternion 是 `(0.7071, 0.7071, 0, 0)`，這
 
 **R6 — 24 步視野學不到需要 >0.8 s 上下文的東西。** 步態相位、轉身完成、跳躍頂點。梯度層面接受這個限制，但每 100 iterations 追蹤一次 300 步 rollout 指標，才會發現短視野 policy 是否在把局部良好、全局不連貫的動作拼在一起。
 
-**R7 — 對目標身體根本不可能的參考幀。** headstand 重定向到 `short_stocky` 可能無論 p 怎麼調都起不來。24 步 window 下 policy 永遠學不到從那裡恢復，它會變成永久噪音源。緩解：per-(clip, body) advantage 正規化（§5.3），並可選擇在前 1000 iterations 課程式過濾掉最難的 10% pair。`model/diagnose_single_task.py` 已經懷疑過舊系統有這個混淆，別讓它靜默重演。
+**R7 — 對目標身體根本不可能的參考幀。** headstand 重定向到 `short_stocky` 可能無論 p 怎麼調都起不來。24 步 window 下 policy 永遠學不到從那裡恢復，它會變成永久噪音源。緩解：per-(clip, body) advantage 正規化（§5.3），並可選擇在前 1000 iterations 課程式過濾掉最難的 10% pair。`model/simple/diagnose_single_task.py` 已經懷疑過舊系統有這個混淆，別讓它靜默重演。
 
 **R8 — RSI 噪音造成穿透的初始狀態**，在寬體身材上最嚴重。緩解：§6.4 的 clip + `ncon`/`contact.dist` 檢查 + 重試。
 
@@ -1242,7 +1242,7 @@ Pelvis 帶 `euler="90 0 0"`、rest quaternion 是 `(0.7071, 0.7071, 0, 0)`，這
 
 `f_max → 0`（iter 2000–8000）。開啟 `λ_ext·E_ext + λ_phys·P + λ_gap·G` 的反對稱 ES。驗證 CRN。可選擇解凍 `log_tau`。給滿 `--iters 10000` 就是正式跑 —— 9 具身體、430 個訓練 clip。
 
-跑完用 `model/bilevel/eval_bilevel.py` 做 held-out：2 具未見身材（`giant`、`short_stocky`）× held-out task split 的四象限，`f_max = 0`，長 rollout，用**原本的** `losses.functional_equivalence` / `losses.physics_penalty` 評分，讓結果與 `model/train.py` 的 baseline（`outputs/{baseline,eval}/report.json`）直接可比。
+跑完用 `model/bilevel/eval_bilevel.py` 做 held-out：2 具未見身材（`giant`、`short_stocky`）× held-out task split 的四象限，`f_max = 0`，長 rollout，用**原本的** `losses.functional_equivalence` / `losses.physics_penalty` 評分，讓結果與 `model/simple/train.py` 的 baseline（`outputs/{baseline,eval}/report.json`）直接可比。
 
 > 原本這裡還有一個「Stage 4 — 全量」。已移除：規模是 `--iters` 而非階段，Stage 2/3 早就用滿全部身材與 clip，那個 preset 與 Stage 3 逐欄位比對零差異。詳見 §0.9。
 
@@ -1409,7 +1409,7 @@ policy forward。過程中修掉兩個實測出來的效能地雷：
 `tests/{test_torch_kin,test_retarget,test_simpool}.py`。
 新增 `scripts/audit_bodies.py`、`scripts/regen_bodies.py`。
 `model/networks.py` 加了 `project_z` 旗標（預設 False，legacy 路徑逐位元不變）、
-`RootWrenchHead`、`ValueNet`。`model/train.py` 等 legacy baseline 未動。
+`RootWrenchHead`、`ValueNet`。`model/simple/train.py` 等 legacy baseline 未動。
 
 `eval_bilevel.py`（held-out 評估，`f_max=0`、整段 clip、沿用 `losses.*`）尚未實作 —— 它是
 Stage 3 跑完才用得到。
@@ -1429,7 +1429,7 @@ Stage 3 跑完才用得到。
 ### Q3 的落地：四象限評估
 
 `model/bilevel/eval_bilevel.py`。身材軸走 `BilevelConfig.train_bodies`／`heldout_bodies`，
-task 軸沿用既有的 `splits/{train,test}_tasks.txt`（與 `model/evaluate.py`／`baseline.py` 同一組，
+task 軸沿用既有的 `splits/{train,test}_tasks.txt`（與 `model/simple/evaluate.py`／`baseline.py` 同一組，
 數字才與 `outputs/{baseline,eval}/report.json` 可比）：
 
 | 象限 | 量測的東西 |
@@ -1468,11 +1468,11 @@ rollout 拉長到數百步（24 步視野看不出 policy 是不是在把局部�
 
 **對 legacy 路徑的實際後果（已明確標註，不讓它靜默塌掉）**：`model/dataset.py` 的
 `qpos_ref` 現在恆為 `None`，因此 `functional_equivalence` 回傳 0.0，
-`model/train.py` 目標函數中的 **D 項恆等於零**，實際被最佳化的只剩
+`model/simple/train.py` 目標函數中的 **D 項恆等於零**，實際被最佳化的只剩
 `λ_z‖z_β−z0‖² + λ_phys·L_phys`。
 
 這一點特別容易漏看 —— 原本 1530 列就有 990 列 `retargeted_motion: null`，D=0 早就是常態。
-因此 `CrossEmbodimentDataset` 建構時會**主動印出警告**，`model/train.py` 與
+因此 `CrossEmbodimentDataset` 建構時會**主動印出警告**，`model/simple/train.py` 與
 `scripts/build_dataset.py` 的 docstring 也都標了。要跑回原本的 baseline，兩行指令可重生：
 
 ```bash

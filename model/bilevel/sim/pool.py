@@ -1,6 +1,6 @@
 """SimPool: 32 worker processes x 8 sims = 256 envs, driven from the main process.
 
-Replaces gymnasium's SyncVectorEnv (model/train.py:235, batch 16, one process).
+Replaces gymnasium's SyncVectorEnv (model/simple/train.py:235, batch 16, one process).
 The measured shape of the problem, from proposal.md 6.1:
 
     16 workers x 16 sims  707 ms / 24-step iteration

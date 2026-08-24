@@ -104,7 +104,7 @@ forcerange_b[j] = tau_b[j] * h_adult[j]
 重點在**不要自己手刻 MJCF 的四元數組合/正規化規則**——讓 MuJoCo 自己 `mj_forward` 算出權威的 rest-pose 世界變換，只把攤平的結果交出去。輸出 `assets/robots/<label>/skeleton.json`。
 
 ### 🟡 `make_child_origact_xml.py`
-組一具混血身體：child 的縮小幾何/慣量 + 成人**未縮放**的原始致動器。給 `model/train_explore.py` 那個純運動學探索實驗用，目的是把「child 的形態在成人級力量驅動下能不能學會維持物理合理」從致動器縮放的影響裡隔離出來。
+組一具混血身體：child 的縮小幾何/慣量 + 成人**未縮放**的原始致動器。給 `model/simple/train_explore.py` 那個純運動學探索實驗用，目的是把「child 的形態在成人級力量驅動下能不能學會維持物理合理」從致動器縮放的影響裡隔離出來。
 
 實作很簡單（兩個 XML 的 actuator 名稱/joint/順序完全相同，整塊 `<actuator>` 換掉就好），但會先 assert 這個恆等式。輸出 `assets/robots/child/robot_origact.xml`。
 
@@ -195,7 +195,7 @@ bilevel 路線**完全不用**這支。`model/bilevel/data.py` 直接讀 `data/o
 1. `retargeted_motion` 這個概念**已被移除**（retargeting 現在是 p 的 runtime 可微函數），它要複製的檔案和寫進 manifest 的 key 都不存在了
 2. `MORPHOLOGY_SRC`（`:44`）指向 `assets/robots/robot_child_parameter.json`，那個路徑在 9495329 的資產重構裡被移除，所以現在跑會直接在那裡崩
 
-留著只是為了能重建 legacy 的 `model/train.py` baseline。
+留著只是為了能重建 legacy 的 `model/simple/train.py` baseline。
 
 ---
 

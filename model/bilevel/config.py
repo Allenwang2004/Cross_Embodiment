@@ -2,9 +2,9 @@
 
 Values and their justifications come from proposal.md; the section number is
 cited next to anything that is not an arbitrary default. Where a value
-deliberately overturns one inherited from model/config.py TrainConfig, the old
+deliberately overturns one inherited from model/simple/config.py TrainConfig, the old
 value and the reason are both recorded -- those old numbers encode findings
-that cost real time (see model/train.py's module docstring).
+that cost real time (see model/simple/train.py's module docstring).
 """
 
 import dataclasses
@@ -20,7 +20,7 @@ class BilevelConfig:
     # Actuator-calibrated assets, produced by scripts/calibrate_actuators.py.
     # assets/robots/ (the shipped ones) only yields 8 usable bodies -- see
     # train_bodies below. The originals are left untouched so the legacy
-    # model/train.py baseline and outputs/{baseline,eval}/report.json stay
+    # model/simple/train.py baseline and outputs/{baseline,eval}/report.json stay
     # reproducible.
     robots_dir: str = "assets/robots_calib_move"
     source_body: str = "adult"                         # the body the frozen policy was trained on
@@ -150,7 +150,7 @@ class BilevelConfig:
 
     # ------------------------------------------------------------ lower level (phi)
     adapter_hidden_dims: List[int] = dataclasses.field(default_factory=lambda: [256, 512, 512, 256])
-    adapter_alpha: float = 0.05         # was 0.1 in model/config.py:15; halved because z_beta is
+    adapter_alpha: float = 0.05         # was 0.1 in model/simple/config.py:15; halved because z_beta is
                                         # now projected back onto the sphere, so the delta acts
                                         # purely tangentially and a smaller step goes further
     adapter_alpha_learnable: bool = False
@@ -161,7 +161,7 @@ class BilevelConfig:
     wrench_head_hidden_dims: List[int] = dataclasses.field(default_factory=lambda: [128, 128])
     value_hidden_dims: List[int] = dataclasses.field(default_factory=lambda: [512, 512])
 
-    exploration_std: float = 0.05       # inherited from model/config.py:35 -- that value was
+    exploration_std: float = 0.05       # inherited from model/simple/config.py:35 -- that value was
                                         # measured, not guessed; noise compounds over the rollout
     wrench_std: float = 0.05
 
@@ -198,7 +198,7 @@ class BilevelConfig:
     # was 2e-5 rather than 3e-4 and the clip, not lr_lower, was setting the step
     # size. 10.0 leaves the clip doing what it is for (catching the occasional
     # outlier update that would wipe the frozen prior) instead of acting as a
-    # permanent throttle. Was 1.0; 5.0 in model/config.py:45.
+    # permanent throttle. Was 1.0; 5.0 in model/simple/config.py:45.
     grad_clip_norm: float = 10.0
     gamma: float = 0.97                 # effective horizon 33 steps ~ 1.1s > the 0.8s window
     gamma_warmup: float = 0.95

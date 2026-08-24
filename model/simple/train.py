@@ -23,7 +23,7 @@ point of adapting at all. D (functional equivalence vs the retargeted
 reference motion) and L_phys (feasibility) don't have this problem -- both
 are computed straight from the target skeleton's own forward kinematics, not
 from a reward tuned for a different body. (R_task is still reported as a
-diagnostic in model/evaluate.py and model/baseline.py -- just not optimized.)
+diagnostic in model/simple/evaluate.py and model/simple/baseline.py -- just not optimized.)
 
 Why REINFORCE, not backprop-through-the-rollout
 -------------------------------------------------
@@ -87,8 +87,8 @@ config.py) -- so D() is comparing two trajectories on the same bone lengths,
 as intended.
 
 Usage (from project root, once datasets/crossenbodiment-1-datasets exists):
-    uv run model/train.py
-    uv run model/run_train.py --gpu 1
+    uv run model/simple/train.py
+    uv run model/simple/run_train.py --gpu 1
 """
 
 import os
@@ -97,7 +97,7 @@ from pathlib import Path
 import sys
 
 PARENT_DIR = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..")
+    os.path.join(os.path.dirname(__file__), "..", "..")
 )
 
 if PARENT_DIR not in sys.path:
@@ -115,11 +115,11 @@ from humenv import make_humenv
 from metamotivo.fb_cpr.huggingface import FBcprModel
 
 from model import losses
-from model.config import TrainConfig
+from model.simple.config import TrainConfig
 from model.dataset import CrossEmbodimentDataset, load_beta, load_task_list
 from model.networks import ActionHead, LatentAdapter
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def rollout_batch(model, adapter, action_head, env, z0_t, beta_t, cfg):

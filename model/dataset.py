@@ -9,7 +9,7 @@ plus 78 MB in data/) were deleted along with the manifest field.
 
 Consequence for this LEGACY path: __getitem__ now always returns
 qpos_ref=None, so losses.functional_equivalence returns 0.0 and the D term in
-model/train.py's objective is identically zero. What remains being optimized is
+model/simple/train.py's objective is identically zero. What remains being optimized is
 lambda_z * ||z_beta - z0||^2 + lambda_phys * L_phys. That is a real change to
 the baseline's behaviour, and the constructor says so out loud rather than
 letting the loss quietly collapse (990 of the original 1530 rows already had
@@ -70,7 +70,7 @@ class CrossEmbodimentDataset:
                 "model/bilevel's runtime retargeting.\n"
                 "         qpos_ref will be None for every row, so functional_equivalence "
                 "returns 0.0 and the\n"
-                "         D term of model/train.py's loss is identically zero. See this "
+                "         D term of model/simple/train.py's loss is identically zero. See this "
                 "module's docstring to regenerate."
             )
 

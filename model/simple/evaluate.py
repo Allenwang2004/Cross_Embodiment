@@ -15,9 +15,9 @@ aggregated, plus optional per-task comparison videos (target-body rollout
 side by side with its retargeted reference).
 
 Usage (from project root):
-    uv run model/evaluate.py --checkpoint model/checkpoints/update_00200.pt
-    uv run model/evaluate.py --checkpoint ... --render-videos --out-dir outputs/eval
-    uv run model/evaluate.py --checkpoint ... --tasks-file docs/humenv_all_tasks_official.txt
+    uv run model/simple/evaluate.py --checkpoint model/checkpoints/update_00200.pt
+    uv run model/simple/evaluate.py --checkpoint ... --render-videos --out-dir outputs/eval
+    uv run model/simple/evaluate.py --checkpoint ... --tasks-file docs/humenv_all_tasks_official.txt
 """
 
 import argparse
@@ -29,9 +29,9 @@ from pathlib import Path
 
 os.environ.setdefault("MUJOCO_GL", "egl")
 
-# Running this file directly (not `-m model.evaluate`) puts model/ itself on
-# sys.path, not its parent -- see the same fix in run_train.py.
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+# Running this file directly (not `-m model.simple.evaluate`) puts model/simple/
+# itself on sys.path, not the repo root -- see the same fix in run_train.py.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 import numpy as np
 import torch
@@ -41,11 +41,11 @@ from humenv.env import make_from_name
 from metamotivo.fb_cpr.huggingface import FBcprModel
 
 from model import losses
-from model.config import TrainConfig
+from model.simple.config import TrainConfig
 from model.dataset import BETA_AXES, CrossEmbodimentDataset, load_beta, load_task_list
 from model.networks import ActionHead, LatentAdapter
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_TEST_TASKS = REPO_ROOT / "datasets" / "crossenbodiment-1-datasets" / "splits" / "test_tasks.txt"
 OFFICIAL_TASKS = REPO_ROOT / "docs" / "humenv_all_tasks_official.txt"
 

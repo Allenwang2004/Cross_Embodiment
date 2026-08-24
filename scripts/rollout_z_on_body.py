@@ -54,7 +54,7 @@ This is a canonicalisation, and it removes part of the problem rather than
 solving it: it tells the actor the body is adult-sized when it is not, so the
 motions it commands are calibrated for adult limb lengths. Its use is as a
 BASELINE -- run with and without to split "how much of the gap is pure scale"
-from "how much is real dynamics" -- not as the default. model/train.py
+from "how much is real dynamics" -- not as the default. model/simple/train.py
 deliberately does the opposite, feeding raw child obs and letting the adapter
 learn the compensation, because canonicalised obs would leave beta nothing to
 explain.

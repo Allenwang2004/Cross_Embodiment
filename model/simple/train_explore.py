@@ -1,7 +1,7 @@
 """Kinematics-only action-network exploration with a fixed, unmodified
 standard-body z (no LatentAdapter, no beta conditioning, no retargeted-motion
 reference). A stripped-down control experiment against the full adapter
-pipeline in model/train.py -- see that file's docstring for the shared
+pipeline in model/simple/train.py -- see that file's docstring for the shared
 REINFORCE/batching mechanics this reuses unchanged.
 
 Pipeline per update (batched across cfg.batch_size parallel episodes on one
@@ -33,7 +33,7 @@ regularize back toward.
 
 Usage (from project root, once datasets/crossenbodiment-1-datasets exists and
 scripts/make_child_origact_xml.py has been run):
-    uv run model/train_explore.py
+    uv run model/simple/train_explore.py
 """
 
 import argparse
@@ -43,7 +43,7 @@ from pathlib import Path
 import sys
 
 PARENT_DIR = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..")
+    os.path.join(os.path.dirname(__file__), "..", "..")
 )
 
 if PARENT_DIR not in sys.path:
@@ -64,11 +64,11 @@ from humenv import make_humenv
 from metamotivo.fb_cpr.huggingface import FBcprModel
 
 from model import losses
-from model.config_explore import ExploreConfig
+from model.simple.config_explore import ExploreConfig
 from model.dataset import CrossEmbodimentDataset, load_task_list
 from model.networks import ActionResidual
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def rollout_batch_explore(model, action_net, env, z0_t, cfg):
@@ -283,7 +283,7 @@ def main():
     parser.add_argument("--task-name", default=None,
                          help="restrict training to a single reward_name's trials "
                               "(debug mode -- isolates cross-task L_phys-scale noise from "
-                              "actual learning signal, see model/diagnose_single_task.py "
+                              "actual learning signal, see model/simple/diagnose_single_task.py "
                               "for the same idea applied to the full adapter pipeline). "
                               "Omit to use the full train_tasks.txt split (default).")
     parser.add_argument("--num-updates", type=int, default=None)

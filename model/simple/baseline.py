@@ -3,14 +3,14 @@ robot_child.xml -- no adapter, no action head, z_beta = z0 unchanged, action
 = the frozen actor's raw mean action (model.act(obs, z0, mean=True)). This
 is "what happens if you just force the pretrained policy to walk on a body
 it was never trained for" -- the reference point the trained adapter
-(model/evaluate.py) needs to beat to be worth anything.
+(model/simple/evaluate.py) needs to beat to be worth anything.
 
 Uses the same task set, reward functions, and D/L_phys scoring as
-model/evaluate.py so the two reports are directly comparable.
+model/simple/evaluate.py so the two reports are directly comparable.
 
 Usage (from project root):
-    uv run model/baseline.py
-    uv run model/baseline.py --render-videos --out-dir outputs/baseline
+    uv run model/simple/baseline.py
+    uv run model/simple/baseline.py --render-videos --out-dir outputs/baseline
 """
 
 import argparse
@@ -22,9 +22,9 @@ from pathlib import Path
 
 os.environ.setdefault("MUJOCO_GL", "egl")
 
-# Running this file directly (not `-m model.baseline`) puts model/ itself on
-# sys.path, not its parent -- see the same fix in run_train.py/evaluate.py.
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+# Running this file directly (not `-m model.simple.baseline`) puts model/simple/
+# itself on sys.path, not the repo root -- see the same fix in run_train.py/evaluate.py.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 import numpy as np
 import torch
@@ -36,7 +36,7 @@ from metamotivo.fb_cpr.huggingface import FBcprModel
 from model import losses
 from model.dataset import CrossEmbodimentDataset, load_task_list
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_TEST_TASKS = REPO_ROOT / "datasets" / "crossenbodiment-1-datasets" / "splits" / "test_tasks.txt"
 OFFICIAL_TASKS = REPO_ROOT / "docs" / "humenv_all_tasks_official.txt"
 

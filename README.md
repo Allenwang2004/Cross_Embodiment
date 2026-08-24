@@ -374,6 +374,17 @@ model/bilevel/
   train_bilevel.py  TTSA 主迴圈 ← 入口
   eval_bilevel.py   四象限 held-out 評估
 
+model/simple/       舊的單階段 REINFORCE pipeline（baseline，保持可執行）
+  train.py          舊主訓練迴圈 ← 舊入口
+  run_train.py      train.py 的 CLI wrapper
+  train_explore.py  純運動學的 action-residual 探索實驗
+  config.py         TrainConfig / config_explore.py ExploreConfig
+  evaluate.py       舊 checkpoint 的 held-out 評估
+  baseline.py       零訓練的對照基準
+  diagnose_single_task.py  單 task 過擬合診斷
+
+（`losses.py`、`dataset.py`、`networks.py`、`kinematics.py` 留在 `model/` 頂層，新舊系統共用）
+
 scripts/
   rollout_video.py       單段動作的左右對照影片 ← 驗收用這個
   calibrate_actuators.py 按實測力矩需求校準馬達（沒這步只有 8/13 具站得住）
@@ -382,6 +393,6 @@ scripts/
 docs/proposal.md         完整設計。§0.6 有 87 條名詞解釋，§11 是實作後的實測修正
 ```
 
-**保留為 baseline、不改造**：`model/train.py`、`train_explore.py`、`evaluate.py`、`baseline.py`。
+**保留為 baseline、不改造**（都在 `model/simple/`）：`train.py`、`train_explore.py`、`evaluate.py`、`baseline.py`。
 它們的 docstring 記錄了付過代價的發現（為何 `exploration_std=0.05` 而非 0.2、為何拿掉 `R_task`、
 為何 `total_loss` 不是進度訊號）。新系統必須贏過它們。

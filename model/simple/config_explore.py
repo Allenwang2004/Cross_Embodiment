@@ -4,9 +4,9 @@ from typing import List, Optional
 
 @dataclasses.dataclass
 class ExploreConfig:
-    """Config for model/train_explore.py -- kinematics-only action-network
+    """Config for model/simple/train_explore.py -- kinematics-only action-network
     exploration with a fixed, unmodified standard-body z (no LatentAdapter,
-    no beta, no retargeted-motion reference). See TrainConfig (model/config.py)
+    no beta, no retargeted-motion reference). See TrainConfig (model/simple/config.py)
     for the full adapter pipeline this is a stripped-down control experiment
     against."""
 

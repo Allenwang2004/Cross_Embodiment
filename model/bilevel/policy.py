@@ -16,7 +16,7 @@ model.act()/model.actor() are @torch.no_grad()-wrapped (metamotivo/fb/model.py:1
 so we call the private model._normalize / model._actor instead. The frozen
 actor's *weights* stay frozen (FBModel.__init__ already does requires_grad_(False));
 its *activations* are differentiable, so gradients flow into z_beta. This is
-the same trick as model/train.py:141-143 -- see that docstring for the full
+the same trick as model/simple/train.py:141-143 -- see that docstring for the full
 argument.
 """
 
