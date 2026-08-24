@@ -1,5 +1,6 @@
 {
   "label": "elderly",
+  "scale_actuators": false,
   "leg_scale": 0.92,
   "arm_scale": 0.97,
   "torso_scale": 0.95,

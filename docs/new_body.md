@@ -259,17 +259,52 @@ left/right mirror holds for all 27 pairs
 
 ---
 
-## 尚未處理
+## 全部身體已對齊（2026-08-24）
 
-`assets/robots/` 底下另外 10 具身體仍帶著舊的 `local_scale` 關節係數（`scale_robot.py` 移除該段之前產生的）：
+`assets/robots/` 底下 11 具身體（adult 除外）都已用 `--no-actuator-scale` 重新產生一次，現在狀態一致：
+
+- **actuator = adult 原值**（先前只有 `elderly` 是縮過的，gainprm 中位 0.8769，現已還原成 1.0）
+- **armature / damping / stiffness = adult 原值**（先前每具都帶著各自的 `local_scale`）
+
+重新產生前的 stiffness / adult 中位，留作對照：
 
 ```
 child 0.1346  short_limbed 0.3144  petite 0.3277  teen 0.5152  elderly 0.5553
-long_limbed 0.8555  pear_shaped 0.9025  short_stocky 1.0648  athletic 1.3225  giant 2.5830
+long_limbed 0.8555  pear_shaped 0.9025  tall_slim 1.0151  short_stocky 1.0648
+athletic 1.3225  giant 2.5830
 ```
 
-（數字是 stiffness / adult 的中位。）在重生成之前不會有任何行為改變。重生成後：
+驗證過的不變量（11 具全部）：幾何、`body_pos`、質量逐位元不變；`skeleton.json`（adult / child /
+tall_slim 有）對新 XML 的 `world_pos` 誤差 `0.00e+00`，不需重生。
 
-- `robot_torque_full.xml` 這條路徑**不受影響**——第二層讀 src 只為了取 subtree 慣量，做的是 `M[dof,dof] − armature`，寫進去的 armature 又被減掉，實測不變量在 1e-14 相對誤差內
-- 只縮 actuator 而不加 `--joint-dynamics` 的舊產物**會變**
-- 直接拿 `assets/robots/*/robot.xml` 去訓練的地方**會變**
+重跑指令（β 從各自的 `parameter.json` 讀）：
+
+```bash
+for b in athletic child elderly giant long_limbed pear_shaped petite short_limbed short_stocky teen; do
+  ARGS=$(uv run python -c "
+import json
+p=json.load(open('assets/robots/$b/parameter.json'))
+print(' '.join(f'--{a.replace(\"_\",\"-\")} {p[a]}' for a in
+  ['leg_scale','arm_scale','torso_scale','head_scale','leg_girth','arm_girth','torso_girth','head_girth']))")
+  uv run scripts/scale_robot.py --label $b $ARGS --no-actuator-scale
+done
+uv run scripts/write_body_splits.py --robots assets/robots    # split 會被覆寫掉，一定要補
+```
+
+`adult` 不在清單裡。它是來源，`scale_robot.py` 不會改它的 XML，但 `--preset adult` 會覆寫
+`parameter.json` 並清掉 `"split": "source"`。
+
+### 下游影響
+
+| 產物 | 受影響？ |
+|---|---|
+| `robot_torque_full.xml`（`--joint-dynamics`） | **否**。實測相對差 ≤ 1e-15 |
+| `assets/robot_torque/child/robot_torque.xml` | **是，已過時** |
+| `assets/robot_torque/child/robot_torque_move_only.xml` | **是，已過時** |
+| 直接吃 `assets/robots/*/robot.xml` 的訓練 | **是** |
+
+`robot_torque_full.xml` 免疫的原因：第二層讀 src 只為了取 subtree 慣量，算的是
+`M[dof,dof] − armature`，寫進去的 armature 又被減掉，只剩浮點抵消的捨入誤差。
+
+那兩個 `child/` 底下的舊檔仍帶著 stiffness `0.1346×`（照抄舊 src），而現在的 src 是 `1.0000×`。
+它們代表的是「只縮 actuator」那條已被取代的路線，**沒有重新產生**——要用的話得先決定它們還算不算數。
