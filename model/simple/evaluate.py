@@ -25,7 +25,7 @@ body it was not asked about. `--tasks-file` still exists for restricting the run
 to a subset when a full pass is too slow, but it is a sampling convenience, not
 a generalization measurement.
 
-For each task: R_task (task reward), D (vs the retargeted reference motion,
+For each task: R_task (task reward), L_align (vs the retargeted reference motion,
 skipped if a row has no retargeted_motion), L_phys -- reported per-task and
 aggregated, plus optional per-task comparison videos (target-body rollout
 side by side with its retargeted reference).
@@ -87,7 +87,7 @@ def make_body_ctx(cfg, dataset_dir, xml_rel, device):
 def rollout_deterministic(model, adapter, env, reward_fn, z0_t, beta_t, cfg,
                           obs_mul=None, record_video=False):
     """obs_mul: (358,) multiplier from model/obs_scale.py, or None for the raw
-    obs -- the actor's view only. R_task, D and L_phys are all scored from the
+    obs -- the actor's view only. R_task, L_align and L_phys are all scored from the
     real body's qpos/qvel, so they stay comparable with baseline.py."""
     z_beta = adapter(beta_t, z0_t)
 
@@ -209,7 +209,7 @@ def evaluate(checkpoint_path, tasks_file=None, trials_per_task=None, bodies=None
                                             cfg, obs_mul=ctx["obs_mul"],
                                             record_video=record_video)
 
-            d_total, d_terms = losses.functional_equivalence(
+            l_align, d_terms = losses.functional_equivalence(
                 env.unwrapped.model, episode["qpos_beta"], sample["qpos_ref"], d_weights
             )
             l_phys, _ = losses.physics_penalty(env.unwrapped.model, episode["qpos_beta"])
@@ -217,7 +217,7 @@ def evaluate(checkpoint_path, tasks_file=None, trials_per_task=None, bodies=None
             per_row.append({
                 "body": body, "body_split": "train" if body in trained_on else "test",
                 "reward_name": reward_name, "trial": sample["trial"],
-                "r_task": episode["r_task"], "d_total": d_total, "l_phys": l_phys, **d_terms,
+                "r_task": episode["r_task"], "l_align": l_align, "l_phys": l_phys, **d_terms,
             })
 
             if record_video:
@@ -227,7 +227,7 @@ def evaluate(checkpoint_path, tasks_file=None, trials_per_task=None, bodies=None
                 rendered.add((body, reward_name))
 
             print(f"[{body} {reward_name} trial {sample['trial']}] "
-                  f"r_task={episode['r_task']:.4f} D={d_total:.4f} L_phys={l_phys:.4f}")
+                  f"r_task={episode['r_task']:.4f} L_align={l_align:.4f} L_phys={l_phys:.4f}")
 
     for ctx in ctxs.values():
         ctx["env"].close()
@@ -242,7 +242,7 @@ def evaluate(checkpoint_path, tasks_file=None, trials_per_task=None, bodies=None
             "n_trials": len(rows),
             "r_task_mean": float(np.mean([r["r_task"] for r in rows])),
             "r_task_std": float(np.std([r["r_task"] for r in rows])),
-            "d_total_mean": float(np.mean([r["d_total"] for r in rows])),
+            "l_align_mean": float(np.mean([r["l_align"] for r in rows])),
             "l_phys_mean": float(np.mean([r["l_phys"] for r in rows])),
         }
 
@@ -250,7 +250,7 @@ def evaluate(checkpoint_path, tasks_file=None, trials_per_task=None, bodies=None
         return {
             "n_rows": len(rows),
             "r_task_mean": float(np.mean([r["r_task"] for r in rows])),
-            "d_total_mean": float(np.mean([r["d_total"] for r in rows])),
+            "l_align_mean": float(np.mean([r["l_align"] for r in rows])),
             "l_phys_mean": float(np.mean([r["l_phys"] for r in rows])),
         }
 
@@ -269,7 +269,7 @@ def evaluate(checkpoint_path, tasks_file=None, trials_per_task=None, bodies=None
         "n_bodies": len(per_body),
         "n_rows": len(per_row),
         "r_task_mean": float(np.mean([r["r_task"] for r in per_row])) if per_row else None,
-        "d_total_mean": float(np.mean([r["d_total"] for r in per_row])) if per_row else None,
+        "l_align_mean": float(np.mean([r["l_align"] for r in per_row])) if per_row else None,
         "l_phys_mean": float(np.mean([r["l_phys"] for r in per_row])) if per_row else None,
     }
 
@@ -288,16 +288,16 @@ def evaluate(checkpoint_path, tasks_file=None, trials_per_task=None, bodies=None
     print(f"{overall['n_tasks']} tasks x {overall['n_bodies']} bodies, "
           f"{overall['n_rows']} rows   "
           f"(tasks: {Path(tasks_file).name if tasks_file else 'all'})")
-    print(f"{'body':14s} {'split':6s} {'rows':>5s} {'r_task':>9s} {'D':>9s} {'L_phys':>9s}")
+    print(f"{'body':14s} {'split':6s} {'rows':>5s} {'r_task':>9s} {'L_align':>9s} {'L_phys':>9s}")
     for b in sorted(per_body, key=lambda x: per_body_rows[x][0]["body_split"]):
         a = per_body[b]
         print(f"{b:14s} {per_body_rows[b][0]['body_split']:6s} {a['n_rows']:5d} "
-              f"{a['r_task_mean']:9.4f} {a['d_total_mean']:9.4f} {a['l_phys_mean']:9.4f}")
+              f"{a['r_task_mean']:9.4f} {a['l_align_mean']:9.4f} {a['l_phys_mean']:9.4f}")
     for k in ("train", "test"):
         if k in per_body_split:
             a = per_body_split[k]
             print(f"{'-- ' + k + ' bodies':21s} {a['n_rows']:5d} "
-                  f"{a['r_task_mean']:9.4f} {a['d_total_mean']:9.4f} {a['l_phys_mean']:9.4f}")
+                  f"{a['r_task_mean']:9.4f} {a['l_align_mean']:9.4f} {a['l_phys_mean']:9.4f}")
     print(f"full report -> {report_path}")
 
     return overall, summary

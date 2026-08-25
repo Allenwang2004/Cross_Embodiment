@@ -10,19 +10,27 @@ z produced by docs/new_body.md stays in exactly one place on disk.
         manifest.jsonl              one row per (clip, body)
         data    -> ../../data           symlink
         robots  -> ../../assets/robots  symlink
-        splits/train_bodies.txt     the ONLY split axis (from each parameter.json's "split")
+        splits/train_bodies.txt     body axis (from each parameter.json's "split")
         splits/test_bodies.txt
+        splits/train_tasks.txt      task axis (49 / 5 by default, seeded)
+        splits/test_tasks.txt
         splits/tasks.txt            every task in the manifest, for reference
 
-One split axis, not two
------------------------
-Held out means held-out BODIES. Every task is trained on, on every training
-body. The generalization question this path is asking is "does a beta the
-adapter never saw produce a usable z", and splitting tasks as well would answer
-a different question with a third of the data and make the four-quadrant report
-harder to read for no gain -- the 54 tasks are the same 54 on both sides of the
-body split, so a task-axis holdout measures the frozen actor's own coverage
-rather than anything the adapter did.
+Two split axes
+--------------
+BODY: splits/{train,test}_bodies.txt, from each parameter.json's "split".
+TASK: splits/{train,test}_tasks.txt, 49 / 5 by default.
+
+The task axis exists for model/simple/train_zmap.py, whose claim is "hand me an
+adult motion I have never seen, and I will give you the latent that performs it
+on this body". Testing that needs motions the map never fit. The split is at the
+TASK level, not the clip level, so the ten correlated trials of one task cannot
+straddle it -- same rationale as scripts/split_tasks.py.
+
+The rollout-based paths (train.py, train_es.py) do not read the task split: for
+them the generalization question is about beta, and holding out tasks as well
+would cost a tenth of the data to answer a question about the frozen actor's
+own coverage rather than about the adapter.
 
 Two things this fixes about the old datasets/crossenbodiment-1-datasets
 -----------------------------------------------------------------------
@@ -35,12 +43,24 @@ Two things this fixes about the old datasets/crossenbodiment-1-datasets
    990 rows blamed elsewhere for "no retargeted_motion" are exactly that task's
    extra trials, since only 10 trials per task were ever retargeted. This
    builder uses the 10-trial core (54 x 10 = 540 clips), which is both balanced
-   AND fully covered: every row has a live qpos_ref, so the D term in
+   AND fully covered: every row has a live qpos_ref, so the L_align term in
    model/simple/train.py's objective is no longer identically zero.
 
 The source of truth for which clips exist is data/origin_z (the adult's
 reward-inferred z0, one (1, 256) per clip). A body is only accepted if its
 retargeting_motion and infer_retargeting_z cover that exact set.
+
+Two DIFFERENT adult latents are referenced and they are not interchangeable:
+
+    origin_z         (1, 256)  reward-inferred, ONE per clip -- "what task is
+                               this", the conditioning input the adapter has
+                               always taken
+    infer_origin_z   (T, 256)  tracking-inferred PER FRAME from the adult
+                               performing the clip on the ADULT skeleton
+
+The per-frame pair (infer_origin_z, <body>/infer_retargeting_z) is a supervised
+correspondence: the same motion, same frame, seen as a latent by the adult and
+by the target body. That is what model/simple/train_zmap.py regresses.
 
 Usage (from project root):
     uv run scripts/build_dataset.py
@@ -51,6 +71,8 @@ Usage (from project root):
 import argparse
 import json
 import shutil
+
+import numpy as np
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -88,6 +110,18 @@ def clip_index(origin_z: Path) -> list:
     return sorted((p.parent.name, p.stem) for p in origin_z.rglob("*.npy"))
 
 
+def check_adult_frames(data_dir: Path, clips) -> None:
+    """data/infer_origin_z is body-independent, so it is checked once."""
+    d = data_dir / "infer_origin_z"
+    have = {(p.parent.name, p.stem) for p in d.rglob("*.npy")}
+    missing = set(clips) - have
+    if missing:
+        raise SystemExit(
+            f"{d} covers {len(have & set(clips))}/{len(clips)} clips; missing e.g. "
+            f"{sorted(missing)[:5]}. Regenerate with scripts/batch_infer_z.py "
+            f"--input_dir data/origin_motion --xml assets/robots/adult/robot.xml")
+
+
 def check_body(data_dir: Path, body: str, clips) -> None:
     want = set(clips)
     for sub, ext in (("retargeting_motion", ".npz"), ("infer_retargeting_z", ".npy")):
@@ -110,6 +144,9 @@ def main():
                     help="explicit body list (default: every body under "
                          "assets/robots/ except adult and child)")
     ap.add_argument("--exclude", nargs="*", default=list(DEFAULT_EXCLUDE))
+    ap.add_argument("--n-test-tasks", type=int, default=5,
+                    help="tasks held out for model/simple/train_zmap.py (of 54)")
+    ap.add_argument("--task-split-seed", type=int, default=0)
     ap.add_argument("--force", action="store_true",
                     help="overwrite an existing dataset directory")
     args = ap.parse_args()
@@ -127,6 +164,7 @@ def main():
         raise SystemExit(f"no z0 under {data / 'origin_z'}")
 
     splits = {b: body_split(robots, b) for b in bodies}
+    check_adult_frames(data, clips)
     for b in bodies:
         check_body(data, b, clips)
 
@@ -140,8 +178,15 @@ def main():
     (out / "data").symlink_to(Path("../..") / "data")
     (out / "robots").symlink_to(Path("../../assets") / "robots")
 
-    (out / "splits" / "tasks.txt").write_text(
-        "".join(f"{t}\n" for t in sorted({t for t, _ in clips})))
+    tasks = sorted({t for t, _ in clips})
+    (out / "splits" / "tasks.txt").write_text("".join(f"{t}\n" for t in tasks))
+    # Seeded, so the held-out motions are the same set every rebuild -- a split
+    # that moves silently makes every "unseen task" number incomparable.
+    rng = np.random.default_rng(args.task_split_seed)
+    test_tasks = sorted(rng.choice(tasks, args.n_test_tasks, replace=False).tolist())
+    train_tasks = [t for t in tasks if t not in set(test_tasks)]
+    (out / "splits" / "train_tasks.txt").write_text("".join(f"{t}\n" for t in train_tasks))
+    (out / "splits" / "test_tasks.txt").write_text("".join(f"{t}\n" for t in test_tasks))
     for s in ("train", "test"):
         (out / "splits" / f"{s}_bodies.txt").write_text(
             "".join(f"{b}\n" for b in bodies if splits[b] == s))
@@ -155,7 +200,9 @@ def main():
                 "trial": int(stem.rsplit("_", 1)[1]),
                 "morphology_label": body,
                 "body_split": splits[body],
+                "task_split": "test" if task in set(test_tasks) else "train",
                 "origin_z": f"data/origin_z/{task}/{stem}.npy",
+                "infer_origin_z": f"data/infer_origin_z/{task}/{stem}.npy",
                 "morphology": f"robots/{body}/parameter.json",
                 "target_xml": f"robots/{body}/robot.xml",
                 "retargeted_motion": f"data/{body}/retargeting_motion/{task}/{stem}.npz",
@@ -169,9 +216,10 @@ def main():
     print(f"  {len(rows)} rows = {len(clips)} clips x {len(bodies)} bodies")
     print(f"  train bodies ({len(tr)}): {' '.join(tr)}")
     print(f"  test  bodies ({len(te)}): {' '.join(te)}")
-    print(f"  tasks: {len({t for t, _ in clips})} (all trained on -- no task split), "
-          f"trials/task {len(clips) // max(1, len({t for t, _ in clips}))}")
-    print(f"  every row has retargeted_motion -> the D term is live")
+    print(f"  tasks: {len(train_tasks)} train / {len(test_tasks)} test, "
+          f"trials/task {len(clips) // max(1, len(tasks))}")
+    print(f"  held-out tasks: {' '.join(test_tasks)}")
+    print(f"  every row has retargeted_motion -> the L_align term is live")
 
 
 if __name__ == "__main__":

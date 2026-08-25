@@ -5,7 +5,7 @@ is "what happens if you just force the pretrained policy to walk on a body
 it was never trained for" -- the reference point the trained adapter
 (model/simple/evaluate.py) needs to beat to be worth anything.
 
-Uses the same task set, reward functions, and D/L_phys scoring as
+Uses the same task set, reward functions, and L_align/L_phys scoring as
 model/simple/evaluate.py so the two reports are directly comparable.
 
 --obs-scale is off by default, which keeps this the pure "frozen policy, raw
@@ -132,14 +132,14 @@ def run_baseline(dataset_dir="datasets/crossenbodiment-1-datasets",
         episode = rollout_baseline(model, env, reward_fn, z0_t, device, steps_per_episode,
                                    obs_mul=obs_mul, record_video=record_video)
 
-        d_total, d_terms = losses.functional_equivalence(
+        l_align, d_terms = losses.functional_equivalence(
             env.unwrapped.model, episode["qpos_beta"], sample["qpos_ref"], d_weights
         )
         l_phys, _ = losses.physics_penalty(env.unwrapped.model, episode["qpos_beta"])
 
         per_row.append({
             "reward_name": reward_name, "trial": sample["trial"],
-            "r_task": episode["r_task"], "d_total": d_total, "l_phys": l_phys, **d_terms,
+            "r_task": episode["r_task"], "l_align": l_align, "l_phys": l_phys, **d_terms,
         })
 
         if record_video:
@@ -148,7 +148,7 @@ def run_baseline(dataset_dir="datasets/crossenbodiment-1-datasets",
             rendered_tasks.add(reward_name)
 
         print(f"[{reward_name} trial {sample['trial']}] "
-              f"r_task={episode['r_task']:.4f} D={d_total:.4f} L_phys={l_phys:.4f}")
+              f"r_task={episode['r_task']:.4f} L_align={l_align:.4f} L_phys={l_phys:.4f}")
 
     env.close()
 
@@ -162,7 +162,7 @@ def run_baseline(dataset_dir="datasets/crossenbodiment-1-datasets",
             "n_trials": len(rows),
             "r_task_mean": float(np.mean([r["r_task"] for r in rows])),
             "r_task_std": float(np.std([r["r_task"] for r in rows])),
-            "d_total_mean": float(np.mean([r["d_total"] for r in rows])),
+            "l_align_mean": float(np.mean([r["l_align"] for r in rows])),
             "l_phys_mean": float(np.mean([r["l_phys"] for r in rows])),
         }
 
@@ -170,7 +170,7 @@ def run_baseline(dataset_dir="datasets/crossenbodiment-1-datasets",
         "n_tasks": len(per_task),
         "n_rows": len(per_row),
         "r_task_mean": float(np.mean([r["r_task"] for r in per_row])) if per_row else None,
-        "d_total_mean": float(np.mean([r["d_total"] for r in per_row])) if per_row else None,
+        "l_align_mean": float(np.mean([r["l_align"] for r in per_row])) if per_row else None,
         "l_phys_mean": float(np.mean([r["l_phys"] for r in per_row])) if per_row else None,
     }
 
@@ -187,7 +187,7 @@ def run_baseline(dataset_dir="datasets/crossenbodiment-1-datasets",
           f"obs_scale={obs_scale}) ===")
     print(f"{overall['n_tasks']} tasks, {overall['n_rows']} rows")
     print(f"r_task mean: {overall['r_task_mean']}")
-    print(f"D mean:      {overall['d_total_mean']}")
+    print(f"L_align mean: {overall['l_align_mean']}")
     print(f"L_phys mean: {overall['l_phys_mean']}")
     print(f"full report -> {report_path}")
 
@@ -211,7 +211,7 @@ def main():
                              "(per-body ratios, what training now does), or an "
                              "explicit float forcing one uniform ratio. Affects "
                              "ONLY the actor's input, never the physics or the "
-                             "D/L_phys/R_task scoring")
+                             "L_align/L_phys/R_task scoring")
     parser.add_argument("--obs-scale-parts", choices=["length", "pose"], default="length")
     parser.add_argument("--obs-scale-ref-xml", default="assets/robots/adult/robot.xml")
     parser.add_argument("--out-dir", default="outputs/baseline")

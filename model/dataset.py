@@ -5,7 +5,7 @@ Two datasets exist and they are not interchangeable:
 `datasets/crossenbodiment-10bodies` (current)
     540 clips x 10 bodies = 5400 rows, built over the per-body artifacts from
     docs/new_body.md. Every row carries a retargeted_motion, so qpos_ref is
-    real and the D term in model/simple/train.py's objective is live. The rows
+    real and the L_align term in model/simple/train.py's objective is live. The rows
     also carry `morphology_label` / `target_xml`, because beta now VARIES --
     a trainer has to roll each row out on its own body's MJCF, not on one
     global cfg.target_xml.
@@ -13,7 +13,7 @@ Two datasets exist and they are not interchangeable:
 `datasets/crossenbodiment-1-datasets` (legacy, what the published baseline used)
     1530 rows, all `child`, and retargeted_motion was deleted from it in favour
     of model/bilevel's runtime retargeting -- so qpos_ref is None for every row,
-    functional_equivalence returns 0.0, and D is identically zero there. The
+    functional_equivalence returns 0.0, and L_align is identically zero there. The
     constructor says so out loud rather than letting the loss quietly collapse.
     Its task balance is also 1000:10 (`move-ego--90-2` alone holds 1000 of the
     1530 rows); those 990 extra trials are exactly the rows that never had a
@@ -71,7 +71,7 @@ class CrossEmbodimentDataset:
                 "model/bilevel's runtime retargeting.\n"
                 "         qpos_ref will be None for every row, so functional_equivalence "
                 "returns 0.0 and the\n"
-                "         D term of model/simple/train.py's loss is identically zero. See this "
+                "         L_align term of model/simple/train.py's loss is identically zero. See this "
                 "module's docstring to regenerate."
             )
 

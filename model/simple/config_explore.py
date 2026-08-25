@@ -25,7 +25,7 @@ class ExploreConfig:
     # ActionResidual: residual correction on the frozen actor's output, no beta
     action_hidden_dims: List[int] = dataclasses.field(default_factory=lambda: [128, 128])
 
-    # loss weight -- L = lambda_phys * L_phys (kinematics-only, no D/qpos_ref;
+    # loss weight -- L = lambda_phys * L_phys (kinematics-only, no L_align/qpos_ref;
     # see model/losses.physics_penalty)
     lambda_phys: float = 1.0
 

@@ -6,7 +6,7 @@ vectorized HumEnv, see "Batching" below):
     a_t    = actor(scale(obs_t), z_beta)            # frozen actor, z is the only knob
     tau_beta = env.step(a_t) for t in 0..T           # rollout on the target body
 
-    L = lambda_rtg * D(tau_beta, tau_beta_ref)
+    L = lambda_align * L_align(tau_beta, tau_beta_ref)
         + lambda_z * (1 - cos(z_beta, z0)) + lambda_phys * L_phys(tau_beta)
 
 One body per update
@@ -86,7 +86,7 @@ body's actual dynamics. What is left after the canonicalisation is the genuine
 mismatch -- masses, inertias, actuator authority, and limb lengths the adult
 actor's motions are still calibrated for -- and that is what beta has to
 explain. ONLY the actor's view is rescaled: the physics, the qpos trajectory,
-and everything D/L_phys score run on the real body. cfg.obs_scale = "none"
+and everything L_align/L_phys score run on the real body. cfg.obs_scale = "none"
 restores the old raw-obs behaviour for the ablation.
 
 No R_task term
@@ -99,7 +99,7 @@ LatentAdapter is changing. Optimizing directly against R_task on the target
 body either rewards a number that no longer means "did the task" once the
 body has changed, or implicitly pressures the adapter to fight the
 morphology change to look more like the source body again, defeating the
-point of adapting at all. D (functional equivalence vs the retargeted
+point of adapting at all. L_align (functional equivalence vs the retargeted
 reference motion) and L_phys (feasibility) don't have this problem -- both
 are computed straight from the target skeleton's own forward kinematics, not
 from a reward tuned for a different body. (R_task is still reported as a
@@ -110,7 +110,7 @@ Per-step credit, not one scalar per episode
 The first multi-body run (400 updates, W&B `cycle-400-8bodies`) learned nothing
 measurable: cos(z_beta, z0) stayed at 1.0000 for all 400 updates, ||z_beta - z0||
 went 0.064 -> 0.078 (initialization noise is 0.064), and the pre-clip gradient
-norm sat at ~3e-3 against a clip of 5.0. What moved was D's TAIL, not its median
+norm sat at ~3e-3 against a clip of 5.0. What moved was L_align's TAIL, not its median
 (median 6.60 -> 7.40, p90 18.9 -> 37.7), i.e. sampling noise on a heavy-tailed
 cost, not degradation.
 
@@ -153,7 +153,7 @@ and model._normalize() directly is not -- gradients flow through the frozen
 actor's activations into z just fine, its *weights* are just frozen).
 
 The blocker is MuJoCo: env.step() runs physics (contacts, integration) with
-no autodiff support, so D/L_phys -- both computed from the resulting qpos
+no autodiff support, so L_align/L_phys -- both computed from the resulting qpos
 trajectory -- cannot be backpropagated through. We use a score-function
 (REINFORCE) estimator instead: sample actions from a Gaussian around the
 (differentiable) mean, accumulate log-probabilities, and after the episode
@@ -176,7 +176,7 @@ NOT the frozen model's own actor_std (0.2) -- that std is tuned for
 single-step inference-time behavior, but here it's injected every one of
 300 steps into a MuJoCo rollout, where per-step noise compounds nonlinearly
 through contacts/integration. Empirically (50 updates, batch_size=16) this
-made D/L_phys swing by an order of magnitude update to update with no
+made L_align/L_phys swing by an order of magnitude update to update with no
 visible trend, i.e. the exploration noise's effect on the trajectory was
 larger than the effect of the adapter actually changing -- the learning
 signal was buried under it. cfg.exploration_std defaults much smaller (0.05).
@@ -187,7 +187,7 @@ All cfg.batch_size episodes run in ONE vectorized HumEnv (gymnasium
 VectorEnv under the hood, `cfg.vectorization_mode` picks sync vs async)
 stepped in lockstep: every timestep is a single batched forward pass through
 the frozen actor + adapter (batch dim = cfg.batch_size) and a
-single env.step() call, not a Python loop over individual episodes. D/
+single env.step() call, not a Python loop over individual episodes. L_align/
 L_phys still need per-trajectory forward kinematics (functional_equivalence/
 physics_penalty operate on one qpos array at a time, not vectorized), so
 those stay a short per-item Python loop over the collected (B, T, nq)
@@ -197,9 +197,9 @@ ending early mid-rollout just resets that slot and keeps stepping; we don't
 special-case it since cfg.steps_per_episode is short enough that this is rare
 and losing part of one sub-episode to a reset boundary doesn't bias the batch).
 
-NOTE on the D term: it is live again. datasets/crossenbodiment-1-datasets (the
+NOTE on the L_align term: it is live again. datasets/crossenbodiment-1-datasets (the
 old single-body manifest) has no retargeted_motion, so qpos_ref was None on
-every row and D was identically zero. The default dataset is now
+every row and L_align was identically zero. The default dataset is now
 datasets/crossenbodiment-10bodies, where every one of the 5400 rows carries a
 per-body retargeted reference produced by docs/new_body.md Step 2, so
 functional_equivalence has something to compare against on all of them.
@@ -207,7 +207,7 @@ functional_equivalence has something to compare against on all of them.
 qpos_ref (retargeted_motion) is produced by scripts/qpos_retarget.py, which
 retargets each origin_motion trajectory directly onto the same
 robot_<label>.xml skeleton used for the live rollout (target_xml in
-config.py) -- so D() is comparing two trajectories on the same bone lengths,
+config.py) -- so L_align is comparing two trajectories on the same bone lengths,
 as intended.
 
 Usage (from project root, once datasets/crossenbodiment-1-datasets exists):
@@ -268,7 +268,7 @@ def rollout_batch(model, adapter, value_net, env, z0_t, beta_t, cfg, obs_mul=Non
 
     obs_mul: (358,) multiplier from model/obs_scale.py, or None for the raw
     obs. It changes ONLY what the actor is shown -- qpos_hist, and therefore
-    D/L_phys, come from the real body either way."""
+    L_align/L_phys, come from the real body either way."""
     B, T = z0_t.shape[0], cfg.steps_per_episode
     dev = cfg.device
     with torch.no_grad():
@@ -335,7 +335,7 @@ def phase_of(t, T, B, device):
 
 
 def window_rewards(fk_model, cfg, qpos_beta, qpos_refs):
-    """Per-step reward (T, B) from per-WINDOW D and L_phys.
+    """Per-step reward (T, B) from per-WINDOW L_align and L_phys.
 
     This is the port of bilevel's per-step reward that keeps model/losses.py
     untouched. losses.functional_equivalence / physics_penalty only produce a
@@ -355,12 +355,12 @@ def window_rewards(fk_model, cfg, qpos_beta, qpos_refs):
     Per window it does not -- a window past the end of the reference slices an
     EMPTY array, _align_length returns length 0, and np.mean of nothing is NaN,
     which propagates through the advantage into the adapter. (Measured: this
-    NaN'd the first 300-step PPO run inside one update.) So a window keeps its D
+    NaN'd the first 300-step PPO run inside one update.) So a window keeps its L_align
     term only over the frames the reference actually covers, and falls back to
     qpos_ref=None -- functional_equivalence's own documented "no reference"
     path, which returns 0.0 -- when there is nothing left to compare against.
 
-    Returns (reward (T, B), d_total (B,), l_phys (B,), n_bad). d_total averages
+    Returns (reward (T, B), align_total (B,), l_phys (B,), n_bad). align_total averages
     only the windows that HAD a reference, so it stays on the same scale as the
     old whole-episode number instead of being diluted by structural zeros.
     """
@@ -370,8 +370,9 @@ def window_rewards(fk_model, cfg, qpos_beta, qpos_refs):
         "root": cfg.d_root_weight, "ee": cfg.d_ee_weight, "contact": cfg.d_contact_weight,
         "pose": cfg.d_pose_weight, "velocity": cfg.d_velocity_weight,
     }
+    dt = 1.0 / cfg.control_fps
     reward = np.zeros((T, B), dtype=np.float32)
-    d_totals = np.zeros(B, dtype=np.float32)
+    align_totals = np.zeros(B, dtype=np.float32)
     l_physes = np.zeros(B, dtype=np.float32)
     n_bad = 0
 
@@ -390,9 +391,9 @@ def window_rewards(fk_model, cfg, qpos_beta, qpos_refs):
                 ref_w = ref[a:end]
             traj = qpos_beta[i, a:end] if ref_w is not None else qpos_beta[i, a:b]
 
-            d_w, _ = losses.functional_equivalence(fk_model, traj, ref_w, d_weights)
-            l_w, _ = losses.physics_penalty(fk_model, qpos_beta[i, a:b])
-            cost = cfg.lambda_rtg * d_w + cfg.lambda_phys * l_w
+            align_w, _ = losses.functional_equivalence(fk_model, traj, ref_w, d_weights, dt)
+            l_w, _ = losses.physics_penalty(fk_model, qpos_beta[i, a:b], dt=dt)
+            cost = cfg.lambda_align * align_w + cfg.lambda_phys * l_w
             if not np.isfinite(cost):
                 # Leave the window at reward 0 (no signal) rather than pushing a
                 # NaN into the advantage. Counted and logged so a systematic
@@ -403,13 +404,13 @@ def window_rewards(fk_model, cfg, qpos_beta, qpos_refs):
             l_physes[i] += l_w
             n_win += 1
             if ref_w is not None:
-                d_totals[i] += d_w
+                align_totals[i] += align_w
                 n_ref_win += 1
         if n_win:
             l_physes[i] /= n_win
         if n_ref_win:
-            d_totals[i] /= n_ref_win
-    return reward, d_totals, l_physes, n_bad
+            align_totals[i] /= n_ref_win
+    return reward, align_totals, l_physes, n_bad
 
 
 def compute_gae(reward, value, done, gamma, lam):
@@ -567,12 +568,12 @@ def ppo_update(cfg, model, adapter, value_net, optimizer, ep, z0_t, beta_t, rewa
 
 def compute_batch_cost(fk_model, cfg, qpos_beta, qpos_refs):
     """qpos_beta: (B, T, nq) numpy. qpos_refs: length-B list, entries may be
-    None (see losses.functional_equivalence). D/L_phys use forward kinematics
+    None (see losses.functional_equivalence). L_align/L_phys use forward kinematics
     per-trajectory (not batched), looped here since it's cheap vs simulation.
-    Returns per-item cost/D/L_phys arrays, shape (B,)."""
+    Returns per-item cost/L_align/L_phys arrays, shape (B,)."""
     B = qpos_beta.shape[0]
     costs = np.empty(B, dtype=np.float32)
-    d_totals = np.empty(B, dtype=np.float32)
+    align_totals = np.empty(B, dtype=np.float32)
     l_physes = np.empty(B, dtype=np.float32)
 
     d_weights = {
@@ -582,24 +583,26 @@ def compute_batch_cost(fk_model, cfg, qpos_beta, qpos_refs):
         "pose": cfg.d_pose_weight,
         "velocity": cfg.d_velocity_weight,
     }
+    dt = 1.0 / cfg.control_fps
     for i in range(B):
-        d_total, _ = losses.functional_equivalence(fk_model, qpos_beta[i], qpos_refs[i], d_weights)
-        l_phys, _ = losses.physics_penalty(fk_model, qpos_beta[i])
-        costs[i] = cfg.lambda_rtg * d_total + cfg.lambda_phys * l_phys
-        d_totals[i] = d_total
+        align_total, _ = losses.functional_equivalence(fk_model, qpos_beta[i], qpos_refs[i],
+                                                       d_weights, dt)
+        l_phys, _ = losses.physics_penalty(fk_model, qpos_beta[i], dt=dt)
+        costs[i] = cfg.lambda_align * align_total + cfg.lambda_phys * l_phys
+        align_totals[i] = align_total
         l_physes[i] = l_phys
-    return costs, d_totals, l_physes
+    return costs, align_totals, l_physes
 
 
-def plot_loss_curve(loss_history, d_history, l_phys_history, out_path, body_history=None):
+def plot_loss_curve(loss_history, align_history, l_phys_history, out_path, body_history=None):
     """total_loss (pg_loss + z_reg_loss) is NOT a progress signal for
     REINFORCE -- it's advantage-weighted log-prob, and advantage is centered
     by construction (cost minus a running mean), so its expected value
     oscillates around 0 whether or not the policy is improving. The actual
-    thing to watch is D / L_phys (the real cost being optimized), so those
+    thing to watch is L_align / L_phys (the real cost being optimized), so those
     get their own panels here rather than only total_loss.
 
-    body_history (one label per update) splits the D and L_phys panels into one
+    body_history (one label per update) splits the L_align and L_phys panels into one
     line per body. Without it a multi-body run's curve is unreadable: successive
     points are different bodies with different cost scales, so the pooled series
     is a sawtooth between bodies rather than a trend within any of them."""
@@ -612,9 +615,9 @@ def plot_loss_curve(loss_history, d_history, l_phys_history, out_path, body_hist
     fig, axes = plt.subplots(3, 1, figsize=(9, 10), sharex=True)
     axes[0].plot(loss_history)
     axes[0].set_ylabel("total_loss")
-    axes[0].set_title("pg_loss + z_reg_loss (surrogate, NOT expected to trend down -- see D/L_phys below)")
+    axes[0].set_title("pg_loss + z_reg_loss (surrogate, NOT expected to trend down -- see L_align/L_phys below)")
 
-    panels = [(1, d_history, "D (mean)", "tab:orange",
+    panels = [(1, align_history, "L_align (mean)", "tab:orange",
                "functional-equivalence cost vs retargeted reference -- this SHOULD trend down"),
               (2, l_phys_history, "L_phys (mean)", "tab:green",
                "physics-feasibility penalty -- this SHOULD trend down")]
@@ -638,7 +641,7 @@ def plot_loss_curve(loss_history, d_history, l_phys_history, out_path, body_hist
 
 def make_body_ctx(cfg, dataset_dir, label, xml_rel):
     """One body's fixed resources: its vectorized env, a standalone MjModel for
-    the D/L_phys forward kinematics, and its obs canonicaliser.
+    the L_align/L_phys forward kinematics, and its obs canonicaliser.
 
     All 10 are built once up front rather than rebuilt when the body changes --
     measured 1.2 s and 0.29 GB for all ten (about 30 MB each), which is cheaper
@@ -655,7 +658,7 @@ def make_body_ctx(cfg, dataset_dir, label, xml_rel):
     return {
         "label": label,
         "env": env,
-        # Separate MjModel just for D/L_phys forward-kinematics (numpy, no grad)
+        # Separate MjModel just for L_align/L_phys forward-kinematics (numpy, no grad)
         # -- same skeleton as the env's own model, loaded standalone so it works
         # whether env is a sync or async VectorEnv.
         "fk": mujoco.MjModel.from_xml_path(str(xml)),
@@ -672,8 +675,8 @@ def make_body_ctx(cfg, dataset_dir, label, xml_rel):
 def run_eval(cfg, model, adapter, value_net, ctxs, dataset, eval_idx, splits):
     """Deterministic pass over the fixed eval clips of every body.
 
-    Returns {body: {"D":, "L_phys":, "cost":}} plus "train"/"test" aggregates.
-    The cost is the same lambda_rtg * D + lambda_phys * L_phys the reward is
+    Returns {body: {"L_align":, "L_phys":, "cost":}} plus "train"/"test" aggregates.
+    The cost is the same lambda_align * L_align + lambda_phys * L_phys the reward is
     built from, summed over the same windows, so it is directly the quantity
     training is minimizing -- pg_loss is NOT, it is an advantage-weighted
     surrogate whose expected value is ~0 whether or not the policy improved,
@@ -690,12 +693,12 @@ def run_eval(cfg, model, adapter, value_net, ctxs, dataset, eval_idx, splits):
         qpos_refs = [s["qpos_ref"] for s in samples]
         ep = rollout_batch(model, adapter, value_net, ctxs[b]["env"],
                            z0_t, beta_t, cfg, ctxs[b]["obs_mul"], deterministic=True)
-        reward, d_totals, l_physes, _ = window_rewards(
+        reward, align_totals, l_physes, _ = window_rewards(
             ctxs[b]["fk"], cfg, ep["qpos_beta"], qpos_refs)
         out[b] = {
-            "D": float(d_totals.mean()),
+            "L_align": float(align_totals.mean()),
             "L_phys": float(l_physes.mean()),
-            "cost": float(cfg.lambda_rtg * d_totals.mean() + cfg.lambda_phys * l_physes.mean()),
+            "cost": float(cfg.lambda_align * align_totals.mean() + cfg.lambda_phys * l_physes.mean()),
         }
     adapter.train()
 
@@ -703,7 +706,7 @@ def run_eval(cfg, model, adapter, value_net, ctxs, dataset, eval_idx, splits):
         members = [b for b in out if splits.get(b) == split]
         if members:
             out[split] = {k: float(np.mean([out[b][k] for b in members]))
-                          for k in ("D", "L_phys", "cost")}
+                          for k in ("L_align", "L_phys", "cost")}
     return out
 
 
@@ -796,7 +799,7 @@ def train(cfg: TrainConfig):
                            "n_clips_per_body": len(by_body[bodies[0]])})
 
     loss_history = []
-    d_history = []
+    align_history = []
     l_phys_history = []
     body_history = []
 
@@ -808,8 +811,8 @@ def train(cfg: TrainConfig):
         tr, te = ev.get("train"), ev.get("test")
         tqdm.write(
             f"  [eval @ {update:04d}] "
-            + (f"train cost={tr['cost']:.4f} (D={tr['D']:.4f} Lp={tr['L_phys']:.4f})  " if tr else "")
-            + (f"test cost={te['cost']:.4f} (D={te['D']:.4f} Lp={te['L_phys']:.4f})  " if te else "")
+            + (f"train cost={tr['cost']:.4f} (L_align={tr['L_align']:.4f} Lp={tr['L_phys']:.4f})  " if tr else "")
+            + (f"test cost={te['cost']:.4f} (L_align={te['L_align']:.4f} Lp={te['L_phys']:.4f})  " if te else "")
             + (f"gap={te['cost'] - tr['cost']:+.4f}" if tr and te else "")
         )
         if cfg.use_wandb:
@@ -843,7 +846,7 @@ def train(cfg: TrainConfig):
 
         episode = rollout_batch(model, adapter, value_net, ctx["env"],
                                 z0_t, beta_t, cfg, ctx["obs_mul"])
-        reward_np, d_totals, l_physes, n_bad = window_rewards(
+        reward_np, align_totals, l_physes, n_bad = window_rewards(
             ctx["fk"], cfg, episode["qpos_beta"], qpos_refs)
         reward = torch.as_tensor(reward_np, device=cfg.device)
 
@@ -852,13 +855,13 @@ def train(cfg: TrainConfig):
         total_loss_v = st["pg"] + cfg.value_coef * st["v"] + st["z_reg_loss"]
 
         loss_history.append(total_loss_v)
-        d_history.append(float(d_totals.mean()))
+        align_history.append(float(align_totals.mean()))
         l_phys_history.append(float(l_physes.mean()))
         body_history.append(label)
         pbar.set_postfix(
             body=label,
             pg=f"{st['pg']:.4f}",
-            D=f"{d_totals.mean():.4f}",
+            L_align=f"{align_totals.mean():.4f}",
             L_phys=f"{l_physes.mean():.4f}",
         )
 
@@ -876,7 +879,7 @@ def train(cfg: TrainConfig):
                     "adv_std_raw": st["adv_std_raw"],
                     "reward_mean": st["reward_mean"],
                     "bad_windows": n_bad,
-                    "D": float(d_totals.mean()),
+                    "L_align": float(align_totals.mean()),
                     "L_phys": float(l_physes.mean()),
                     "z_cos": st["z_cos"],
                     "z_norm": st["z_norm"],
@@ -885,7 +888,7 @@ def train(cfg: TrainConfig):
                     # fold), so the per-body panels are the ones to read for a
                     # trend; each only gets a point on its own updates.
                     "body_idx": bodies.index(label),
-                    f"by_body/{label}/D": float(d_totals.mean()),
+                    f"by_body/{label}/L_align": float(align_totals.mean()),
                     f"by_body/{label}/L_phys": float(l_physes.mean()),
                     f"by_body/{label}/reward": st["reward_mean"],
                 },
@@ -898,7 +901,7 @@ def train(cfg: TrainConfig):
                 f"pg={st['pg']:+.4f} v={st['v']:.4f} kl={st['kl']:+.2e} "
                 f"clip={st['clipfrac']:.2f} grad={st['grad']:.3f} "
                 f"1-zcos={1 - st['z_cos']:.2e} "
-                f"D={d_totals.mean():.4f} L_phys={l_physes.mean():.4f}"
+                f"L_align={align_totals.mean():.4f} L_phys={l_physes.mean():.4f}"
             )
 
         if cfg.eval_every and (update + 1) % cfg.eval_every == 0:
@@ -922,15 +925,15 @@ def train(cfg: TrainConfig):
     if eval_history:
         print("\n=== held-out evaluation ===")
         print(f"{'update':>7s} {'train cost':>11s} {'test cost':>10s} {'gap':>9s} "
-              f"{'train D':>9s} {'test D':>9s}")
+              f"{'train L_align':>13s} {'test L_align':>13s}")
         for u, ev in eval_history:
             tr, te = ev.get("train"), ev.get("test")
             if not (tr and te):
                 continue
             print(f"{u:7d} {tr['cost']:11.4f} {te['cost']:10.4f} "
-                  f"{te['cost'] - tr['cost']:+9.4f} {tr['D']:9.4f} {te['D']:9.4f}")
+                  f"{te['cost'] - tr['cost']:+9.4f} {tr['L_align']:13.4f} {te['L_align']:13.4f}")
 
-    plot_loss_curve(loss_history, d_history, l_phys_history,
+    plot_loss_curve(loss_history, align_history, l_phys_history,
                     REPO_ROOT / cfg.loss_curve_path, body_history)
 
     if cfg.use_wandb:

@@ -1,6 +1,6 @@
 """Forward-kinematics helpers for computing world-frame body positions and
 orientations from raw qpos arrays, used by losses.py to score motion
-similarity (D terms) without needing to re-run physics."""
+similarity (L_align terms) without needing to re-run physics."""
 
 import numpy as np
 import mujoco

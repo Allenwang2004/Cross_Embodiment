@@ -18,7 +18,7 @@ vectorized HumEnv, exactly as in train.py):
 
 L_phys (model/losses.physics_penalty) is computed purely from the live
 rollout's own qpos via forward kinematics -- no retargeted reference, no
-qpos_ref, no D term at all. This isolates: given the child's own scaled-down
+qpos_ref, no L_align term at all. This isolates: given the child's own scaled-down
 morphology but full adult actuator strength, and z left completely alone, can
 a small residual action network alone learn to keep the rollout physically
 plausible (joint limits respected, not collapsing)?
@@ -112,7 +112,7 @@ def rollout_batch_explore(model, action_net, env, z0_t, cfg):
 def compute_batch_cost_explore(fk_model, cfg, qpos_beta):
     """qpos_beta: (B, T, nq) numpy. L_phys is computed per-trajectory via
     forward kinematics (not batched), looped here since it's cheap vs
-    simulation. No D/qpos_ref -- kinematics-only. Returns per-item cost/L_phys
+    simulation. No L_align/qpos_ref -- kinematics-only. Returns per-item cost/L_phys
     arrays (shape (B,)) and a list of each item's unweighted term breakdown
     (limit/fall/com_support/foot_slide/penetrate/smooth -- see
     losses.physics_penalty) for logging."""

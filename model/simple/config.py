@@ -40,14 +40,14 @@ class TrainConfig:
     # normalizer holds adult-scale BatchNorm statistics and z_beta should not
     # have to spend itself on a unit conversion. "none" is the ablation (the
     # raw obs this file used before); an explicit float forces one uniform
-    # ratio. Affects the actor's input only -- never the physics or D/L_phys.
+    # ratio. Affects the actor's input only -- never the physics or L_align/L_phys.
     obs_scale: str = "auto"
     obs_scale_parts: str = "length"  # "length" also rescales local_body_vel; "pose" does not
     obs_scale_ref_xml: str = "assets/robots/adult/robot.xml"  # the body the actor was trained on
 
-    # loss weights, L = lambda_rtg * D + lambda_z * (1 - cos(z_beta, z0)) + lambda_phys * L_phys
+    # loss weights, L = lambda_align * L_align + lambda_z * (1 - cos(z_beta, z0)) + lambda_phys * L_phys
     # (no R_task term -- see train.py module docstring for why)
-    lambda_rtg: float = 1.0
+    lambda_align: float = 1.0
     lambda_z: float = 0.1  # COSINE anchor, not Euclidean: with adapter_project_z the radius is
                            # fixed by construction, so ||z_beta - z0||^2 would spend part of
                            # itself penalizing a distance that cannot change. Same form and same
@@ -56,17 +56,24 @@ class TrainConfig:
                            # near-orthogonal to z0, which in 256 dims is the typical case), so
                            # 0.1 carries over without a retune.
     lambda_phys: float = 1.0
+    # L_align's five sub-terms; the d_ prefix matches losses.py's d_root/d_ee/...
     d_root_weight: float = 1.0
     d_ee_weight: float = 1.0
     d_contact_weight: float = 1.0
     d_pose_weight: float = 1.0
-    d_velocity_weight: float = 1.0
+    # 1/900, not 1.0, for the same reason as losses.PHYS_DEFAULT_WEIGHTS' migration
+    # note: d_velocity is a squared first time-derivative, so real dt made it 900x
+    # larger. This holds the objective at its pre-dt-fix value; 1.0 is the retune.
+    d_velocity_weight: float = 1.0 / 30 ** 2
+    # Control rate of the clips and of the env (15 physics steps of 1/450 s).
+    # Everything scored from qpos is differentiated with dt = 1 / control_fps.
+    control_fps: float = 30.0
 
     # PPO, ported from model/bilevel/ppo.py -- see train.py's "Per-step credit,
     # not one scalar per episode". The rollout is still not differentiable; what
     # changed is that the score-function estimator now gets one advantage per
     # WINDOW instead of one per episode.
-    window_steps: int = 30      # 1.0 s @ 30 Hz. D/L_phys are computed on each window
+    window_steps: int = 30      # 1.0 s @ 30 Hz. L_align/L_phys are computed on each window
                                 # separately using the UNCHANGED model/losses.py, so an
                                 # episode of 300 steps yields 10 rewards, not 1. Shorter
                                 # than this and d_root's heading/curvature terms have too
@@ -94,7 +101,7 @@ class TrainConfig:
                                     # computed against the same distribution. Decoupled from
                                     # the frozen model's own actor_std (0.2) because this
                                     # noise compounds over 300 MuJoCo steps and was swamping
-                                    # the D/L_phys signal. It being this small is also why
+                                    # the L_align/L_phys signal. It being this small is also why
                                     # ppo_target_kl and grad_clip_norm=1.0 are load-bearing:
                                     # d logp/d mu scales as 1/sigma^2.
     batch_size: int = 16  # episodes per update, run as one vectorized HumEnv (see train.py)
@@ -113,7 +120,7 @@ class TrainConfig:
     grad_clip_norm: float = 1.0
     seed: int = 0
 
-    # W&B. One update is one body, so the pooled D/L_phys series alternates
+    # W&B. One update is one body, so the pooled L_align/L_phys series alternates
     # between bodies with different cost scales -- read `by_body/<label>/*`
     # for a trend within a body and treat the pooled ones as a sanity check.
     use_wandb: bool = True
@@ -142,3 +149,136 @@ class TrainConfig:
     ckpt_dir: str = "outputs/simple/checkpoints"
     ckpt_every: int = 20
     loss_curve_path: str = "outputs/simple/loss_curve.png"
+
+
+@dataclasses.dataclass
+class ESConfig:
+    """model/simple/train_es.py -- antithetic evolution strategies on z_beta.
+
+    Shares TrainConfig's model-defining fields (adapter, obs canonicalisation,
+    loss weights, episode length) so the two are comparable, and drops every
+    field that only existed to make a per-step policy gradient work: gamma,
+    gae_lambda, ppo_*, value_*, window_steps, exploration_std, baseline_momentum.
+    ES needs one scalar per rollout, so none of them have an analogue.
+    """
+    metamotivo_repo: str = "facebook/metamotivo-M-1"
+    dataset_dir: str = "datasets/crossenbodiment-10bodies"
+    body_order: str = "cycle"
+    device: str = "cuda:0"
+    # "all", or a group written by scripts/split_tasks_by_fall.py. P.fall is
+    # 66.6% of the cost and is a per-task CONSTANT on the tasks whose reference
+    # motion is legitimately on the ground, so pooling both groups means most of
+    # the objective is an offset the policy cannot move. See that script.
+    task_group: str = "all"
+
+    adapter_hidden_dims: List[int] = dataclasses.field(default_factory=lambda: [256, 512, 512, 256])
+    adapter_alpha: float = 0.1
+    adapter_alpha_learnable: bool = False
+    adapter_project_z: bool = True
+
+    obs_scale: str = "auto"
+    obs_scale_parts: str = "length"
+    obs_scale_ref_xml: str = "assets/robots/adult/robot.xml"
+
+    # Fitness = lambda_align * L_align + lambda_phys * L_phys over the WHOLE episode,
+    # from the unchanged model/losses.py -- the same number evaluate.py reports.
+    lambda_align: float = 1.0
+    lambda_phys: float = 1.0
+    # NOT 0.1. Rank normalization strips g_z of the cost's units, so nothing the
+    # PPO objective tuned carries over. MEASURED at lambda_z = 0.1:
+    # |g_es| ~ 1.5 against |g_anchor| ~ 1.3e-5, a ratio of 8e-6 -- the anchor was
+    # doing literally nothing. 10.0 is chosen so it stays negligible while
+    # z_beta sits on top of z0 (1 - cos ~ 1e-5 today) and reaches ~10% of the ES
+    # term once z has drifted to 1 - cos ~ 0.01, i.e. about 8 degrees: a soft
+    # barrier against leaving the frozen actor's distribution, not a constant
+    # drag. train_es.py logs g_es_norm / g_anchor_norm / g_ratio every update, so
+    # re-derive this rather than trusting it if the rank scheme or sigma changes.
+    lambda_z: float = 10.0
+    # L_align's five sub-terms; the d_ prefix matches losses.py's d_root/d_ee/...
+    d_root_weight: float = 1.0
+    d_ee_weight: float = 1.0
+    d_contact_weight: float = 1.0
+    d_pose_weight: float = 1.0
+    # 1/900, not 1.0, for the same reason as losses.PHYS_DEFAULT_WEIGHTS' migration
+    # note: d_velocity is a squared first time-derivative, so real dt made it 900x
+    # larger. This holds the objective at its pre-dt-fix value; 1.0 is the retune.
+    d_velocity_weight: float = 1.0 / 30 ** 2
+    # Control rate of the clips and of the env (15 physics steps of 1/450 s).
+    # Everything scored from qpos is differentiated with dt = 1 / control_fps.
+    control_fps: float = 30.0
+
+    # eps ~ N(0, I_256) has |eps| ~ sqrt(256) = 16 and |z| = 16, so |sigma*eps| /
+    # |z| = sigma: **sigma IS the fractional perturbation of z**. 0.25 moves z by
+    # 26% (measured), which is a large step, not a small probe. Too small and
+    # |F+ - F-| drowns in the noise of F (train_es.py logs delta_abs and
+    # delta_std so that ratio is visible); too large and the difference stops
+    # being a local measurement of the landscape.
+    es_sigma: float = 0.25
+    es_pairs: int = 4            # antithetic pairs per clip; batch_size // (2*this)
+                                 # clips fit in one update
+    es_rank_normalize: bool = True   # see train_es.py:rank_normalize -- L_align is
+                                     # heavy-tailed and one bad clip would
+                                     # otherwise set the step size. Applied PER
+                                     # ROW; ranking across clips would compare
+                                     # clips instead of directions.
+
+    lr: float = 3e-4
+    grad_clip_norm: float = 1.0
+    batch_size: int = 16         # env slots; must be a multiple of 2*es_pairs
+    vectorization_mode: str = "sync"
+    num_updates: int = 400
+    steps_per_episode: int = 300
+    seed: int = 0
+
+    eval_every: int = 50
+    eval_at_start: bool = True
+    eval_seed: int = 12345
+
+    use_wandb: bool = True
+    wandb_project: str = "crossenbodiment-simple"
+    wandb_run_name: Optional[str] = None
+    progress: bool = True
+    log_every: int = 1
+    ckpt_dir: str = "outputs/simple_es/checkpoints"
+    ckpt_every: int = 50
+
+
+@dataclasses.dataclass
+class ZMapConfig:
+    """model/simple/train_zmap.py -- supervised (z_adult, beta) -> z_body.
+
+    No simulator, so nothing from TrainConfig/ESConfig about rollouts, rewards
+    or estimators applies. What carries over is only the network itself: this
+    trains the SAME LatentAdapter, on a labelled target instead of a physics
+    objective, so a checkpoint from here is loadable by the rollout paths.
+    """
+    dataset_dir: str = "datasets/crossenbodiment-10bodies"
+    device: str = "cuda:0"
+
+    adapter_hidden_dims: List[int] = dataclasses.field(default_factory=lambda: [256, 512, 512, 256])
+    # alpha=1.0, not 0.1. The residual scale exists to keep z_beta near z0 when
+    # the objective is a noisy rollout; here the target is labelled and the map
+    # has to reach it. Measured cos(z_adult, z_body) is well below 1, so a 0.1
+    # residual could not span the gap even in principle.
+    adapter_alpha: float = 1.0
+    adapter_alpha_learnable: bool = False
+    adapter_project_z: bool = True   # both endpoints are on the sphere already
+                                     # (tracking_inference calls project_z)
+
+    lr: float = 1e-3
+    lr_final: float = 1e-5           # cosine schedule over the whole run
+    batch_size: int = 4096           # frames, mixed across bodies
+    epochs: int = 20
+    grad_clip_norm: float = 1.0
+    seed: int = 0
+    # Put the whole training pool on the GPU. ~1.3M frames x 256 x 4 B x 2
+    # (src+dst) plus beta is about 3 GB; set False to stream from host memory.
+    preload_device: bool = True
+
+    use_wandb: bool = True
+    wandb_project: str = "crossenbodiment-simple"
+    wandb_run_name: Optional[str] = None
+    progress: bool = True
+    log_every: int = 20
+    ckpt_dir: str = "outputs/simple_zmap"
+

@@ -1,12 +1,12 @@
 """Diagnostic: is the adapter actually learning anything, or is
-the D/L_phys noise seen in normal training (see outputs/train_logs/loss_curve.png)
+the L_align/L_phys noise seen in normal training (see outputs/train_logs/loss_curve.png)
 coming entirely from a different confound -- a NEW random set of tasks being
 sampled every update?
 
 Normal training draws cfg.batch_size fresh random (z0, beta, qpos_ref) rows
-every update. Since the 43 train tasks likely have very different intrinsic D
+every update. Since the 43 train tasks likely have very different intrinsic L_align
 scales (a standing pose task is probably much easier to match than crawl or
-headstand), the batch-mean D swinging an order of magnitude update to update
+headstand), the batch-mean L_align swinging an order of magnitude update to update
 could just reflect "which tasks got sampled this time", with the actual
 policy-quality signal buried underneath.
 
@@ -15,7 +15,7 @@ cfg.batch_size times every update. With the (clip x body) manifest that also
 pins the BODY -- normal training walks 8 of them and their cost scales differ
 by several times, so --task-idx now isolates both axes at once (all sub-envs run the exact same z0/beta/
 qpos_ref -- the only thing that differs between sub-envs is the stochastic
-action noise). If D trends down here, task-composition noise was the real
+action noise). If L_align trends down here, task-composition noise was the real
 problem in normal training. If it still doesn't move, the issue is deeper
 (e.g. reward/cost signal too weak, lr, or REINFORCE variance itself).
 
@@ -104,7 +104,7 @@ def main():
     beta_t = torch.tensor(sample["beta"], dtype=torch.float32, device=cfg.device).unsqueeze(0).repeat(cfg.batch_size, 1)
     qpos_refs = [sample["qpos_ref"]] * cfg.batch_size
 
-    loss_history, d_history, l_phys_history = [], [], []
+    loss_history, align_history, l_phys_history = [], [], []
 
     pbar = tqdm(range(cfg.num_updates), desc="diagnose")
     for update in pbar:
@@ -112,29 +112,29 @@ def main():
         # rollout_batch / window_rewards / ppo_update, so what this isolates is
         # the sampling, not a second implementation of the objective.
         episode = rollout_batch(model, adapter, value_net, env, z0_t, beta_t, cfg, obs_mul)
-        reward_np, d_totals, l_physes, _ = window_rewards(
+        reward_np, align_totals, l_physes, _ = window_rewards(
             fk_model, cfg, episode["qpos_beta"], qpos_refs)
         reward = torch.as_tensor(reward_np, device=cfg.device)
         st = ppo_update(cfg, model, adapter, value_net, optimizer,
                         episode, z0_t, beta_t, reward)
 
         loss_history.append(st["pg"] + cfg.value_coef * st["v"] + st["z_reg_loss"])
-        d_history.append(float(d_totals.mean()))
+        align_history.append(float(align_totals.mean()))
         l_phys_history.append(float(l_physes.mean()))
-        pbar.set_postfix(D=f"{d_totals.mean():.4f}", L_phys=f"{l_physes.mean():.4f}")
+        pbar.set_postfix(L_align=f"{align_totals.mean():.4f}", L_phys=f"{l_physes.mean():.4f}")
 
         if update % 10 == 0:
             tqdm.write(f"[{update:04d}/{cfg.num_updates}] pg={st['pg']:+.4f} "
                        f"v={st['v']:.4f} 1-zcos={1 - st['z_cos']:.2e} "
-                       f"D={d_totals.mean():.4f} L_phys={l_physes.mean():.4f}")
+                       f"L_align={align_totals.mean():.4f} L_phys={l_physes.mean():.4f}")
 
     env.close()
-    plot_loss_curve(loss_history, d_history, l_phys_history, REPO_ROOT / args.out)
+    plot_loss_curve(loss_history, align_history, l_phys_history, REPO_ROOT / args.out)
 
-    first10 = np.mean(d_history[:10])
-    last10 = np.mean(d_history[-10:])
-    print(f"\nD mean, first 10 updates: {first10:.4f}")
-    print(f"D mean, last 10 updates:  {last10:.4f}")
+    first10 = np.mean(align_history[:10])
+    last10 = np.mean(align_history[-10:])
+    print(f"\nL_align mean, first 10 updates: {first10:.4f}")
+    print(f"L_align mean, last 10 updates:  {last10:.4f}")
     print(f"{'IMPROVED' if last10 < first10 else 'DID NOT IMPROVE'} ({(1 - last10/first10)*100:+.1f}%)")
 
 
