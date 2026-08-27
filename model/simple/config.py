@@ -56,6 +56,28 @@ class TrainConfig:
                            # near-orthogonal to z0, which in 256 dims is the typical case), so
                            # 0.1 carries over without a retune.
     lambda_phys: float = 1.0
+    # L_phys's fall term: reference the pelvis height to the retargeted clip's
+    # own per-frame height instead of the rollout's first frame (see
+    # losses._fall_penalty). Only has an effect where a qpos_ref exists -- rows
+    # without one fall back to the old behaviour on their own.
+    #
+    # OFF. It was written to stop the term calling a legitimate crawl/headstand
+    # a fall, and it does -- but on the upright tasks that training actually
+    # keeps it removes most of what fall was penalising (a rollout that stays
+    # near the reference's height scores ~0 whether or not it is about to go
+    # over), so the term stops separating a rollout from the reference at all.
+    # The ground tasks it fixes are dropped from training anyway. Keep it off
+    # unless the ground split comes back, and then fix the tilt half too --
+    # tilt is unreferenced and is the larger of the two on ground clips.
+    phys_fall_ref: bool = False
+    # A key of losses.PHYS_WEIGHT_TABLES:
+    #   "default"   the dt-migration weights, what every recorded number used
+    #   "equal"     every active term 1.0. An ABLATION, not a trainable
+    #               objective: the terms differ by ~3 orders of magnitude, so
+    #               this makes L_phys == smooth to within 0.1%
+    #   "balanced"  each term scaled to contribute ~1 at a typical rollout --
+    #               the one that actually gives every term an equal say
+    phys_weights: str = "default"
     # L_align's five sub-terms; the d_ prefix matches losses.py's d_root/d_ee/...
     d_root_weight: float = 1.0
     d_ee_weight: float = 1.0

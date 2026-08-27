@@ -239,7 +239,12 @@ def test_d_velocity_is_fps_invariant():
 def test_weight_migration_preserves_the_old_objective():
     """PHYS_DEFAULT_WEIGHTS was divided by 30^(2k) exactly as dt was fixed, so
     today's cost equals what the dt=1.0 code produced. This pins that the bug
-    fix and the retune stayed separate."""
+    fix and the retune stayed separate.
+
+    Terms in PHYS_DISABLED_TERMS are excluded from BOTH sides: switching a term
+    off is a deliberate change to what is optimized, not a distortion of it, and
+    folding it in here would make this test fail for the one reason it is not
+    meant to catch."""
     m = model()
     T = 200
     rng = np.random.default_rng(3)
@@ -251,10 +256,32 @@ def test_weight_migration_preserves_the_old_objective():
 
     old_weights = {"limit": 1.0, "fall": 5.0, "com_support": 1.0,
                    "foot_slide": 1.0, "penetrate": 1.0, "smooth": 0.01}
+    old_weights = {k: (0.0 if k in losses.PHYS_DISABLED_TERMS else v)
+                   for k, v in old_weights.items()}
     _, old_terms = losses.physics_penalty(m, q, weights=old_weights, dt=1.0)
     old = sum(old_weights[k] * v for k, v in old_terms.items())
 
     assert abs(new - old) <= 1e-6 * max(abs(old), 1.0), f"{new} vs {old}"
+
+
+def test_disabled_terms_are_still_reported():
+    """Weighted 0, not deleted -- the diagnostic has to survive the switch-off,
+    otherwise terms.csv silently loses a column and re-enabling the term means
+    re-implementing it."""
+    m = model()
+    T = 60
+    rng = np.random.default_rng(5)
+    q = np.tile(m.qpos0, (T, 1)).astype(np.float64)
+    q[:, 7:] += 0.1 * rng.standard_normal((T, q.shape[1] - 7))
+
+    total, terms = losses.physics_penalty(m, q)
+    for k in losses.PHYS_DISABLED_TERMS:
+        assert k in terms, f"{k} vanished from the terms dict"
+        assert losses.PHYS_DEFAULT_WEIGHTS[k] == 0.0
+        assert losses.PHYS_EQUAL_WEIGHTS[k] == 0.0
+    # and it really is out of the total
+    assert abs(total - sum(losses.PHYS_DEFAULT_WEIGHTS[k] * v
+                           for k, v in terms.items())) < 1e-12
 
 
 # --------------------------------------------------------------------------

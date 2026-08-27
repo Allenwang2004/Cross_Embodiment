@@ -32,7 +32,11 @@ Known v1 simplifications (flagged, not silently swept under the rug):
   (tall_slim) to 0.0363 (adult), and on jump-2 the flight phase is detected for
   30% of frames on giant but 0% on child -- i.e. the small bodies get their
   airborne foot penalized for sliding. Fixing this needs a per-body threshold,
-  which is a separate change from the three corrected here.
+  which is a separate change from the three corrected here. foot_slide is
+  DISABLED (weight 0) until that gate is fixed -- see PHYS_DISABLED_TERMS.
+  com_support gates on the same constant and is still on: it is a position
+  comparison, so a mis-gated frame moves it far less than it moves a squared
+  velocity.
 
 Three defects were corrected together, all of the same kind -- the loss was not
 measuring what it claimed, so any weight tuning or ES search done on top of it
@@ -270,13 +274,94 @@ def functional_equivalence(model, qpos_beta: np.ndarray, qpos_ref, weights: dict
 # with the equivalence point as the baseline: the pre-dt-fix values were
 # foot_slide 1.0 and smooth 0.01, and going back to those is the first
 # experiment worth running.
+#
+# foot_slide is OFF (weight 0) -- see PHYS_DISABLED_TERMS below.
 PHYS_DEFAULT_WEIGHTS = {
     "limit": 1.0,           # joint-range violation                        (k=0)
     "fall": 5.0,            # pelvis height + torso tilt                   (k=0)
     "com_support": 1.0,     # CoM_xy vs. the grounded-foot support base    (k=0)
-    "foot_slide": 1.0 / 30 ** 2,      # grounded-foot horizontal speed     (k=1)
+    "foot_slide": 0.0,      # DISABLED, was 1.0 / 30 ** 2                  (k=1)
     "penetrate": 1.0,       # foot z < 0 -- clipping through the floor     (k=0)
     "smooth": 0.01 / 30 ** 4,         # joint angular-acceleration proxy   (k=2)
+}
+
+# Weighted 0, not deleted: the term is still computed and still comes back in
+# physics_penalty's terms dict, so terms.csv / audit.csv keep recording it and
+# turning it back on is a one-line change rather than a re-implementation. It
+# just does not enter the total.
+#
+# Why foot_slide is off. Its gate is FOOT_CONTACT_HEIGHT, a fixed 0.05 m that
+# does not scale with the body (see this module's docstring). The child's
+# rest-pose toe sits at 0.014 m and 55% of its reference foot-frames fall under
+# 0.05 m, so a large part of what the term calls "a planted foot sliding" is the
+# reference's own swing phase passing low over the ground. It shows up in the
+# separation: measured on upright clips the retargeted reference is beaten by
+# only 1.6x on condition B, against 12-29x for fall and 9-88x for smooth -- the
+# term barely distinguishes a rollout from a motion that is correct by
+# construction, which is the one thing L_phys has to do. Re-enable it after the
+# gate is per-body (rest-pose toe height + a fraction of leg length), not before.
+PHYS_DISABLED_TERMS = ("foot_slide",)
+
+# Every ACTIVE term weighted 1.0 -- the "let each term speak at its own
+# magnitude" ablation. Read the magnitudes before reading the total: the terms
+# are NOT commensurable. Measured over the 540 child clips of
+# scripts/loss_test.py, unweighted means on the retargeted reference are limit
+# 9e-4, fall 4e-1, com_support 3e-2 and smooth 1.4e3 (1.5e4 on a rollout), so
+# with equal weights L_phys is smooth to within 0.1% and the three terms the
+# metric exists to measure contribute nothing. Kept as a named constant because
+# that collapse is worth being able to reproduce, not because it is a good
+# objective.
+PHYS_EQUAL_WEIGHTS = {k: (0.0 if k in PHYS_DISABLED_TERMS else 1.0)
+                      for k in PHYS_DEFAULT_WEIGHTS}
+
+# Each active term scaled so it contributes ~1.0 at a TYPICAL ROLLOUT, which is
+# what "every term gets an equal say" actually requires -- equal weights give it
+# to whichever term happens to carry the largest units (smooth, by 10^3).
+#
+# w = 1 / median(term), medians pooled over conditions A/B/C/D of
+# scripts/loss_test.py on the 300 upright child clips
+# (outputs/loss_test_upright/terms.csv):
+#
+#     fall         0.4579     ->    2.18
+#     com_support  0.04832    ->   20.7
+#     smooth       4.412e+04  ->    2.27e-05
+#
+# The anchor is the rollouts, not the reference: the reference's own value is
+# near zero on every term (that is the point of it), so normalising there would
+# divide by noise. Pooling all four conditions keeps the weights from moving
+# when one of them improves.
+#
+# limit and penetrate are NOT median-normalised, because they are not quantities
+# with a typical value -- they are VIOLATIONS, zero whenever nothing is wrong.
+# Dividing by their median promotes the smallest routine violation to a full
+# unit of cost (penetrate's pooled median is 2.8e-07, so 1/median is 3.5e6 and
+# one rare frame would swamp the objective; limit's 1/median is 239, which made
+# it 45.8% of B's total). They get a physical scale instead -- "this much
+# violation, sustained, costs one unit":
+#
+#     penetrate    0.01 m of foot below the floor   ->  1 / 0.01^2  = 1e4
+#     limit        0.1 rad (5.7 deg) past the stop  ->  1 / 0.1^2   = 100
+#
+# What this changes, measured on the 300 upright clips. Under equal weights
+# L_phys was smooth to within 0.1% and A->C read as -63%; almost all of that was
+# smooth alone. Under these weights every term is visible, and the ladder does
+# NOT hold: B is worse than A on fall (0.900 -> 1.168), com_support (1.108 ->
+# 1.245) and limit, better only on smooth. Lowering limit stops it dominating
+# but does not restore the ladder, because limit was never the only reason --
+# equal weights were hiding three separate regressions behind one improvement.
+PHYS_BALANCED_WEIGHTS = {
+    "limit": 100.0,         # 1 / (0.1 rad)^2 -- violation scale, not median
+    "fall": 2.18,
+    "com_support": 20.7,
+    "foot_slide": 0.0,      # disabled, see PHYS_DISABLED_TERMS
+    "penetrate": 1.0e4,     # 1 / (0.01 m)^2 -- violation scale, not median
+    "smooth": 2.27e-5,
+}
+
+PHYS_WEIGHT_TABLES = {
+    "default": PHYS_DEFAULT_WEIGHTS,
+    "equal": PHYS_EQUAL_WEIGHTS,
+    "balanced": PHYS_BALANCED_WEIGHTS,
 }
 
 # Foot-body world z below this counts as "grounded" for com_support/foot_slide
@@ -313,12 +398,29 @@ def _joint_limit_penalty(model, qpos_seq):
     return penalty
 
 
-def _fall_penalty(qpos_seq):
+def _fall_penalty(qpos_seq, qpos_ref=None):
     """Smooth, continuous fall signal (see prior docstring note: a hard
     pelvis-height threshold saturates almost immediately on the child body
     and stops carrying gradient). Two components:
-      - height_ratio: clip(pelvis_z / initial_pelvis_z, 0, 1) -> (1-ratio)^2
-      - tilt: torso "up" axis vs. world z. NOT the naive
+      - height_ratio: clip(pelvis_z / ref_h, 0, 1) -> (1-ratio)^2, where ref_h
+        is the height the pelvis is SUPPOSED to be at.
+
+        With qpos_ref (the retargeted reference for this clip) the reference is
+        that clip's own PER-FRAME pelvis height, so a motion that is meant to be
+        low -- crawl, lieonground, headstand -- is scored against where it should
+        be rather than against its own first frame. Measured on the 540 child
+        clips, the old self-referenced version gave the retargeted reference
+        itself a mean fall of 1.100 on the 240 ground clips (headstand alone
+        scored 17.6, WORSE than a failed rollout at 15.0) purely because the
+        first frame is standing and everything after it legitimately is not.
+        Only being LOWER than the reference is penalized -- the clip at 1.0 is
+        the ceiling, so a rollout that stays up while the reference goes down
+        scores 0 here, and it is d_root/d_pose's job to notice that.
+
+        Without qpos_ref the fallback is the old qpos_seq[0, 2], which is what
+        train_explore.py (no reference by construction) still uses.
+      - tilt: torso "up" axis vs. world z. Deliberately NOT referenced -- see
+        the note under physics_penalty. NOT the naive
         up_z = 1 - 2*(qx^2 + qy^2) (that assumes local +Z is anatomical
         "up" at identity quaternion) -- this asset's free joint bakes in a
         SMPL-style Y-up rest pose, so the model's own standing/rest qpos has
@@ -329,7 +431,11 @@ def _fall_penalty(qpos_seq):
         when upside down.
     """
     pelvis_z = qpos_seq[:, 2]
-    ref_h = qpos_seq[0, 2]
+    if qpos_ref is not None:
+        pelvis_z, ref_h = _align_length(pelvis_z, qpos_ref[:, 2])
+        ref_h = np.maximum(ref_h, 1e-6)
+    else:
+        ref_h = max(float(qpos_seq[0, 2]), 1e-6)
     height_ratio = np.clip(pelvis_z / ref_h, 0.0, 1.0)
     height_term = float(np.mean((1.0 - height_ratio) ** 2))
 
@@ -404,7 +510,7 @@ def _smoothness_penalty(qpos_seq, dt):
 
 
 def physics_penalty(model, qpos_seq: np.ndarray, weights: dict = None,
-                    dt: float = DEFAULT_DT):
+                    dt: float = DEFAULT_DT, qpos_ref: np.ndarray = None):
     """Kinematics-only physical-plausibility cost, computed entirely from a
     single rollout's own qpos (no reference trajectory needed) via forward
     kinematics -- everything here is a proxy for "is this rollout headed
@@ -412,7 +518,10 @@ def physics_penalty(model, qpos_seq: np.ndarray, weights: dict = None,
     reward) can be individually inspected/reweighted:
 
       limit        joint-range violation
-      fall         pelvis height + torso tilt (graded, not a hard threshold)
+      fall         pelvis height + torso tilt (graded, not a hard threshold).
+                   With qpos_ref, the height half is referenced to the
+                   retargeted clip's own per-frame pelvis height instead of
+                   the rollout's first frame -- see _fall_penalty.
       com_support  CoM_xy vs. the grounded-foot support base (static
                    stability proxy -- see _com_support_penalty for why this
                    is NOT full ZMP: no CoM acceleration term, just position.
@@ -421,15 +530,26 @@ def physics_penalty(model, qpos_seq: np.ndarray, weights: dict = None,
                    quantity -- noisy from a single qpos rollout -- and is a
                    natural follow-up if this static proxy proves too weak a
                    signal in practice.)
-      foot_slide   grounded-foot horizontal speed (penalizes "skating")
+      foot_slide   grounded-foot horizontal speed (penalizes "skating").
+                   DISABLED -- still computed and still returned in terms, but
+                   weighted 0 in the total. See PHYS_DISABLED_TERMS for why.
       penetrate    foot clipping below the floor
       smooth       joint angular-acceleration proxy (discourages jerky output)
 
-    Deliberately excludes any FK-vs-reference reconstruction term (would
-    need a retargeted-motion qpos_ref, which train_explore.py's whole point
-    is to NOT depend on) and any closed-loop/RL-style disturbance-recovery
-    signal (would need actual perturbations injected during rollout, out of
-    scope for this kinematics-only cost).
+    Deliberately excludes any FK-vs-reference reconstruction term (that is
+    L_align's job) and any closed-loop/RL-style disturbance-recovery signal
+    (would need actual perturbations injected during rollout, out of scope for
+    this kinematics-only cost).
+
+    qpos_ref, when given, is used by ONE term and for one purpose: to tell the
+    fall term what height this clip is supposed to be at. It is not a
+    reconstruction target and no other term sees it, so passing it does not
+    turn L_phys into a second L_align. Omitting it (train_explore.py, which has
+    no reference by construction) keeps the original self-referenced behaviour.
+    The tilt half of fall is NOT referenced: on the 240 ground clips it is the
+    larger of the two (0.749 vs 0.352 on the reference itself), so referencing
+    the height alone does not make ground motion score clean -- that is a
+    separate change, not silently folded in here.
 
     weights: dict with a subset/all of PHYS_DEFAULT_WEIGHTS's keys; missing
     keys fall back to the default. Returns (total, terms) -- terms is a
@@ -445,7 +565,7 @@ def physics_penalty(model, qpos_seq: np.ndarray, weights: dict = None,
 
     terms = {
         "limit": _joint_limit_penalty(model, qpos_seq),
-        "fall": _fall_penalty(qpos_seq),
+        "fall": _fall_penalty(qpos_seq, qpos_ref),
         "com_support": _com_support_penalty(com[:, :2], foot_pos),
         "foot_slide": _foot_slide_penalty(foot_pos, dt),
         "penetrate": _penetration_penalty(foot_pos),
