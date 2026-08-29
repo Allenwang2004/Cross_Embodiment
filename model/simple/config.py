@@ -78,6 +78,17 @@ class TrainConfig:
     #   "balanced"  each term scaled to contribute ~1 at a typical rollout --
     #               the one that actually gives every term an equal say
     phys_weights: str = "default"
+    # Per-frame weight decay inside every L_align sub-term: frame t counts
+    # gamma ** t, normalised by the weights' sum (see losses._discounted_mean).
+    # 1.0 is the plain mean and reproduces every number recorded before this
+    # existed. Below 1.0 pulls the objective back toward the part of the episode
+    # a single z can still influence -- a tracking error is cumulative, so at
+    # gamma = 1 most of L_align is drift that no z could have prevented by then.
+    # At 30 Hz over 300 frames: 0.995 leaves frame 300 at 22% of frame 0's
+    # weight, 0.99 at 5%, 0.97 at 0.01% (i.e. only the first ~2 s count).
+    # Applies to L_align only -- L_phys is a penalty, not an accumulating error,
+    # and a fall at t=250 should cost exactly what a fall at t=10 costs.
+    align_discount: float = 1.0
     # L_align's five sub-terms; the d_ prefix matches losses.py's d_root/d_ee/...
     d_root_weight: float = 1.0
     d_ee_weight: float = 1.0
@@ -216,6 +227,17 @@ class ESConfig:
     # drag. train_es.py logs g_es_norm / g_anchor_norm / g_ratio every update, so
     # re-derive this rather than trusting it if the rank scheme or sigma changes.
     lambda_z: float = 10.0
+    # Per-frame weight decay inside every L_align sub-term: frame t counts
+    # gamma ** t, normalised by the weights' sum (see losses._discounted_mean).
+    # 1.0 is the plain mean and reproduces every number recorded before this
+    # existed. Below 1.0 pulls the objective back toward the part of the episode
+    # a single z can still influence -- a tracking error is cumulative, so at
+    # gamma = 1 most of L_align is drift that no z could have prevented by then.
+    # At 30 Hz over 300 frames: 0.995 leaves frame 300 at 22% of frame 0's
+    # weight, 0.99 at 5%, 0.97 at 0.01% (i.e. only the first ~2 s count).
+    # Applies to L_align only -- L_phys is a penalty, not an accumulating error,
+    # and a fall at t=250 should cost exactly what a fall at t=10 costs.
+    align_discount: float = 1.0
     # L_align's five sub-terms; the d_ prefix matches losses.py's d_root/d_ee/...
     d_root_weight: float = 1.0
     d_ee_weight: float = 1.0

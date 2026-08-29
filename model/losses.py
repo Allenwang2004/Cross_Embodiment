@@ -108,20 +108,57 @@ def _align_length(a, b):
     return a[:T], b[:T]
 
 
-def d_pose(qpos_a: np.ndarray, qpos_b: np.ndarray) -> float:
+def _discounted_mean(err, discount: float = 1.0, mask=None) -> float:
+    """Mean over frames, weighted by discount ** t.
+
+    Every L_align term is a per-frame error averaged uniformly, and the error a
+    tracking rollout makes is CUMULATIVE: the trajectory drifts from the
+    reference, so frame 250 is mostly carrying the consequences of frames 0-249
+    rather than any decision that could still be made at 250. A uniform mean
+    hands most of the objective to that tail. discount < 1 pulls the weight back
+    toward the part of the episode a z can still influence -- gamma = 0.99 gives
+    frame 300 about 5% of frame 0's weight, gamma = 0.995 about 22%.
+
+    Normalised by the weights' own sum, so the result stays on the same scale as
+    the uniform mean instead of shrinking with gamma -- otherwise lambda_align
+    would silently need retuning every time gamma moved.
+
+    discount == 1.0 returns np.mean's exact value, not an equivalent computed a
+    different way, so nothing recorded before this parameter existed changes.
+
+    err: (T,) or (T, ...) -- extra axes are averaged first, then time is
+    weighted. mask: optional per-frame boolean; excluded frames drop out but the
+    survivors keep their ORIGINAL t, so a late frame is still discounted as late.
+    """
+    e = np.asarray(err, dtype=np.float64)
+    if e.ndim > 1:
+        e = e.reshape(len(e), -1).mean(axis=1)
+    idx = np.flatnonzero(mask) if mask is not None else np.arange(len(e))
+    if mask is not None:
+        e = e[mask]
+    if len(e) == 0:
+        return 0.0
+    if discount == 1.0:
+        return float(np.mean(e))
+    w = np.power(float(discount), idx.astype(np.float64))
+    return float(np.dot(w, e) / w.sum())
+
+
+def d_pose(qpos_a: np.ndarray, qpos_b: np.ndarray, discount: float = 1.0) -> float:
     a, b = _align_length(qpos_a[:, 7:], qpos_b[:, 7:])
-    return float(np.mean((a - b) ** 2))
+    return _discounted_mean((a - b) ** 2, discount)
 
 
-def d_velocity(qpos_a: np.ndarray, qpos_b: np.ndarray, dt: float = DEFAULT_DT) -> float:
+def d_velocity(qpos_a: np.ndarray, qpos_b: np.ndarray, dt: float = DEFAULT_DT,
+               discount: float = 1.0) -> float:
     va = np.diff(qpos_a, axis=0) / dt
     vb = np.diff(qpos_b, axis=0) / dt
     va, vb = _align_length(va, vb)
-    return float(np.mean((va - vb) ** 2))
+    return _discounted_mean((va - vb) ** 2, discount)
 
 
 def d_root(model, qpos_a: np.ndarray, qpos_b: np.ndarray,
-           dt: float = DEFAULT_DT) -> float:
+           dt: float = DEFAULT_DT, discount: float = 1.0) -> float:
     """heading + yaw_rate + curvature + travel, on the root body.
 
     heading is 1 - cos(yaw_a - yaw_b), NOT (unwrap(yaw_a) - unwrap(yaw_b))^2.
@@ -163,7 +200,7 @@ def d_root(model, qpos_a: np.ndarray, qpos_b: np.ndarray,
     raw_yaw_a = kin.quat_to_yaw(quat_a[kin.ROOT_BODY])
     raw_yaw_b = kin.quat_to_yaw(quat_b[kin.ROOT_BODY])
     ya, yb = _align_length(raw_yaw_a, raw_yaw_b)
-    heading_err = float(np.mean(1.0 - np.cos(ya - yb)))
+    heading_err = _discounted_mean(1.0 - np.cos(ya - yb), discount)
 
     # unwrap IS correct here: diff of an unwrapped sequence is the per-frame
     # rotation increment, already confined to [-pi, pi]. It is only the
@@ -173,7 +210,7 @@ def d_root(model, qpos_a: np.ndarray, qpos_b: np.ndarray,
     yaw_a, yaw_b = _align_length(yaw_a, yaw_b)
 
     yaw_rate_a, yaw_rate_b = _align_length(np.diff(yaw_a), np.diff(yaw_b))
-    yaw_rate_err = float(np.mean((yaw_rate_a - yaw_rate_b) ** 2)) if len(yaw_rate_a) else 0.0
+    yaw_rate_err = _discounted_mean((yaw_rate_a - yaw_rate_b) ** 2, discount)
 
     def curvature(traj_xy, min_speed=1e-3, clip=50.0):
         # dheading/speed is inherently ill-conditioned as speed -> 0 (e.g.
@@ -205,21 +242,22 @@ def d_root(model, qpos_a: np.ndarray, qpos_b: np.ndarray,
     curv_a, curv_b = _align_length(curv_a, curv_b)
     valid_a, valid_b = _align_length(valid_a, valid_b)
     both_valid = valid_a & valid_b
-    curv_err = float(np.mean((curv_a[both_valid] - curv_b[both_valid]) ** 2)) if both_valid.any() else 0.0
+    curv_err = _discounted_mean((curv_a - curv_b) ** 2, discount, mask=both_valid)
 
     L = _leg_length(model)
     v_ref = np.sqrt(GRAVITY * L)
     froude_a = np.linalg.norm(np.diff(root_a[:, :2], axis=0), axis=-1) / dt / v_ref
     froude_b = np.linalg.norm(np.diff(root_b[:, :2], axis=0), axis=-1) / dt / v_ref
     froude_a, froude_b = _align_length(froude_a, froude_b)
-    speed_err = float(np.mean((froude_a - froude_b) ** 2)) if len(froude_a) else 0.0
-    height_err = float(np.mean(((root_a[:, 2] - root_b[:, 2]) / L) ** 2))
+    speed_err = _discounted_mean((froude_a - froude_b) ** 2, discount)
+    height_err = _discounted_mean(((root_a[:, 2] - root_b[:, 2]) / L) ** 2, discount)
     travel_err = speed_err + height_err
 
     return heading_err + yaw_rate_err + curv_err + ROOT_TRAVEL_WEIGHT * travel_err
 
 
-def d_ee(model, qpos_a: np.ndarray, qpos_b: np.ndarray) -> float:
+def d_ee(model, qpos_a: np.ndarray, qpos_b: np.ndarray,
+         discount: float = 1.0) -> float:
     bodies = kin.EE_BODIES + [kin.ROOT_BODY]
     pos_a, _ = kin.batch_forward_pose(model, qpos_a, bodies)
     pos_b, _ = kin.batch_forward_pose(model, qpos_b, bodies)
@@ -228,33 +266,39 @@ def d_ee(model, qpos_a: np.ndarray, qpos_b: np.ndarray) -> float:
         rel_a = pos_a[name] - pos_a[kin.ROOT_BODY]
         rel_b = pos_b[name] - pos_b[kin.ROOT_BODY]
         rel_a, rel_b = _align_length(rel_a, rel_b)
-        err += float(np.mean((rel_a - rel_b) ** 2))
+        err += _discounted_mean((rel_a - rel_b) ** 2, discount)
     return err / len(kin.EE_BODIES)
 
 
-def d_contact(model, qpos_a: np.ndarray, qpos_b: np.ndarray) -> float:
+def d_contact(model, qpos_a: np.ndarray, qpos_b: np.ndarray,
+              discount: float = 1.0) -> float:
     pos_a, _ = kin.batch_forward_pose(model, qpos_a, kin.FOOT_BODIES)
     pos_b, _ = kin.batch_forward_pose(model, qpos_b, kin.FOOT_BODIES)
     err = 0.0
     for name in kin.FOOT_BODIES:
         za, zb = _align_length(pos_a[name][:, 2], pos_b[name][:, 2])
-        err += float(np.mean((za - zb) ** 2))
+        err += _discounted_mean((za - zb) ** 2, discount)
     return err / len(kin.FOOT_BODIES)
 
 
 def functional_equivalence(model, qpos_beta: np.ndarray, qpos_ref, weights: dict,
-                           dt: float = DEFAULT_DT):
+                           dt: float = DEFAULT_DT, discount: float = 1.0):
     """weights: dict with keys root/ee/contact/pose/velocity.
     qpos_ref may be None (no retargeted reference attached yet for this
-    sample) -> returns (0.0, {})."""
+    sample) -> returns (0.0, {}).
+
+    discount: per-frame weight decay, gamma ** t, applied inside every sub-term
+    -- see _discounted_mean for why a uniform mean over 300 frames hands the
+    objective to accumulated drift. 1.0 (the default) is the plain mean and
+    reproduces every number recorded before this existed."""
     if qpos_ref is None:
         return 0.0, {}
     terms = {
-        "root": d_root(model, qpos_beta, qpos_ref, dt),
-        "ee": d_ee(model, qpos_beta, qpos_ref),
-        "contact": d_contact(model, qpos_beta, qpos_ref),
-        "pose": d_pose(qpos_beta, qpos_ref),
-        "velocity": d_velocity(qpos_beta, qpos_ref, dt),
+        "root": d_root(model, qpos_beta, qpos_ref, dt, discount),
+        "ee": d_ee(model, qpos_beta, qpos_ref, discount),
+        "contact": d_contact(model, qpos_beta, qpos_ref, discount),
+        "pose": d_pose(qpos_beta, qpos_ref, discount),
+        "velocity": d_velocity(qpos_beta, qpos_ref, dt, discount),
     }
     total = sum(weights[k] * v for k, v in terms.items())
     return total, terms

@@ -41,7 +41,7 @@ would be optimizing over a region the frozen actor never saw.
 CRN is exact and free here for the same reason as in train_es.py: every slot
 starts from a bit-identical state -- humenv's Default reset, or under
 --init reference the clip's own frame 0 written into all of them -- and the
-actions are the actor's mean, so two rollouts in one generation differ ONLY by
+actions are the actor's mean, so two rollouts in one step differ ONLY by
 their z.
 
 The reported best is the best CANDIDATE ACTUALLY EVALUATED, not the final mean
@@ -61,7 +61,7 @@ Usage (from project root):
 
 Writes <out>/best_z.npy, <out>/curve.csv, <out>/summary.json, <out>/best.npz and
 <out>/origin_z.npz (the winning and the baseline rollout's qpos), plus
-<out>/z_trace.npz -- every generation's mean z and best-so-far z, so the search
+<out>/z_trace.npz -- every step's mean z and best-so-far z, so the search
 can be replayed visually afterwards:
 
     uv run scripts/rollout_z_trace.py --trace <out>/z_trace.npz --n 8
@@ -151,6 +151,16 @@ def rollout(model, env, z_env, steps, device, obs_mul, init_qpos=None, nv=None):
     return np.stack(hist, axis=1)
 
 
+def device_arg(s: str) -> str:
+    """Accept a bare GPU index ("1") as well as a full torch device string.
+
+    torch.device rejects "1" with 'Invalid device string', and argparse has
+    already accepted it by then, so the failure surfaces 90 seconds later
+    inside FBcprModel.to() -- after the env and the model download.
+    """
+    return f"cuda:{s}" if s.isdigit() else s
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--clip", default="move-ego-0-2/move-ego-0-2_4",
@@ -158,11 +168,12 @@ def main():
     p.add_argument("--body", default="child")
     p.add_argument("--objective", default="both", choices=sorted(OBJECTIVES))
     p.add_argument("--evals", type=int, default=10000,
-                   help="total rollouts of the search. NOT generations: the "
-                        "budget is what costs wall-clock, and generations = "
+                   help="total rollouts of the search. NOT steps: the "
+                        "budget is what costs wall-clock, and steps = "
                         "evals // (2*pairs)")
     p.add_argument("--pairs", type=int, default=8,
-                   help="antithetic pairs per generation; 2*pairs env slots")
+                   help="antithetic pairs per step (one step = one Adam update "
+                        "on z); 2*pairs env slots")
     p.add_argument("--sigma", type=float, default=0.25,
                    help="|sigma*eps| / |z| = sigma, i.e. the FRACTIONAL "
                         "perturbation of z -- see ESConfig.es_sigma")
@@ -189,12 +200,20 @@ def main():
                    help="balanced, because this script SUMS L_align and L_phys: "
                         "under 'default' L_phys is ~1e4 and 'both' would be "
                         "L_phys with a rounding error attached")
+    p.add_argument("--discount", type=float, default=1.0,
+                   help="per-frame weight decay gamma inside every L_align "
+                        "sub-term (losses._discounted_mean). 1.0 = the plain "
+                        "mean. Lower it when the objective is dominated by "
+                        "accumulated drift: at 30 Hz over 300 frames, 0.995 "
+                        "leaves the last frame at 22%% of the first's weight, "
+                        "0.99 at 5%%")
     p.add_argument("--no-fall-ref", action="store_true", default=True)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--eval-every", type=int, default=25,
                    help="also roll out the current mean z this often, so the "
                         "curve shows the iterate and not only its samples")
-    p.add_argument("--device", default="cuda:0" if torch.cuda.is_available() else "cpu")
+    p.add_argument("--device", type=device_arg,
+                   default="cuda:0" if torch.cuda.is_available() else "cpu")
     p.add_argument("--metamotivo", default="facebook/metamotivo-M-1")
     p.add_argument("--out", default=None)
     args = p.parse_args()
@@ -228,13 +247,14 @@ def main():
     cfg.lambda_align, cfg.lambda_phys = lam_a, lam_p
     cfg.phys_weights = args.phys_weights
     cfg.phys_fall_ref = not args.no_fall_ref
+    cfg.align_discount = args.discount
 
     n_envs = 2 * args.pairs
     n_gens = max(args.evals // n_envs, 1)
     print(f"clip {args.clip} on {args.body} ({xml.name})")
     print(f"objective {args.objective}: cost = {lam_a} * L_align + {lam_p} * L_phys "
-          f"(L_phys weights={cfg.phys_weights})")
-    print(f"{n_gens} generations x {n_envs} rollouts = {n_gens * n_envs} evals, "
+          f"(L_phys weights={cfg.phys_weights}, L_align discount={cfg.align_discount})")
+    print(f"{n_gens} steps x {n_envs} rollouts = {n_gens * n_envs} evals, "
           f"sigma {args.sigma}, lr {args.lr}, reference {len(ref)} frames")
     print(f"init: {args.init}" + (" (rollout starts from the reference's frame 0)"
                                   if args.init == "reference" else
@@ -279,9 +299,9 @@ def main():
     best = dict(cost=base["cost"], align=base["align"], phys=base["phys"],
                 z=z0.copy(), qpos=q0[0].copy(), gen=-1, source="origin_z")
     curve = []
-    # Every generation's iterate and its best-so-far, so any point in the search
+    # Every step's iterate and its best-so-far, so any point in the search
     # can be rolled out afterwards without re-running it (256 floats a row --
-    # 625 generations is under a megabyte, so this is not worth a flag).
+    # 625 steps is under a megabyte, so this is not worth a flag).
     trace_mean, trace_best = [z0.copy()], [z0.copy()]
     t0 = time.time()
     for gen in range(n_gens):
@@ -338,7 +358,7 @@ def main():
     # (measured: L_align 1.569 in the async search vs 1.290 re-rendered).
     np.savez_compressed(out_dir / "origin_z.npz", qpos=q0[0].astype(np.float32),
                         fps=cfg.control_fps)
-    # gen -1 is z0 itself, so row i is "after i generations" and row 0 is the
+    # gen -1 is z0 itself, so row i is "after i steps" and row 0 is the
     # starting point -- scripts/rollout_z_trace.py indexes it that way.
     np.savez_compressed(
         out_dir / "z_trace.npz",
@@ -354,9 +374,12 @@ def main():
         "clip": args.clip, "body": args.body, "xml": str(xml),
         "objective": args.objective, "lambda_align": lam_a, "lambda_phys": lam_p,
         "phys_weights": cfg.phys_weights, "phys_fall_ref": cfg.phys_fall_ref,
+        # "generations" is the on-disk name for what the logs and figures now
+        # call steps -- kept so older summary.json files stay readable
         "evals": n_gens * n_envs, "generations": n_gens, "pairs": args.pairs,
         "sigma": args.sigma, "lr": args.lr, "steps": args.steps,
         "obs_scale": args.obs_scale, "seed": args.seed, "init": args.init,
+        "align_discount": args.discount,
         "origin_z": base, "reference_floor": floor,
         "best": {k: best[k] for k in ("cost", "align", "phys", "gen", "source")},
         "improvement_vs_origin_z": (base["cost"] - best["cost"]) / max(abs(base["cost"]), 1e-12),

@@ -391,7 +391,9 @@ def window_rewards(fk_model, cfg, qpos_beta, qpos_refs):
                 ref_w = ref[a:end]
             traj = qpos_beta[i, a:end] if ref_w is not None else qpos_beta[i, a:b]
 
-            align_w, _ = losses.functional_equivalence(fk_model, traj, ref_w, d_weights, dt)
+            align_w, _ = losses.functional_equivalence(
+                fk_model, traj, ref_w, d_weights, dt,
+                discount=getattr(cfg, "align_discount", 1.0))
             # same fall reference and weights as compute_batch_cost -- if the
             # per-window reward and the episode-level cost measured "falling"
             # differently, the advantage would be optimizing a third thing
@@ -604,8 +606,9 @@ def compute_batch_cost(fk_model, cfg, qpos_beta, qpos_refs, return_terms=False):
     fall_ref = getattr(cfg, "phys_fall_ref", False)
     term_list = []
     for i in range(B):
-        align_total, _ = losses.functional_equivalence(fk_model, qpos_beta[i], qpos_refs[i],
-                                                       d_weights, dt)
+        align_total, _ = losses.functional_equivalence(
+            fk_model, qpos_beta[i], qpos_refs[i], d_weights, dt,
+            discount=getattr(cfg, "align_discount", 1.0))
         l_phys, terms = losses.physics_penalty(
             fk_model, qpos_beta[i], weights=phys_w, dt=dt,
             qpos_ref=qpos_refs[i] if fall_ref else None)

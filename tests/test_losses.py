@@ -285,6 +285,66 @@ def test_disabled_terms_are_still_reported():
 
 
 # --------------------------------------------------------------------------
+# the per-frame discount
+# --------------------------------------------------------------------------
+
+def test_discount_1_is_exactly_the_plain_mean():
+    """The default must not perturb anything recorded before it existed --
+    equal to np.mean bit for bit, not merely close."""
+    m = model()
+    rng = np.random.default_rng(11)
+    T = 200
+    a = np.tile(m.qpos0, (T, 1)).astype(np.float64)
+    b = a.copy()
+    a[:, 7:] += 0.1 * rng.standard_normal((T, a.shape[1] - 7))
+    b[:, 7:] += 0.1 * rng.standard_normal((T, b.shape[1] - 7))
+    b[:, :3] += 0.05 * rng.standard_normal((T, 3))
+    w = {"root": 1.0, "ee": 1.0, "contact": 1.0, "pose": 1.0, "velocity": 1.0}
+
+    plain, pt = losses.functional_equivalence(m, a, b, w)
+    same, st = losses.functional_equivalence(m, a, b, w, discount=1.0)
+    assert plain == same, f"{plain} vs {same}"
+    for k in pt:
+        assert pt[k] == st[k], f"{k}: {pt[k]} vs {st[k]}"
+
+
+def test_discount_moves_weight_off_the_tail():
+    """A trajectory that is clean early and bad late must score LOWER under a
+    discount, and the mirror image must score higher -- that asymmetry is the
+    whole point, so a discount that merely rescaled would pass a same-value
+    check while doing nothing."""
+    m = model()
+    T = 200
+    late = np.tile(m.qpos0, (T, 1)).astype(np.float64)
+    ref = late.copy()
+    late[T // 2:, 7:] += 0.3                      # error only in the tail
+    early = np.tile(m.qpos0, (T, 1)).astype(np.float64)
+    early[:T // 2, 7:] += 0.3                     # error only at the start
+
+    flat_late = losses.d_pose(late, ref)
+    flat_early = losses.d_pose(early, ref)
+    assert abs(flat_late - flat_early) < 1e-12, "uniform mean cannot tell them apart"
+
+    g = 0.98
+    assert losses.d_pose(late, ref, discount=g) < flat_late
+    assert losses.d_pose(early, ref, discount=g) > flat_early
+    assert losses.d_pose(late, ref, discount=g) < losses.d_pose(early, ref, discount=g)
+
+
+def test_discount_keeps_the_scale():
+    """Normalised by the weights' sum, so a constant error scores the same
+    whatever gamma is -- otherwise lambda_align would need retuning per gamma."""
+    m = model()
+    T = 150
+    ref = np.tile(m.qpos0, (T, 1)).astype(np.float64)
+    const = ref.copy()
+    const[:, 7:] += 0.2
+    base = losses.d_pose(const, ref)
+    for g in (0.999, 0.99, 0.95, 0.9):
+        assert abs(losses.d_pose(const, ref, discount=g) - base) < 1e-9, g
+
+
+# --------------------------------------------------------------------------
 
 def main():
     tests = [(n, f) for n, f in sorted(globals().items())

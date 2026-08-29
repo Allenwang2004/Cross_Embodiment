@@ -2,9 +2,9 @@
 """rollout_z_trace.py -- watch a single_z_search run learn.
 
 Takes the z_trace.npz that scripts/single_z_search.py writes (every
-generation's iterate and its best-so-far) and turns a selection of those
+step's iterate and its best-so-far) and turns a selection of those
 checkpoints into one video: the same clip, driven by the z the search held
-after 0, 10, 40, ... generations, all playing side by side on the same timeline.
+after 0, 10, 40, ... steps, all playing side by side on the same timeline.
 
 Two things make this cheap rather than a re-run of the search:
 
@@ -54,6 +54,28 @@ from PIL import Image, ImageDraw
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
+def logspaced(count, n):
+    """Exactly min(n, count) distinct indices into range(count), always
+    including 0, spaced logarithmically.
+
+    Log-spaced because the interesting part is the first few hundred
+    evaluations; linear spacing spends most of the panels on an already
+    converged run. Rounding collides at the dense end, which is why the gaps
+    are then filled from the low end rather than the result being handed back
+    short -- asking for 8 panels and getting 6 is a silent surprise.
+    """
+    n = min(n, count)
+    out = {0}
+    if n > 1:
+        for v in np.geomspace(1, count - 1, n - 1):
+            out.add(int(round(v)))
+    i = 1
+    while len(out) < n and i < count:
+        out.add(i)
+        i += 1
+    return sorted(out)
+
+
 def label(frame, text, sub=None):
     """Burn the checkpoint's identity into its own panel -- a grid of otherwise
     identical humanoids is unreadable without it, and a legend outside the
@@ -68,17 +90,21 @@ def label(frame, text, sub=None):
 
 
 def main():
+    from single_z_search import device_arg
+
     p = argparse.ArgumentParser()
     p.add_argument("--trace", required=True, help="a z_trace.npz")
     p.add_argument("--which", default="mean", choices=["mean", "best"],
-                   help="'mean' = the ES iterate after k generations (training "
+                   help="'mean' = the ES iterate after k steps (training "
                         "progress). 'best' = best sample so far, monotone by "
                         "construction")
     p.add_argument("--n", type=int, default=8,
                    help="how many checkpoints, log-spaced over the run (early "
-                        "generations are where everything happens)")
+                        "steps are where everything happens)")
     p.add_argument("--gens", default=None,
-                   help="explicit comma-separated generations, overrides --n")
+                   help="explicit comma-separated step numbers, overrides --n. "
+                        "Spelled --gens because --steps on this script is "
+                        "the rollout LENGTH, which is a different number")
     p.add_argument("--clip", default=None, help="default: from the run's summary.json")
     p.add_argument("--body", default="child")
     p.add_argument("--xml", default=None, help="default: from the run's summary.json")
@@ -92,7 +118,8 @@ def main():
     p.add_argument("--size", type=int, default=320, help="panel pixels")
     p.add_argument("--camera", default="front_side")
     p.add_argument("--fps", type=float, default=30.0)
-    p.add_argument("--device", default="cuda:0" if torch.cuda.is_available() else "cpu")
+    p.add_argument("--device", type=device_arg,
+                   default="cuda:0" if torch.cuda.is_available() else "cpu")
     p.add_argument("--metamotivo", default="facebook/metamotivo-M-1")
     p.add_argument("--out", default=None, help="default: next to the trace")
     args = p.parse_args()
@@ -128,14 +155,10 @@ def main():
         want = [int(g) for g in args.gens.split(",")]
         idx = [int(np.argmin(np.abs(gens - g))) for g in want]
     else:
-        # log-spaced, because the interesting part is the first few hundred
-        # evaluations -- linear spacing spends most panels on a converged run
-        lo, hi = 1, len(gens) - 1
-        idx = [0] + sorted({int(round(v)) for v in
-                            np.geomspace(lo, hi, max(args.n - 1, 1))})
+        idx = logspaced(len(gens), args.n)
     idx = sorted(set(idx))
     sel_gen, sel_z = gens[idx], zs[idx].astype(np.float64)
-    print(f"{clip} on {xml.name}, {args.which} z at generations "
+    print(f"{clip} on {xml.name}, {args.which} z at steps "
           f"{list(map(int, sel_gen))}  ({len(idx)} rollouts, init={init_mode})")
 
     ref = np.load(REPO_ROOT / "data" / args.body / "retargeting_motion"
@@ -195,15 +218,6 @@ def main():
                                 f"gen {int(g)}  ({rows[i]['evals']} evals)",
                                 f"sum {rows[i]['sum']:.3f}"))
         panels.append(frames)
-    # the reference itself, as the last panel -- the thing being chased
-    ref_frames = []
-    for t in range(steps):
-        data.qpos[:] = ref[min(t, len(ref) - 1)]
-        mujoco.mj_forward(fk, data)
-        renderer.update_scene(data, camera=args.camera)
-        ref_frames.append(label(renderer.render().copy(), "reference",
-                                "the retargeted clip"))
-    panels.append(ref_frames)
     renderer.close()
 
     cols = min(args.cols, len(panels))

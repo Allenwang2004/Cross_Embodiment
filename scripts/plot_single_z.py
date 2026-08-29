@@ -5,27 +5,34 @@ Reads only what the searches wrote (summary.json, curve.csv, best.npz,
 origin_z.npz) plus the reference clip, and re-scores every trajectory here, so
 no number in the figures is transcribed by hand.
 
-Two figures, and the split between them is the point:
+ONE QUESTION PER FILE, and no in-image title -- the caption belongs wherever
+the figure gets used, and combining panels only shrinks them past legibility:
 
-  curves.png    HOW the search went. One panel per objective, each on its OWN
-                axis -- the three costs are not the same quantity (L_align,
-                L_phys, and their sum), so a curve that sits lower in one panel
-                than another says nothing. The one place the three CAN be
-                ranked gets its own panel: every z scored on the sum.
+  curve_align.png   HOW each search went, one file per objective, since
+  curve_phys.png    L_align, L_phys and their sum are three different
+  curve_both.png    quantities and side-by-side heights would mean nothing.
+                    The best z is starred on the curve, labelled with its
+                    cosine to origin_z.
+  rank.png          each z scored on the sum -- the only shared axis.
+  plane.png         where each objective lands in (L_align, L_phys).
+  travel.png        what the rollout physically does.
+  latent.png        cos(z, origin_z) over the search: did it actually move,
+                    or is the best z a nudge on the one it started from?
 
-  plane.png     WHERE each objective ended up, in the (L_align, L_phys) plane,
-                and what the rollout physically does.
+A note on the retargeted reference. It is drawn as a landmark, NOT a lower
+bound: it is a kinematic playback with no physics behind it, and it carries
+real smooth/com_support cost of its own, so a physical rollout can and does
+score BELOW it on L_phys.
 
-A note on the retargeted reference. It is drawn on both figures, but it is NOT
-a lower bound: it is a kinematic playback with no physics behind it, and it
-carries real smooth/com_support cost of its own, so a physical rollout can and
-does score BELOW it on L_phys. It is a landmark, not a floor.
-
-Usage (from project root, after the three searches have finished):
+Usage (from project root, after the three searches have finished). --dir is
+either the parent of the three run dirs or the run prefix itself, and the
+figures are written into whichever you pass -- use the prefix form when you
+have more than one clip, since the figure names are fixed:
     uv run scripts/plot_single_z.py
     uv run scripts/plot_single_z.py --dir outputs/single_z --clip move-ego-0-2/move-ego-0-2_4
+    uv run scripts/plot_single_z.py --dir outputs/single_z/rotate-y--5-0.8_0 \
+        --clip rotate-y--5-0.8/rotate-y--5-0.8_0
 """
-
 from __future__ import annotations
 
 import argparse
@@ -67,6 +74,27 @@ def style(ax):
     ax.tick_params(colors=INK_2, length=0, labelsize=9)
 
 
+def project_z(z):
+    """Onto the sphere of radius sqrt(dim), metamotivo's project_z. Needed
+    because averaging per-frame latents leaves the sphere, and a cosine against
+    an off-sphere mean is not the cosine against a usable z."""
+    a = np.atleast_2d(np.asarray(z, dtype=np.float64))
+    r = np.sqrt(a.shape[-1])
+    return (a * (r / np.maximum(np.linalg.norm(a, axis=-1, keepdims=True), 1e-12))
+            ).reshape(np.shape(z))
+
+
+def cos(a, b):
+    a, b = np.ravel(a), np.ravel(b)
+    return float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b)))
+
+
+# cos between two independent uniform directions on S^255 has sd 1/sqrt(256).
+# Every cosine here is meaningless without it: 0.05 in 256 dimensions is not
+# "slightly aligned", it is inside the noise floor of two unrelated vectors.
+CHANCE_SD = 1.0 / np.sqrt(256)
+
+
 def diagnostics(qpos, fps):
     """Loss-independent facts about what the body did, so the figure can say
     what a cost number means. up_z = 2*(qy*qz + qw*qx) -- this asset's rest
@@ -98,11 +126,25 @@ def main():
     if not root.is_absolute():
         root = REPO_ROOT / root
     task, stem = args.clip.split("/")
-    dirs = {o: root / f"{stem}_{o}" for o in OBJ}
-    missing = [str(d) for d in dirs.values() if not (d / "summary.json").exists()]
-    if missing:
-        raise SystemExit("no summary.json in:\n  " + "\n  ".join(missing)
-                         + "\nrun scripts/single_z_search.py for each objective first")
+
+    # --dir takes either shape, because both are natural to type:
+    #   the PARENT of the three run dirs   outputs/single_z
+    #   the run PREFIX itself              outputs/single_z/<stem>_0
+    # i.e. the same string the searches got as --out minus the _<objective>.
+    # The prefix form is the useful one for a second clip: the three figure
+    # names are fixed, so pointing every clip at the same parent overwrites
+    # the previous clip's figures.
+    layouts = [{o: root / f"{stem}_{o}" for o in OBJ},
+               {o: root.parent / f"{root.name}_{o}" for o in OBJ}]
+    for dirs in layouts:
+        if all((d / "summary.json").exists() for d in dirs.values()):
+            break
+    else:
+        raise SystemExit(
+            "no summary.json under either reading of --dir:\n  "
+            + "\n  ".join(str(d) for lay in layouts for d in lay.values())
+            + "\nrun scripts/single_z_search.py for each objective first")
+    root.mkdir(parents=True, exist_ok=True)
 
     S = {o: json.loads((dirs[o] / "summary.json").read_text()) for o in OBJ}
     C = {o: list(csv.DictReader(open(dirs[o] / "curve.csv"))) for o in OBJ}
@@ -152,47 +194,137 @@ def main():
     for k, v in pts.items():
         v["sum"] = v["align"] + v["phys"]
 
-    init_note = ("rollout starts from the reference's frame 0"
-                 if S["align"].get("init") == "reference"
-                 else "humenv Default standing reset")
-    head = (f"{stem} on {args.body}: ES directly on z, "
-            f"{S['align']['evals']} rollouts per objective  "
-            f"(L_phys weights={cfg.phys_weights}, {init_note})")
+    # --- how far each z sits from z0, the latent every rollout starts at ------
+    zvec = {"origin_z": project_z(np.load(REPO_ROOT / "data" / "origin_z" / task
+                                          / f"{stem}.npy").reshape(-1))}
+    for o in OBJ:
+        zvec[o] = np.load(dirs[o] / "best_z.npy").reshape(-1).astype(np.float64)
+    for k, z in zvec.items():
+        pts[k]["cos_z0"] = cos(z, zvec["origin_z"])
+
+    # "step" = one Adam update on z, which the ES literature and the search's
+    # own logs call a generation -- same thing, and the figures use the
+    # optimiser word. One step is 2*pairs rollouts, fixed for the whole run, so
+    # steps and evaluations are one clock at a fixed ratio. The x axis is in
+    # evaluations because that is what costs wall-clock and what stays
+    # comparable when --pairs changes; the ratio is on the axis so the step
+    # numbers in the search log and in summary.json convert by eye.
+    per_step = 2 * S["align"]["pairs"]
+    xlab = f"rollout evaluations   ({per_step} per step)"
 
     col = lambda o, k: np.array([float(r[k]) for r in C[o]])
     ev = lambda o: np.array([int(r["evals"]) for r in C[o]])
 
-    # ======================= figure 1: the curves ============================
-    fig = plt.figure(figsize=(14, 9.6), facecolor=SURFACE)
-    gs = fig.add_gridspec(2, 3, hspace=0.42, wspace=0.26)
+    # One question per FILE. Nothing is combined: a figure that answers two
+    # questions gets read as answering one, and the panels shrink to where the
+    # numbers stop being legible. No in-image title either -- the caption lives
+    # wherever the figure is used, and the filename says which figure it is.
 
-    for i, o in enumerate(OBJ):
-        ax = fig.add_subplot(gs[0, i]); style(ax)
+    def finish(fig, name):
+        fig.savefig(root / name, dpi=150, facecolor=SURFACE, bbox_inches="tight")
+        plt.close(fig)
+        print(f"-> {root / name}")
+
+    def at_best(o):
+        """(evals, cost, cos_z0) of the best z.
+
+        summary.json and curve.csv both spell the step "gen" -- that is the
+        on-disk name and is left alone; only what the reader sees changes.
+
+        cos comes from summary.json, NOT from curve.csv's cos_z0 at that
+        step: the best z is a perturbed SAMPLE and cos_z0 tracks the ES mean,
+        so the two differ by roughly sigma.
+        """
+        g = S[o]["best"]["gen"]
+        row = min(C[o], key=lambda r: abs(int(r["gen"]) - g))
+        return int(row["evals"]), S[o]["best"]["cost"], S[o]["cos_best_z0"]
+
+    # ============ 1. curve_<objective>.png -- how each search went ===========
+    # One file per objective: L_align, L_phys and their sum are three different
+    # quantities, so putting them side by side invites a comparison of heights
+    # that means nothing.
+    for o in OBJ:
+        fig = plt.figure(figsize=(7.2, 4.4), facecolor=SURFACE)
+        ax = fig.add_subplot(111); style(ax)
         x = ev(o)
         ax.fill_between(x, col(o, "gen_best"), col(o, "gen_mean"), color=CAT[o],
-                        alpha=0.16, linewidth=0, zorder=2)
-        ax.plot(x, col(o, "best_so_far"), color=CAT[o], linewidth=2.4, zorder=5)
+                        alpha=0.12, linewidth=0, zorder=2,
+                        label="each step's samples")
+        # The ES ITERATE, evaluated every --eval-every steps. It is what
+        # rollout_z_trace.py --which mean plays back, and unlike best_so_far it
+        # is NOT monotone -- best_so_far is a running minimum and cannot go up,
+        # so a figure showing only that one makes the trace's wobble look like a
+        # contradiction rather than the thing it actually is.
+        mz = np.array([(int(r["evals"]), float(r["mean_z_cost"]))
+                       for r in C[o] if r["mean_z_cost"]])
+        if len(mz):
+            ax.plot(mz[:, 0], mz[:, 1], color=CAT[o], linewidth=1.3, linestyle="--",
+                    zorder=4, label="the ES iterate")
+        ax.plot(x, col(o, "best_so_far"), color=CAT[o], linewidth=2.4, zorder=5,
+                label="best sample so far")
+
         z0c = S[o]["origin_z"]["cost"]
         ax.scatter([x[0]], [z0c], s=52, color=CAT[o], zorder=6,
                    edgecolor=SURFACE, linewidth=1.8)
-        ax.annotate("origin_z", (x[0], z0c), textcoords="offset points",
-                    xytext=(8, 2), color=INK_2, fontsize=8.5)
+        ax.annotate(f"origin_z  {z0c:.2f}", (x[0], z0c), textcoords="offset points",
+                    xytext=(8, 2), color=INK_2, fontsize=9)
+
+        # WHERE the best z was found, marked on the curve itself, carrying the
+        # one number that says whether it is a different z at all: its cosine to
+        # origin_z. A low cost reached at cos ~ 0 is a different direction in
+        # latent space; the same cost reached at cos ~ 1 would be a nudge.
+        bx, by, bc = at_best(o)
+        ax.scatter([bx], [by], s=190, marker="*", color=CAT[o], zorder=7,
+                   edgecolor=SURFACE, linewidth=1.6)
         refc = S[o]["reference_floor"]["cost"]
         if refc > 0:
             ax.plot([x[0], x[-1]], [refc, refc], color=INK_MUTED, linewidth=1.4,
-                    linestyle=":", zorder=4)
-            ax.annotate("reference", (x[-1], refc), textcoords="offset points",
-                        xytext=(-4, 4), ha="right", color=INK_MUTED, fontsize=8.5)
-        ax.set_xscale("log"); ax.set_yscale("log"); ax.set_xlim(10, 1.3 * x[-1])
-        ax.set_xlabel("rollout evaluations", color=INK_2, fontsize=10)
-        ax.set_ylabel(WHAT[o], color=INK_2, fontsize=10)
-        ax.set_title(f"({i + 1}) minimise {WHAT[o]}", color=CAT[o], fontsize=12,
-                     fontweight="bold", loc="left", pad=20)
-        ax.text(0, 1.02, f"{z0c:.2f} -> {S[o]['best']['cost']:.3f}"
-                + (f"   (reference {refc:.3f})" if refc > 0 else "   (reference 0)"),
-                transform=ax.transAxes, fontsize=9, color=INK_MUTED)
+                    linestyle=":", zorder=3)
+            ax.annotate(f"reference  {refc:.3f}", (x[0], refc),
+                        textcoords="offset points", xytext=(4, -6), ha="left",
+                        va="top", color=INK_MUTED, fontsize=9)
+        # x is ALWAYS log: the search is essentially over by ~300 evaluations
+        # out of 10000, so on a linear axis 97% of the width is a flat line.
+        ax.set_xscale("log"); ax.set_xlim(10, 1.45 * x[-1])
 
-    ax = fig.add_subplot(gs[1, 0:2]); style(ax)
+        # y is log only when the numbers need it. L_phys falls ~3000x, which no
+        # linear axis can show; L_align falls 2x and L_align+L_phys 9x, and
+        # forcing those onto a log axis buys nothing while costing readable
+        # ticks (6x10^-1 instead of 0.6) and a distorted sense of the drop.
+        lo = min(col(o, "best_so_far").min(), by)
+        hi = max(z0c, col(o, "gen_mean").max())
+        if hi / max(lo, 1e-12) > 30:
+            ax.set_yscale("log")
+            ylo, yhi = ax.get_ylim()
+            ylo, yhi = ylo * 0.5, yhi * 1.7          # headroom, multiplicative
+        else:
+            ylo, yhi = 0.0, hi * 1.28                # ... and additive
+        ax.set_ylim(ylo, yhi)
+
+        # The star's numbers go in a FIXED corner with a leader line, not in an
+        # offset next to the star. The curve is monotone decreasing on log-log,
+        # so the star is always bottom-right and every offset direction from it
+        # runs into either the curve, the samples band or the axis -- which is
+        # whack-a-mole. Two corners are free by the same monotonicity: below-left
+        # of the curve (legend) and above-right of it (this).
+        ax.annotate(f"best z  {by:.3f}\ncos(z, origin_z) = {bc:+.3f}",
+                    xy=(bx, by), xycoords="data",
+                    xytext=(0.985, 0.985), textcoords="axes fraction",
+                    ha="right", va="top", color=CAT[o], fontsize=9.5,
+                    fontweight="bold", zorder=8,
+                    arrowprops=dict(arrowstyle="-", color=CAT[o], linewidth=0.9,
+                                    alpha=0.45, shrinkA=2, shrinkB=6))
+        ax.set_xlabel(xlab, color=INK_2, fontsize=10)
+        ax.set_ylabel(WHAT[o], color=CAT[o], fontsize=11, fontweight="bold")
+        leg = ax.legend(frameon=False, fontsize=8.5, loc="lower left",
+                        handlelength=1.6, borderaxespad=0.4)
+        for t in leg.get_texts():
+            t.set_color(INK_2)
+        finish(fig, f"curve_{o}.png")
+
+    # ============ 2. rank.png -- which z won on the only shared axis =========
+    fig = plt.figure(figsize=(5.2, 4.6), facecolor=SURFACE)
+    ax = fig.add_subplot(111); style(ax)
     order = sorted(pts, key=lambda k: -pts[k]["sum"])
     xs = np.arange(len(order))
     ax.bar(xs, [pts[k]["sum"] for k in order], 0.6,
@@ -200,45 +332,15 @@ def main():
     for xi, k in zip(xs, order):
         ax.text(xi, pts[k]["sum"], f"{pts[k]['sum']:.2f}", ha="center", va="bottom",
                 fontsize=10, color=INK, fontweight="bold")
-    ax.set_xticks(xs); ax.set_xticklabels(order, fontsize=10, fontweight="bold")
+    ax.set_xticks(xs)
+    ax.set_xticklabels(order, fontsize=9, fontweight="bold", rotation=20, ha="right")
     ax.set_ylim(0, max(pts[k]["sum"] for k in order) * 1.2)
     ax.set_ylabel("L_align + L_phys", color=INK_2, fontsize=10)
-    ax.set_title("the comparable question: what does each z score on the SUM?",
-                 color=INK, fontsize=12, fontweight="bold", loc="left", pad=20)
-    ax.text(0, 1.02, "the only axis on which the three searches can be ranked "
-            "against each other", transform=ax.transAxes, fontsize=9, color=INK_MUTED)
+    finish(fig, "rank.png")
 
-    ax = fig.add_subplot(gs[1, 2]); style(ax)
-    finals = sorted(OBJ, key=lambda o: -S[o]["cos_best_z0"])
-    for j, o in enumerate(finals):
-        x = ev(o)
-        ax.plot(x, col(o, "cos_z0"), color=CAT[o], linewidth=2.0, zorder=4)
-        y = S[o]["cos_best_z0"]
-        ax.scatter([x[-1]], [y], s=52, color=CAT[o], zorder=5,
-                   edgecolor=SURFACE, linewidth=1.8)
-        # the three finals can land within 0.01 of each other -- fan the labels
-        ax.text(x[-1] * 1.15, y + 0.06 * (1 - j), o, color=CAT[o], fontsize=9.5,
-                fontweight="bold", va="center")
-    ax.axhline(0, color=INK_MUTED, linewidth=1.5, zorder=3)
-    ax.set_xscale("log"); ax.set_xlim(10, 2.6 * ev(OBJ[0])[-1]); ax.set_ylim(-0.35, 1.05)
-    ax.set_xlabel("rollout evaluations", color=INK_2, fontsize=10)
-    ax.set_ylabel("cos(z, origin_z)", color=INK_2, fontsize=10)
-    ax.set_title("how far z drifts from origin_z", color=INK, fontsize=12,
-                 fontweight="bold", loc="left", pad=20)
-    ax.text(0, 1.02, "1 = unchanged, 0 = orthogonal", transform=ax.transAxes,
-            fontsize=9, color=INK_MUTED)
-
-    fig.suptitle(head + "   (band = best..mean of each generation's samples)",
-                 color=INK, fontsize=13, fontweight="bold", x=0.012, ha="left", y=0.975)
-    fig.savefig(root / "curves.png", dpi=150, facecolor=SURFACE, bbox_inches="tight")
-    plt.close(fig)
-    print(f"-> {root / 'curves.png'}")
-
-    # ======================= figure 2: the plane =============================
-    fig = plt.figure(figsize=(13, 5.6), facecolor=SURFACE)
-    gs = fig.add_gridspec(1, 2, width_ratios=[1.25, 1], wspace=0.26)
-
-    ax = fig.add_subplot(gs[0, 0]); style(ax)
+    # ============ 3. plane.png -- the align/phys trade-off ==================
+    fig = plt.figure(figsize=(6.4, 5.0), facecolor=SURFACE)
+    ax = fig.add_subplot(111); style(ax)
     plotted = [k for k in ("origin_z", *OBJ) if pts[k]["align"] > 0]
     xlo = min(pts[k]["align"] for k in plotted) * 0.45
     xhi = max(pts[k]["align"] for k in plotted) * 2.2
@@ -247,34 +349,33 @@ def main():
     for c in (0.25, 0.5, 1.0, 2.0, 5.0):          # iso-cost: L_align + L_phys = c
         xsv = np.geomspace(xlo, c * 0.999, 240)
         ax.plot(xsv, c - xsv, color=GRID, linewidth=1.4, zorder=1)
-        ax.text(c * 0.55, c * 0.45, f"sum {c:g}", color=INK_MUTED, fontsize=8,
-                rotation=-38, ha="center", va="center", zorder=1)
+        # only label a line whose label lands INSIDE the axes: bbox_inches
+        # "tight" grows the saved figure around stray text, so a label parked
+        # off-axis silently adds a band of blank canvas
+        lx, ly = c * 0.55, c * 0.45
+        if xlo < lx < xhi and ylo < ly < yhi:
+            ax.text(lx, ly, f"sum {c:g}", color=INK_MUTED, fontsize=8,
+                    rotation=-38, ha="center", va="center", zorder=1)
     ax.axhline(pts["reference"]["phys"], color=INK_MUTED, linewidth=1.6,
                linestyle=":", zorder=2)
-    ax.text(0.985, 0.965, f"retargeted reference, L_phys {pts['reference']['phys']:.3f}"
-            "  (L_align 0)", transform=ax.transAxes, ha="right", va="top",
-            color=INK_MUTED, fontsize=8.5)
+    ax.text(0.985, 0.965, "retargeted reference", transform=ax.transAxes,
+            ha="right", va="top", color=INK_MUTED, fontsize=8.5)
     for k in plotted:
-        ax.scatter([pts[k]["align"]], [pts[k]["phys"]], s=150, color=CAT[k],
+        ax.scatter([pts[k]["align"]], [pts[k]["phys"]], s=140, color=CAT[k],
                    zorder=5, edgecolor=SURFACE, linewidth=2.5)
         ax.annotate(k, (pts[k]["align"], pts[k]["phys"]), textcoords="offset points",
-                    xytext=(11, 9), color=CAT[k], fontsize=10.5,
-                    fontweight="bold", zorder=6)
-        ax.annotate(f"sum {pts[k]['sum']:.2f}", (pts[k]["align"], pts[k]["phys"]),
-                    textcoords="offset points", xytext=(11, -4), color=INK_2,
-                    fontsize=8.5, zorder=6)
+                    xytext=(11, 7), color=CAT[k], fontsize=10, fontweight="bold",
+                    zorder=6)
     ax.set_xscale("log"); ax.set_yscale("log")
     ax.set_xlim(xlo, xhi); ax.set_ylim(ylo, yhi)
     ax.invert_xaxis(); ax.invert_yaxis()
     ax.set_xlabel("L_align  (reproduces the reference ->)", color=INK_2, fontsize=10)
     ax.set_ylabel("L_phys  (physically clean ->)", color=INK_2, fontsize=10)
-    ax.set_title("where each objective lands", color=INK, fontsize=12,
-                 fontweight="bold", loc="left", pad=20)
-    ax.text(0, 1.02, "better is toward the top right; the dotted line is a "
-            "landmark, not a floor", transform=ax.transAxes, fontsize=9,
-            color=INK_MUTED)
+    finish(fig, "plane.png")
 
-    ax = fig.add_subplot(gs[0, 1]); style(ax)
+    # ============ 4. travel.png -- what the rollout actually does ============
+    fig = plt.figure(figsize=(6.4, 4.2), facecolor=SURFACE)
+    ax = fig.add_subplot(111); style(ax)
     bars = [k for k in ("reference", *OBJ, "origin_z")
             if not np.isnan(pts[k]["travel"])]
     bars.sort(key=lambda k: pts[k]["travel"])
@@ -298,22 +399,52 @@ def main():
     ax.set_xlim(0, hi)
     ax.set_xlabel(f"distance travelled in {pts['reference']['seconds']:.0f} s (m)",
                   color=INK_2, fontsize=10)
-    ax.set_title("what the rollout actually does", color=INK, fontsize=12,
-                 fontweight="bold", loc="left", pad=20)
-    ax.text(0, 1.02, f"the task is {task}", transform=ax.transAxes, fontsize=9,
-            color=INK_MUTED)
+    finish(fig, "travel.png")
 
-    fig.suptitle(head, color=INK, fontsize=13, fontweight="bold",
-                 x=0.012, ha="left", y=1.02)
-    fig.savefig(root / "plane.png", dpi=150, facecolor=SURFACE, bbox_inches="tight")
-    plt.close(fig)
-    print(f"-> {root / 'plane.png'}")
+    # ============ 5. latent.png -- did the search actually leave origin_z? ===
+    # Only origin_z. It is the one latent every rollout in the repo starts
+    # from, so "how far did we move" is the question with consequences (an
+    # adapter initialised near identity has to cover this distance); the other
+    # reference latents answer a different question and were crowding this one.
+    fig = plt.figure(figsize=(6.8, 4.6), facecolor=SURFACE)
+    ax = fig.add_subplot(111); style(ax)
+    ax.axhspan(-2 * CHANCE_SD, 2 * CHANCE_SD, color=GRID, zorder=1)
+    ax.axhline(0, color=INK_MUTED, linewidth=1.5, zorder=3)
+    finals = sorted(OBJ, key=lambda o: -S[o]["cos_best_z0"])
+    for j, o in enumerate(finals):
+        x = ev(o)
+        ax.plot(x, col(o, "cos_z0"), color=CAT[o], linewidth=2.0, zorder=4)
+        bx, _, bc = at_best(o)
+        ax.scatter([bx], [bc], s=190, marker="*", color=CAT[o], zorder=6,
+                   edgecolor=SURFACE, linewidth=1.6)
+        y = S[o]["cos_best_z0"]
+        ax.scatter([x[-1]], [y], s=52, color=CAT[o], zorder=5,
+                   edgecolor=SURFACE, linewidth=1.8)
+        # the three finals can land within 0.01 of each other -- fan the labels
+        ax.text(x[-1] * 1.15, y + 0.06 * (1 - j), f"{o}  {y:+.3f}", color=CAT[o],
+                fontsize=9.5, fontweight="bold", va="center")
+    ax.text(0.015, 0.965, f"grey band = +-2 sd of chance ({2 * CHANCE_SD:.2f}) in "
+            "256 dims;  inside it = no better than an unrelated direction\n"
+            "star = the step the best z came from",
+            transform=ax.transAxes, ha="left", va="top", fontsize=8.5,
+            color=INK_MUTED, zorder=7)
+    ax.set_xscale("log"); ax.set_xlim(10, 2.6 * ev(OBJ[0])[-1]); ax.set_ylim(-0.35, 1.05)
+    ax.set_xlabel(xlab, color=INK_2, fontsize=10)
+    ax.set_ylabel("cos(z, origin_z)", color=INK_2, fontsize=10)
+    finish(fig, "latent.png")
 
     print(f"\n{'':11s}{'L_align':>9s}{'L_phys':>9s}{'sum':>8s}{'travel_m':>10s}{'upright':>9s}")
     for k in sorted(pts, key=lambda k: pts[k]["sum"]):
         v = pts[k]
         print(f"{k:11s}{v['align']:9.4f}{v['phys']:9.4f}{v['sum']:8.4f}"
               f"{v['travel']:10.2f}{100 * v['upright_frac']:8.0f}%")
+
+    print(f"\ncos(best z, origin_z)   (chance is 0 +- {CHANCE_SD:.3f} in 256 dims)")
+    for o in OBJ:
+        v = S[o]["cos_best_z0"]
+        near = "  <- inside chance: a different direction, not a nudge" \
+            if abs(v) <= 2 * CHANCE_SD else ""
+        print(f"  best[{o}]{'':<6s}{v:+8.4f}{near}")
 
 
 if __name__ == "__main__":
