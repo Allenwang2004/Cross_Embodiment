@@ -93,6 +93,7 @@ def main():
         hidden_dims=cfg.adapter_hidden_dims, alpha=cfg.adapter_alpha,
         alpha_learnable=cfg.adapter_alpha_learnable,
         project=cfg.adapter_project_z,
+        residual=getattr(cfg, "adapter_residual", True),
     ).to(cfg.device)
     obs_dim = env.single_observation_space["proprio"].shape[0]
     value_net = ValueNet(obs_dim=obs_dim, z_dim=model.cfg.archi.z_dim,

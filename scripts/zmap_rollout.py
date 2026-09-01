@@ -167,7 +167,8 @@ def main():
         beta_dim=len(BETA_AXES), z_dim=model.cfg.archi.z_dim,
         hidden_dims=cfg.adapter_hidden_dims, alpha=cfg.adapter_alpha,
         alpha_learnable=cfg.adapter_alpha_learnable,
-        project=cfg.adapter_project_z).to(a.device)
+        project=cfg.adapter_project_z,
+        residual=getattr(cfg, "adapter_residual", True),).to(a.device)
     adapter.load_state_dict(ck["adapter"])
     adapter.eval()
 

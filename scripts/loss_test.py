@@ -399,7 +399,7 @@ TERMS = ["limit", "fall", "com_support", "foot_slide", "penetrate", "smooth"]
 
 
 def ground_tasks(dataset_dir: Path) -> set:
-    """The crawl/lie/sit/headstand split written by scripts/split_tasks_by_fall.py.
+    """The crawl/lie/sit/headstand split written by scripts/spilt_tasks.py.
     L_phys behaves completely differently on the two groups, so a pooled mean is
     the one number that hides the result rather than showing it."""
     p = dataset_dir / "splits" / "ground_tasks.txt"
@@ -610,8 +610,8 @@ def main():
                         "armature/damping/stiffness too, not just the actuators")
     p.add_argument("--obs-scale-ref", default="assets/robots/adult/robot.xml")
     p.add_argument("--tasks", default=None,
-                   help="a group written by scripts/split_tasks_by_fall.py "
-                        "(ground|upright) or a path to a task list")
+                   help="a group written by scripts/spilt_tasks.py "
+                        "(ground|upright|move) or a path to a task list")
     p.add_argument("--clips", type=int, default=60, help="0 = every clip")
     p.add_argument("--n-envs", type=int, default=20, help="env slots per batch")
     p.add_argument("--steps", type=int, default=300)

@@ -196,17 +196,46 @@ class ESConfig:
     """
     metamotivo_repo: str = "facebook/metamotivo-M-1"
     dataset_dir: str = "datasets/crossenbodiment-10bodies"
+    # How many bodies one update's batch covers, 0 = all training bodies. This
+    # is the file's whole premise (train_es.py "One motion, every body"): a batch
+    # is clips_per_update clips x this many bodies, same z0, different beta, so
+    # beta VARIES inside one gradient instead of being a per-update constant.
+    # Each body needs its own batched rollout, so an update costs this many of
+    # them -- lower it only to buy wall clock back.
+    es_bodies_per_update: int = 0
+    # Only read when es_bodies_per_update < the number of training bodies, i.e.
+    # when an update covers a SUBSET: "cycle" walks the list so N updates still
+    # give every body its share, "random" draws the subset i.i.d.
     body_order: str = "cycle"
     device: str = "cuda:0"
-    # "all", or a group written by scripts/split_tasks_by_fall.py. P.fall is
-    # 66.6% of the cost and is a per-task CONSTANT on the tasks whose reference
-    # motion is legitimately on the ground, so pooling both groups means most of
-    # the objective is an offset the policy cannot move. See that script.
+    # "all", or a task list written by scripts/spilt_tasks.py.
+    # "ground" (24) and "upright" (30) are the partition: P.fall is 66.6% of the
+    # cost and is a per-task CONSTANT on the tasks whose reference motion is
+    # legitimately on the ground, so pooling them means most of the objective is
+    # an offset the policy cannot move. "move" (17) is a SUBSET of upright, cut
+    # on root displacement instead: d_root's heading/velocity terms carry the
+    # objective on clips whose root travels and are ~0 by construction on clips
+    # whose root stays put, so upright is still two landscapes and move is the
+    # locomotion one. Selecting "move" therefore narrows "upright"; it does not
+    # pick a disjoint group.
     task_group: str = "all"
 
     adapter_hidden_dims: List[int] = dataclasses.field(default_factory=lambda: [256, 512, 512, 256])
     adapter_alpha: float = 0.1
     adapter_alpha_learnable: bool = False
+    # True: z_beta = z0 + alpha * MLP([beta, z0]) -- the spec, and a prior that
+    # z_beta belongs near z0. False: z_beta = MLP([beta, z0]), no skip and alpha
+    # unused. The ablation exists because scripts/single_z_search.py measured the
+    # best single-clip z at 79..96 degrees from z0, while alpha=0.1 needs an MLP
+    # output of norm ~92 to reach even 30 degrees -- so the residual form may be
+    # what is pinning the map near z0 rather than the optimizer.
+    #
+    # Read train_es.py's "adapter:" startup line before trusting a False run:
+    # with adapter_project_z on, normalize gives ANY direction full radius, so
+    # z_beta starts as a uniformly random point on the sphere (cos ~ 0) instead
+    # of on z0 (cos ~ 1). That is a real cost, not a formality -- the run starts
+    # from a latent the frozen actor has no reason to like.
+    adapter_residual: bool = True
     adapter_project_z: bool = True
 
     obs_scale: str = "auto"

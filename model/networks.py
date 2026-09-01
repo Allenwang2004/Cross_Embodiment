@@ -14,11 +14,33 @@ def _mlp(input_dim, hidden_dims, output_dim):
 
 
 class LatentAdapter(nn.Module):
-    """G_theta: z_beta = z0 + alpha * MLP_theta([beta, z0])
+    """G_theta: z_beta = z0 + alpha * MLP_theta([beta, z0])   (residual=True)
+              z_beta = MLP_theta([beta, z0])                  (residual=False)
 
-    Bottleneck MLP over [beta, z0] (default hidden dims 256->512->512->256),
-    output is a same-size delta added to z0 and scaled by alpha -- keeps
-    z_beta close to z0 by construction, matching the model.md spec.
+    Bottleneck MLP over [beta, z0] (default hidden dims 256->512->512->256).
+
+    `residual` (default True) is the model.md spec: the output is a same-size
+    delta added to z0 and scaled by alpha, so z_beta starts ON z0 and the map
+    only has to learn the correction the body change calls for. That skip is a
+    prior, and a strong one -- z0 is already the latent that produces the right
+    motion on the SOURCE body.
+
+    residual=False drops it and lets the MLP name z_beta outright. Worth having
+    because scripts/single_z_search.py measured the best z for a single clip at
+    79..96 degrees from z0, and with alpha=0.1 reaching even 30 degrees needs an
+    MLP output of norm ~92 (per-coordinate ~5.8) -- the residual form makes far
+    targets expensive to express, and this is the ablation that says whether
+    that is what is holding the map back.
+
+    What it costs, and it is not small: with project=True, F.normalize turns ANY
+    output direction into a full-radius point, so at initialization z_beta is a
+    uniformly random point on the sphere rather than z0. The frozen actor is
+    then being steered by a latent it has no reason to like, and the ES
+    estimator -- a K-dimensional random-subspace probe of a 256-dimensional
+    non-differentiable landscape -- has to climb out of that with no gradient to
+    guide it. train_es.py prints cos(z_beta, z0) at init so which regime a run
+    started in is on the record. model/simple/train_zmap.py is the setting where
+    dropping the prior is safe: its target is labelled, so it does not need one.
 
     `project`: re-project the result onto the sphere of radius sqrt(z_dim),
     which is where FB's latents actually live -- every z in data/z/ has norm
@@ -31,11 +53,18 @@ class LatentAdapter(nn.Module):
     """
 
     def __init__(self, beta_dim, z_dim, hidden_dims=(256, 512, 512, 256),
-                 alpha=0.1, alpha_learnable=False, project=False):
+                 alpha=0.1, alpha_learnable=False, project=False, residual=True):
         super().__init__()
         self.z_dim = z_dim
         self.project = project
+        self.residual = residual
         self.mlp = _mlp(beta_dim + z_dim, list(hidden_dims), z_dim)
+        # Built even when residual=False, where nothing reads it: alpha is a
+        # state_dict entry, and dropping it would make the two modes'
+        # checkpoints structurally incompatible for no gain. Which mode a
+        # checkpoint was trained under travels in its pickled cfg, not in its
+        # tensor shapes -- so a loader MUST pass `residual` through from there,
+        # exactly as it already has to for `project`.
         if alpha_learnable:
             self.alpha = nn.Parameter(torch.tensor(float(alpha)))
         else:
@@ -43,8 +72,8 @@ class LatentAdapter(nn.Module):
 
     def forward(self, beta: torch.Tensor, z0: torch.Tensor) -> torch.Tensor:
         # beta: (B, beta_dim), z0: (B, z_dim)
-        delta = self.mlp(torch.cat([beta, z0], dim=-1))
-        z = z0 + self.alpha * delta
+        out = self.mlp(torch.cat([beta, z0], dim=-1))
+        z = z0 + self.alpha * out if self.residual else out
         if self.project:
             z = (self.z_dim ** 0.5) * F.normalize(z, dim=-1)
         return z

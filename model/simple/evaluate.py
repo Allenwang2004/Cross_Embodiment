@@ -152,6 +152,11 @@ def evaluate(checkpoint_path, tasks_file=None, trials_per_task=None, bodies=None
         # forward pass, so evaluating with a different setting than the
         # checkpoint trained under would score a different policy.
         project=getattr(cfg, "adapter_project_z", True),
+        # Same reason as project, one field over: residual changes the forward
+        # pass, not the tensor shapes, so a --no-residual checkpoint would load
+        # cleanly here and be scored as a policy it never was. Default True for
+        # a cfg pickled before the field existed.
+        residual=getattr(cfg, "adapter_residual", True),
     ).to(device)
     adapter.load_state_dict(ckpt["adapter"])
     adapter.eval()

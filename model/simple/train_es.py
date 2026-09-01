@@ -41,24 +41,60 @@ every env slot to a bit-identical state (verified: max spread 0.0 across slots),
 and with deterministic actions nothing else is random. So a +eps and a -eps
 rollout differ ONLY by the z perturbation.
 
+One motion, every body
+-----------------------
+An update holds the CLIP fixed and varies the BODY: it draws clips_per_update
+clips and evaluates each of them on all 8 training bodies. The manifest stores
+one origin_z per (task, trial) and every body's row for that clip points at the
+same file, so the rows of one batch share z0 EXACTLY and differ only in beta and
+in the per-body retargeted reference.
+
+That is the contrast the adapter exists to explain, and it was absent before.
+With one body per update beta is a CONSTANT inside the batch, so no single
+update's gradient can distinguish G_theta(beta, z0) from a beta-blind
+G_theta(z0) -- the beta-dependence had to be assembled ACROSS updates, through
+the optimizer state, from batches that each also differed in which clips they
+drew. Here it is inside one gradient: same z0, eight betas, eight references.
+
 Slot budget
 -----------
-One vectorized env has cfg.batch_size slots and one skeleton, so one update is
-still one body. Those slots are split into 2 * es_pairs antithetic rollouts per
-clip, which fixes how many clips an update can see:
+One vectorized env has cfg.batch_size slots and one skeleton, so a body's rows
+have to be rolled out in that body's OWN env -- one batched rollout per body per
+update. Within a body the slots are split into 2 * es_pairs antithetic rollouts
+per clip, which fixes how many clips an update can see:
 
     clips_per_update = batch_size // (2 * es_pairs)
 
-At the defaults (16 slots, 4 pairs) that is 2 clips x 4 directions, in ONE
-batched rollout -- the same simulator cost as a PPO update, not 8x it.
+At the defaults (16 slots, 4 pairs, 8 bodies) that is 2 clips x 4 directions x
+2 signs = 16 slots per body, 8 batched rollouts, 128 episodes per update -- 8x
+the simulator cost of the one-body update this replaces. --bodies N buys that
+back at the cost of the within-update beta contrast: --bodies 1 recovers the old
+loop exactly, and es_pairs=8 (--pairs 8) makes clips_per_update 1, i.e. the
+literal "one motion, eight bodies" batch.
 
 Usage (from project root):
     uv run model/simple/train_es.py
     uv run model/simple/train_es.py --updates 400 --run-name es-400-8bodies
     uv run model/simple/train_es.py --sigma 0.5 --pairs 8 --no-wandb
 
-    # one P.fall group only -- see scripts/split_tasks_by_fall.py for why
-    uv run model/simple/train_es.py --tasks upright --run-name es-upright
+    # one clip x 8 bodies per update (pairs 8 => clips_per_update 1), or fewer
+    # bodies per update when the 8x rollout cost is the binding constraint.
+    uv run model/simple/train_es.py --pairs 8 --run-name es-1clip-8bodies
+    uv run model/simple/train_es.py --bodies 4 --run-name es-4bodies
+
+    # one task group only -- see scripts/spilt_tasks.py. `upright` is the
+    # 30 low-fall tasks; `move` is its 17-task locomotion SUBSET, so the two
+    # overlap and `move` is the narrower experiment, not a disjoint one.
+    uv run model/simple/train_es.py --category upright --run-name es-upright
+    uv run model/simple/train_es.py --category move --run-name es-move
+
+    # which of the two terms the fitness IS. The other one is still measured and
+    # logged either way -- it just does not enter the cost -- so running all
+    # three is how you find out whether they pull in the same direction:
+    for L in both L_align L_phys; do
+      uv run model/simple/train_es.py --loss $L --category upright \
+          --ckpt-dir outputs/simple_es/$L --run-name es-upright-$L
+    done
 """
 
 import argparse
@@ -89,6 +125,51 @@ from model.simple.config import ESConfig
 from model.simple.train import compute_batch_cost, make_body_ctx
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+# --loss -> (lambda_align, lambda_phys), fed straight into ESConfig so the cost
+# compute_batch_cost already returns IS the objective and this file never gets a
+# second definition of it. Same table as scripts/single_z_search.py:OBJECTIVES,
+# so the ceiling that script measures and what training minimises are the same
+# three quantities.
+#
+# Only "both" is sensitive to the two terms' relative scale. The single-term
+# settings are not: es_rank_normalize replaces the fitness with its rank inside
+# each row, and any monotone rescaling of one loss leaves the ranks unchanged.
+LOSS_LAMBDAS = {
+    "both": (1.0, 1.0),
+    "L_align": (1.0, 0.0),
+    "L_phys": (0.0, 1.0),
+}
+
+
+def clip_index(dataset):
+    """{(reward_name, trial): {body label: row index}} -- a CLIP's column of the
+    manifest's (clip x body) cross product.
+
+    CrossEmbodimentDataset.indices_by_body() is the transpose of this, and is
+    what a one-body-per-update loop needs. This is what "same motion, different
+    bodies" needs. The two rows of one column share origin_z (hence z0) and
+    differ in `morphology` (beta) and `retargeted_motion` (qpos_ref).
+    """
+    out = {}
+    for i, r in enumerate(dataset.rows):
+        key = (r["reward_name"], r["trial"])
+        out.setdefault(key, {})[r.get("morphology_label", "child")] = i
+    return out
+
+
+def select_bodies(bodies, n, order, update):
+    """Which bodies one update's batch covers. n >= len(bodies) is all of them,
+    which is this file's point and its default; smaller n is the wall-clock
+    escape hatch, and body_order then says whether the subset walks the list
+    ("cycle", so N updates still give every body N*n/len(bodies) of them) or is
+    drawn i.i.d. ("random")."""
+    if n >= len(bodies):
+        return list(bodies)
+    if order == "cycle":
+        start = (update * n) % len(bodies)
+        return [bodies[(start + j) % len(bodies)] for j in range(n)]
+    return random.sample(bodies, n)
 
 
 def rank_normalize(x: torch.Tensor) -> torch.Tensor:
@@ -165,13 +246,21 @@ def tangent_eps(z_beta, K, sigma, project_on):
     return eps
 
 
-def es_update(cfg, model, adapter, optimizer, ctx, samples, z_dim):
-    """One antithetic ES step over `samples` clips of one body."""
+def es_update(cfg, model, adapter, optimizer, ctxs, rows, z_dim):
+    """One antithetic ES step over `rows`, each a (body label, sample) pair.
+
+    Every clip appears once per body, so a row is a (clip, body) cell and the
+    batch is a rectangle of them. eps is drawn PER ROW rather than shared by the
+    bodies of one clip: the perturbation lives in the tangent plane of that
+    row's own z_beta, and betas differ, so a shared direction would not be
+    tangent for more than one of them.
+    """
     dev = cfg.device
-    R, K = len(samples), cfg.es_pairs
+    R, K = len(rows), cfg.es_pairs
+    labels = [lab for lab, _ in rows]
+    samples = [s for _, s in rows]
     z0 = torch.tensor(np.stack([s["z0"] for s in samples]), dtype=torch.float32, device=dev)
     beta = torch.tensor(np.stack([s["beta"] for s in samples]), dtype=torch.float32, device=dev)
-    qpos_refs = [s["qpos_ref"] for s in samples]
 
     z_beta = adapter(beta, z0)                                   # (R, 256), differentiable
     eps = tangent_eps(z_beta, K, cfg.es_sigma, cfg.adapter_project_z)
@@ -180,12 +269,30 @@ def es_update(cfg, model, adapter, optimizer, ctx, samples, z_dim):
         base = z_beta.unsqueeze(1)                               # (R, 1, 256)
         plus = project_z(base + cfg.es_sigma * eps, z_dim, cfg.adapter_project_z)
         minus = project_z(base - cfg.es_sigma * eps, z_dim, cfg.adapter_project_z)
-        # Slot layout: [row0 +k0..+k3, row0 -k0..-k3, row1 +..., row1 -...]
-        z_env = torch.cat([torch.cat([plus[r], minus[r]]) for r in range(R)])
+        # Per-row slot layout: [+k0..+k3, -k0..-k3]
+        z_row = torch.cat([plus, minus], dim=1)                  # (R, 2K, 256)
 
-    qpos = rollout_z(model, ctx["env"], z_env, cfg, ctx["obs_mul"])
-    refs_env = [qpos_refs[r] for r in range(R) for _ in range(2 * K)]
-    costs, align_totals, l_physes = compute_batch_cost(ctx["fk"], cfg, qpos, refs_env)
+    # One batched rollout per body: an env carries one skeleton, and scoring a
+    # row against another body's forward kinematics would silently measure the
+    # adapter on a body it was not asked about (model/dataset.py says the same).
+    groups = {}
+    for r, lab in enumerate(labels):
+        groups.setdefault(lab, []).append(r)
+    costs = np.empty((R, 2 * K), dtype=np.float32)
+    align_totals = np.empty((R, 2 * K), dtype=np.float32)
+    l_physes = np.empty((R, 2 * K), dtype=np.float32)
+    for lab, rs in groups.items():
+        n_slots = len(rs) * 2 * K
+        if n_slots != cfg.batch_size:
+            raise SystemExit(f"body {lab} has {len(rs)} rows x {2 * K} = {n_slots} "
+                             f"rollouts but its env has {cfg.batch_size} slots")
+        z_env = torch.cat([z_row[r] for r in rs])                # (batch_size, 256)
+        qpos = rollout_z(model, ctxs[lab]["env"], z_env, cfg, ctxs[lab]["obs_mul"])
+        refs_env = [samples[r]["qpos_ref"] for r in rs for _ in range(2 * K)]
+        c, a, p = compute_batch_cost(ctxs[lab]["fk"], cfg, qpos, refs_env)
+        costs[rs] = c.reshape(len(rs), 2 * K)
+        align_totals[rs] = a.reshape(len(rs), 2 * K)
+        l_physes[rs] = p.reshape(len(rs), 2 * K)
 
     f = torch.as_tensor(costs, dtype=torch.float32, device=dev).view(R, 2, K)
     delta = f[:, 0] - f[:, 1]                                    # (R, K) = F+ - F-
@@ -195,6 +302,10 @@ def es_update(cfg, model, adapter, optimizer, ctx, samples, z_dim):
         # would take every extreme rank and a clip whose deltas are O(0.1) would
         # be assigned arbitrary middle ranks. Only directions within one
         # (clip, body) are commensurable, because only they share a landscape.
+        # Unchanged by the body-major batch, and load-bearing for it: cost scale
+        # is a body property (L_phys on `giant` and on `petite` are not the same
+        # number for the same quality of rollout), so ranking across the rows of
+        # one clip would rank the BODIES.
         shaped = torch.stack([rank_normalize(delta[r]) for r in range(R)])
     else:
         shaped = delta / (2.0 * cfg.es_sigma)
@@ -219,9 +330,18 @@ def es_update(cfg, model, adapter, optimizer, ctx, samples, z_dim):
     grad = torch.nn.utils.clip_grad_norm_(adapter.parameters(), cfg.grad_clip_norm)
     optimizer.step()
 
+    per_body = {lab: {"cost": float(costs[rs].mean()),
+                      "L_align": float(align_totals[rs].mean()),
+                      "L_phys": float(l_physes[rs].mean())}
+                for lab, rs in groups.items()}
+
     return {
+        "by_body": per_body,
         "cost": float(costs.mean()), "L_align": float(align_totals.mean()),
         "L_phys": float(l_physes.mean()),
+        # Spread of the pooled cost that is pure body, at a fixed set of clips --
+        # only meaningful because every body in this batch saw the same clips.
+        "body_cost_spread": float(np.std([v["cost"] for v in per_body.values()])),
         # |F+ - F-| against the spread of F itself: if the perturbation moves the
         # cost by much less than the clip-to-clip spread, sigma is too small to
         # measure anything and no amount of lr will fix it.
@@ -271,7 +391,7 @@ def train(cfg: ESConfig):
     if cfg.task_group != "all":
         path = dataset_dir / "splits" / f"{cfg.task_group}_tasks.txt"
         if not path.exists():
-            raise SystemExit(f"{path} not found -- run scripts/split_tasks_by_fall.py")
+            raise SystemExit(f"{path} not found -- run scripts/spilt_tasks.py")
         task_filter = load_task_list(path)
         print(f"task group '{cfg.task_group}': {len(task_filter)} tasks")
     dataset = CrossEmbodimentDataset(dataset_dir, task_filter=task_filter)
@@ -287,29 +407,72 @@ def train(cfg: ESConfig):
     model.eval()
     z_dim = model.cfg.archi.z_dim
 
+    # A clip is (reward_name, trial); its column of the manifest is one row per
+    # body. Training may only draw a clip that every SELECTED body has (a batch
+    # is a full rectangle -- see es_update's slot check); eval may only draw one
+    # that every body has, train and held-out alike, since it scores all of them.
+    clips = clip_index(dataset)
+    train_clips = sorted(k for k, m in clips.items() if all(b in m for b in bodies))
+    eval_clips_pool = sorted(k for k, m in clips.items() if len(m) == len(by_body))
+    if not train_clips or not eval_clips_pool:
+        raise SystemExit("no clip is present for every body -- the manifest is not a "
+                         "full (clip x body) cross product; rebuild it with "
+                         "scripts/build_dataset.py --force")
+    if len(train_clips) < len(clips):
+        print(f"{len(clips) - len(train_clips)} of {len(clips)} clips dropped: "
+              f"not present for every training body")
+
     ctxs = {b: make_body_ctx(cfg, dataset_dir, b, dataset[by_body[b][0]]["target_xml"])
             for b in by_body}
     splits = {b: ("train" if b in bodies else "test") for b in by_body}
     beta_dim = len(dataset[by_body[bodies[0]][0]]["beta"])
-    print(f"{len(bodies)} training bodies; {clips_per_update} clips x {cfg.es_pairs} "
-          f"antithetic pairs = {cfg.batch_size} slots per update, sigma={cfg.es_sigma}")
+    n_bodies = min(cfg.es_bodies_per_update or len(bodies), len(bodies))
+    print(f"{len(bodies)} training bodies, {len(train_clips)} clips; per update "
+          f"{n_bodies} bodies x {clips_per_update} clips x {cfg.es_pairs} antithetic "
+          f"pairs = {n_bodies} rollouts of {cfg.batch_size} slots "
+          f"({n_bodies * cfg.batch_size} episodes), sigma={cfg.es_sigma}")
+    print(f"objective: cost = {cfg.lambda_align} * L_align + {cfg.lambda_phys} * L_phys "
+          f"(the zero-weighted term is still computed and logged)")
 
     adapter = LatentAdapter(
         beta_dim=beta_dim, z_dim=z_dim, hidden_dims=cfg.adapter_hidden_dims,
         alpha=cfg.adapter_alpha, alpha_learnable=cfg.adapter_alpha_learnable,
-        project=cfg.adapter_project_z,
+        project=cfg.adapter_project_z, residual=cfg.adapter_residual,
     ).to(cfg.device)
     optimizer = torch.optim.Adam(adapter.parameters(), lr=cfg.lr)
 
+    # Where the run STARTS, measured rather than assumed. residual=True puts
+    # z_beta on top of z0 (cos ~ 1); residual=False with projection on starts it
+    # at a uniformly random point of the sphere (cos ~ 0), which is a different
+    # experiment and needs to be visible in the log rather than inferred from
+    # the flags.
+    with torch.no_grad():
+        _r = [dataset[by_body[b][0]] for b in bodies]
+        _z0 = torch.tensor(np.stack([x["z0"] for x in _r]), dtype=torch.float32, device=cfg.device)
+        _be = torch.tensor(np.stack([x["beta"] for x in _r]), dtype=torch.float32, device=cfg.device)
+        _c = F.cosine_similarity(adapter(_be, _z0), _z0, dim=-1).mean()
+        _a = torch.rad2deg(torch.arccos(_c.clamp(-1, 1)))
+    print(f"adapter: " + (f"z0 + {cfg.adapter_alpha:g} * MLP([beta, z0])" if cfg.adapter_residual
+                          else "MLP([beta, z0])  (NO z0 residual; alpha unused)")
+          + f", project={cfg.adapter_project_z}; "
+            f"at init cos(z_beta, z0) = {_c:.4f} ({_a:.1f} deg from z0)")
+
     erng = random.Random(cfg.eval_seed)
-    eval_idx = {b: [erng.choice(by_body[b]) for _ in range(cfg.batch_size)] for b in by_body}
+    # The SAME clips for every body. eval's headline number is the train/test
+    # BODY gap, and drawing each body's clips independently put the clip
+    # difficulty spread -- which is heavy-tailed, L_align p90 18.9 against a
+    # median of 6.6 -- straight into it, so one body's unlucky draw could move
+    # the gap by more than the adapter does. Shared clips make it a body effect.
+    eval_clips = [erng.choice(eval_clips_pool) for _ in range(cfg.batch_size)]
+    eval_idx = {b: [clips[c][b] for c in eval_clips] for b in by_body}
 
     ckpt_dir = REPO_ROOT / cfg.ckpt_dir
     ckpt_dir.mkdir(parents=True, exist_ok=True)
     if cfg.use_wandb:
         wandb.init(project=cfg.wandb_project, name=cfg.wandb_run_name,
                    config={**dataclasses.asdict(cfg), "train_bodies": bodies,
-                           "held_out_bodies": held, "clips_per_update": clips_per_update})
+                           "held_out_bodies": held, "clips_per_update": clips_per_update,
+                           "bodies_per_update": n_bodies})
 
     history = []
 
@@ -335,22 +498,26 @@ def train(cfg: ESConfig):
 
     pbar = tqdm(range(cfg.num_updates), desc="es", disable=not cfg.progress)
     for update in pbar:
-        label = (bodies[update % len(bodies)] if cfg.body_order == "cycle"
-                 else random.choice(bodies))
-        idx = [random.choice(by_body[label]) for _ in range(clips_per_update)]
-        st = es_update(cfg, model, adapter, optimizer, ctxs[label],
-                       [dataset[i] for i in idx], z_dim)
+        sel = select_bodies(bodies, n_bodies, cfg.body_order, update)
+        picks = [random.choice(train_clips) for _ in range(clips_per_update)]
+        # Body-major so es_update's per-body group is contiguous; the (clip,
+        # body) rectangle it forms is what makes beta the only thing varying.
+        rows = [(b, dataset[clips[c][b]]) for b in sel for c in picks]
+        st = es_update(cfg, model, adapter, optimizer, ctxs, rows, z_dim)
 
-        pbar.set_postfix(body=label, L_align=f"{st['L_align']:.4f}", d=f"{st['delta_abs']:.3f}")
+        # cost, not L_align: under --loss L_phys the L_align column is a
+        # bystander and watching it would say nothing about whether ES is working.
+        clip_tag = picks[0][0] if clips_per_update == 1 else f"{len(picks)} clips"
+        pbar.set_postfix(clip=clip_tag, cost=f"{st['cost']:.4f}", d=f"{st['delta_abs']:.3f}")
         if cfg.use_wandb:
-            wandb.log({**{k: v for k, v in st.items()},
-                       "body_idx": bodies.index(label),
-                       f"by_body/{label}/cost": st["cost"],
-                       f"by_body/{label}/L_align": st["L_align"],
-                       f"by_body/{label}/L_phys": st["L_phys"]}, step=update)
+            log = {k: v for k, v in st.items() if k != "by_body"}
+            for lab, v in st["by_body"].items():
+                log.update({f"by_body/{lab}/{k}": val for k, val in v.items()})
+            wandb.log(log, step=update)
         if update % cfg.log_every == 0:
-            tqdm.write(f"[{update:04d}/{cfg.num_updates}] {label:13s} "
-                       f"cost={st['cost']:.4f} |dF|={st['delta_abs']:.4f} "
+            tqdm.write(f"[{update:04d}/{cfg.num_updates}] {clip_tag:24s} "
+                       f"cost={st['cost']:.4f} sd_body={st['body_cost_spread']:.4f} "
+                       f"|dF|={st['delta_abs']:.4f} "
                        f"sd(dF)={st['delta_std']:.4f} |g_es|={st['g_es_norm']:.4f} "
                        f"|g_anc|={st['g_anchor_norm']:.2e} r={st['g_ratio']:.2e} "
                        f"grad={st['grad_norm']:.3f} "
@@ -384,14 +551,46 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--gpu", type=int, default=0)
     p.add_argument("--device", default=None)
+    p.add_argument("--loss", default="both", choices=["both", "L_align", "L_phys"])
     p.add_argument("--updates", type=int, default=None)
     p.add_argument("--sigma", type=float, default=None, help="ES perturbation scale on z")
     p.add_argument("--pairs", type=int, default=None, help="antithetic pairs per clip")
+    p.add_argument("--bodies", type=int, default=None,
+                   help="bodies per update (default: all training bodies). One "
+                        "batched rollout each, so this multiplies the simulator "
+                        "cost of an update -- lower it only if wall clock matters "
+                        "more than varying beta inside one gradient")
     p.add_argument("--lr", type=float, default=None)
-    p.add_argument("--tasks", default=None, choices=["all", "ground", "upright"],
-                   help="restrict to a P.fall group (scripts/split_tasks_by_fall.py). "
-                        "'upright' is where fall is ~0 on a good rollout, so any fall "
-                        "the policy incurs is real signal -- train there first")
+    p.add_argument("--alpha", type=float, default=None,
+                   help="residual scale in z_beta = z0 + alpha * MLP. Sets how far "
+                        "a given MLP output moves z: tan(angle) = alpha*|MLP|/16, "
+                        "so 0.1 needs |MLP| ~ 92 for 30 deg. Ignored under "
+                        "--no-residual")
+    p.add_argument("--lambda-z", type=float, default=None,
+                   help="weight of the (1 - cos(z_beta, z0)) anchor. Inert at the "
+                        "default while z sits on z0 (measured g_ratio ~5e-4), but "
+                        "under --no-residual z starts ~87 deg away, 1-cos is O(1), "
+                        "and 10.0 puts the anchor at ~11%% of the ES gradient "
+                        "PULLING BACK TO z0 -- i.e. fighting the ablation. Turn it "
+                        "down (0 disables) when running --no-residual")
+    p.add_argument("--no-residual", action="store_true",
+                   help="z_beta = MLP([beta, z0]) with no z0 skip and no alpha. "
+                        "Removes the prior that the answer is near z0 -- and with "
+                        "projection on, starts z_beta at a RANDOM point of the "
+                        "sphere instead of on z0, so the frozen actor begins from "
+                        "a latent it has no reason to like. Check the printed "
+                        "'at init cos(z_beta, z0)' before reading the curve")
+    p.add_argument("--category", default=None,
+                   choices=["all", "ground", "upright", "move"],
+                   help="restrict training to one task list written by "
+                        "scripts/spilt_tasks.py. 'ground' (24) and "
+                        "'upright' (30) are the P.fall partition -- on ground, "
+                        "fall is a large per-task constant the policy cannot "
+                        "remove, so pooling the two makes most of the objective "
+                        "an offset. 'move' (17) is a SUBSET of upright, not a "
+                        "fourth disjoint group: the upright tasks whose "
+                        "reference root actually travels, where beta acts "
+                        "through stride rather than through reach")
     p.add_argument("--ckpt-dir", default=None)
     p.add_argument("--no-rank", action="store_true",
                    help="use the raw (F+ - F-)/(2 sigma) estimate instead of ranks")
@@ -402,12 +601,21 @@ def main():
     a = p.parse_args()
 
     cfg = ESConfig(device=a.device or f"cuda:{a.gpu}")
+    cfg.lambda_align, cfg.lambda_phys = LOSS_LAMBDAS[a.loss]
+    # --category names a TASK group, never a per-clip property:
+    # spilt_tasks.py averages P.fall (and root displacement) over a
+    # task's clips before cutting, so the dataset carries no per-clip label and
+    # "move clips" can only mean "clips of a move task".
     for attr, val in (("num_updates", a.updates), ("es_sigma", a.sigma),
-                      ("es_pairs", a.pairs), ("lr", a.lr), ("ckpt_dir", a.ckpt_dir),
-                      ("task_group", a.tasks),
+                      ("es_pairs", a.pairs), ("es_bodies_per_update", a.bodies),
+                      ("lr", a.lr), ("adapter_alpha", a.alpha),
+                      ("lambda_z", a.lambda_z), ("ckpt_dir", a.ckpt_dir),
+                      ("task_group", a.category),
                       ("wandb_project", a.project), ("wandb_run_name", a.run_name)):
         if val is not None:
             setattr(cfg, attr, val)
+    if a.no_residual:
+        cfg.adapter_residual = False
     if a.no_rank:
         cfg.es_rank_normalize = False
     if a.no_progress:
