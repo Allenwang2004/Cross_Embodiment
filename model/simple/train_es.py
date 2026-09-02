@@ -246,7 +246,31 @@ def tangent_eps(z_beta, K, sigma, project_on):
     return eps
 
 
-def es_update(cfg, model, adapter, optimizer, ctxs, rows, z_dim):
+def update_best_buffer(buf, keys, z_row, costs):
+    """{(task, trial, body): (z, cost)} -- the best CANDIDATE ever evaluated for
+    each cell, kept across updates.
+
+    Comparing a cost measured 300 updates ago against one measured now is only
+    legitimate because the rollout is deterministic and the reset is
+    bit-identical (see this module's CRN section): the same z on the same cell
+    scores the same number forever, so the running minimum is a real minimum and
+    not a record of which update got a lucky draw.
+
+    Note what is NOT in here: z_beta itself. Training rolls out the perturbed
+    candidates, never the iterate, so the buffer holds points the simulator
+    actually scored -- which is the property that makes it a supervised target
+    rather than a second guess.
+    """
+    hit = 0
+    for r, k in enumerate(keys):
+        j = int(costs[r].argmin())
+        if k not in buf or costs[r, j] < buf[k][1]:
+            buf[k] = (z_row[r, j].detach().cpu().numpy().copy(), float(costs[r, j]))
+            hit += 1
+    return hit
+
+
+def es_update(cfg, model, adapter, optimizer, ctxs, rows, z_dim, best_buf=None):
     """One antithetic ES step over `rows`, each a (body label, sample) pair.
 
     Every clip appears once per body, so a row is a (clip, body) cell and the
@@ -254,6 +278,14 @@ def es_update(cfg, model, adapter, optimizer, ctxs, rows, z_dim):
     bodies of one clip: the perturbation lives in the tangent plane of that
     row's own z_beta, and betas differ, so a shared direction would not be
     tangent for more than one of them.
+
+    best_buf, when cfg.lambda_bc > 0, is the running per-cell best candidate
+    (update_best_buffer). It adds a term that pulls z_beta toward a point the
+    simulator MEASURED to be better, with an exact gradient, instead of toward
+    whatever the rank-weighted zeroth-order estimate points at. Passing None, or
+    leaving lambda_bc at 0, leaves every number in this function bit-identical to
+    what it was before the buffer existed -- no RNG is drawn and no branch is
+    taken.
     """
     dev = cfg.device
     R, K = len(rows), cfg.es_pairs
@@ -318,12 +350,45 @@ def es_update(cfg, model, adapter, optimizer, ctxs, rows, z_dim):
     anchor = cfg.lambda_z * (1.0 - z_cos)
     loss = surrogate + anchor
 
+    bc = None
+    bc_stats = {}
+    if cfg.lambda_bc > 0 and best_buf is not None:
+        keys = [(s["reward_name"], s["trial"], lab) for lab, s in rows]
+        # Updated BEFORE the loss, so this update's own candidates are eligible:
+        # the term is then "move toward the best thing measured so far,
+        # including a moment ago", which is the greedy step the ES gradient is a
+        # noisy approximation of.
+        n_new = update_best_buffer(best_buf, keys, z_row, costs)
+        tgt = torch.tensor(np.stack([best_buf[k][0] for k in keys]),
+                           dtype=torch.float32, device=dev)
+        # Cosine, not Euclidean, for the same reason as the anchor: with
+        # adapter_project_z the radius is fixed, so a squared distance would
+        # spend part of itself on a gap that cannot close.
+        bc_cos = F.cosine_similarity(z_beta, tgt, dim=-1)
+        bc = cfg.lambda_bc * (1.0 - bc_cos).mean()
+        loss = loss + bc
+        bc_stats = {
+            "bc_deg": float(torch.rad2deg(torch.arccos(bc_cos.detach().clamp(-1, 1))).mean()),
+            "bc_new": n_new / max(len(keys), 1),      # share of cells improved this update
+            "buf_size": len(best_buf),
+            "buf_cost": float(np.mean([best_buf[k][1] for k in keys])),
+        }
+
     # The two terms' gradients w.r.t. z_beta, so their relative size is visible
     # rather than assumed. Rank normalization strips g_z of the cost's units, so
     # lambda_z tuned against the PPO objective carries no meaning here -- if this
     # ratio is far from O(1) the anchor is either inert or in sole charge.
     g_es = torch.autograd.grad(surrogate, z_beta, retain_graph=True)[0]
     g_anchor = torch.autograd.grad(anchor, z_beta, retain_graph=True)[0]
+    if bc is not None:
+        # Same diagnostic as the anchor's, and needed for the same reason: this
+        # term's gradient is EXACT while the ES term's is a K-dimensional probe
+        # of a 256-dimensional landscape, so a bc_ratio well under 1 can still
+        # dominate once the noise averages out over updates.
+        g_bc = torch.autograd.grad(bc, z_beta, retain_graph=True)[0]
+        bc_stats["g_bc_norm"] = g_bc.norm(dim=-1).mean().item()
+        bc_stats["bc_ratio"] = (g_bc.norm(dim=-1).mean()
+                                / g_es.norm(dim=-1).mean().clamp(min=1e-12)).item()
 
     optimizer.zero_grad(set_to_none=True)
     loss.backward()
@@ -352,6 +417,7 @@ def es_update(cfg, model, adapter, optimizer, ctxs, rows, z_dim):
         "g_es_norm": g_es.norm(dim=-1).mean().item(),
         "g_anchor_norm": g_anchor.norm(dim=-1).mean().item(),
         "g_ratio": (g_anchor.norm(dim=-1).mean() / g_es.norm(dim=-1).mean().clamp(min=1e-12)).item(),
+        **bc_stats,
     }
 
 
@@ -475,6 +541,13 @@ def train(cfg: ESConfig):
                            "bodies_per_update": n_bodies})
 
     history = []
+    # None unless the feature is on, so the default path allocates nothing and
+    # the checkpoints it writes keep their old shape.
+    best_buf = {} if cfg.lambda_bc > 0 else None
+    if best_buf is not None:
+        print(f"best-point buffer ON: lambda_bc={cfg.lambda_bc} "
+              f"(cosine pull toward the best candidate measured per (clip, body); "
+              f"watch bc_ratio and bc_deg)")
 
     def do_eval(update):
         ev = run_eval(cfg, model, adapter, ctxs, dataset, eval_idx, splits, z_dim)
@@ -503,7 +576,7 @@ def train(cfg: ESConfig):
         # Body-major so es_update's per-body group is contiguous; the (clip,
         # body) rectangle it forms is what makes beta the only thing varying.
         rows = [(b, dataset[clips[c][b]]) for b in sel for c in picks]
-        st = es_update(cfg, model, adapter, optimizer, ctxs, rows, z_dim)
+        st = es_update(cfg, model, adapter, optimizer, ctxs, rows, z_dim, best_buf)
 
         # cost, not L_align: under --loss L_phys the L_align column is a
         # bystander and watching it would say nothing about whether ES is working.
@@ -521,14 +594,25 @@ def train(cfg: ESConfig):
                        f"sd(dF)={st['delta_std']:.4f} |g_es|={st['g_es_norm']:.4f} "
                        f"|g_anc|={st['g_anchor_norm']:.2e} r={st['g_ratio']:.2e} "
                        f"grad={st['grad_norm']:.3f} "
-                       f"1-zcos={1 - st['z_cos']:.2e} L_align={st['L_align']:.4f} Lp={st['L_phys']:.4f}")
+                       f"1-zcos={1 - st['z_cos']:.2e} L_align={st['L_align']:.4f} Lp={st['L_phys']:.4f}"
+                       + (f" | bc {st['bc_deg']:.1f}deg r={st['bc_ratio']:.2e} "
+                          f"new={st['bc_new']:.0%} buf={st['buf_size']}"
+                          if "bc_deg" in st else ""))
 
         if cfg.eval_every and (update + 1) % cfg.eval_every == 0:
             do_eval(update + 1)
         if (update + 1) % cfg.ckpt_every == 0:
             path = ckpt_dir / f"update_{update + 1:05d}.pt"
-            torch.save({"adapter": adapter.state_dict(), "update": update + 1,
-                        "cfg": cfg, "bodies": bodies}, path)
+            blob = {"adapter": adapter.state_dict(), "update": update + 1,
+                    "cfg": cfg, "bodies": bodies}
+            if best_buf:
+                # The buffer IS a labelled (clip, body) -> z dataset, collected
+                # for free by training. Saved so a run can be resumed without
+                # losing it and so it can be exported, but only when the feature
+                # is on -- ~1 MB that a default run has no reason to carry.
+                blob["best_buf"] = {"|".join(map(str, k)): (v[0], v[1])
+                                    for k, v in best_buf.items()}
+            torch.save(blob, path)
             tqdm.write(f"saved checkpoint -> {path}")
 
     for c in ctxs.values():
@@ -566,6 +650,13 @@ def main():
                         "a given MLP output moves z: tan(angle) = alpha*|MLP|/16, "
                         "so 0.1 needs |MLP| ~ 92 for 30 deg. Ignored under "
                         "--no-residual")
+    p.add_argument("--lambda-bc", type=float, default=None,
+                   help="weight of the pull toward the best candidate ever "
+                        "measured for each (clip, body). 0 (default) is OFF and "
+                        "bit-identical to the loop without it. This gradient is "
+                        "EXACT while the ES one is estimated, so it can take over "
+                        "at a bc_ratio well under 1 -- try 0.1..1.0 and read the "
+                        "logged bc_ratio / bc_deg before going higher")
     p.add_argument("--lambda-z", type=float, default=None,
                    help="weight of the (1 - cos(z_beta, z0)) anchor. Inert at the "
                         "default while z sits on z0 (measured g_ratio ~5e-4), but "
@@ -609,7 +700,8 @@ def main():
     for attr, val in (("num_updates", a.updates), ("es_sigma", a.sigma),
                       ("es_pairs", a.pairs), ("es_bodies_per_update", a.bodies),
                       ("lr", a.lr), ("adapter_alpha", a.alpha),
-                      ("lambda_z", a.lambda_z), ("ckpt_dir", a.ckpt_dir),
+                      ("lambda_z", a.lambda_z), ("lambda_bc", a.lambda_bc),
+                      ("ckpt_dir", a.ckpt_dir),
                       ("task_group", a.category),
                       ("wandb_project", a.project), ("wandb_run_name", a.run_name)):
         if val is not None:

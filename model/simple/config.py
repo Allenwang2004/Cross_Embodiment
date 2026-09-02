@@ -256,6 +256,29 @@ class ESConfig:
     # drag. train_es.py logs g_es_norm / g_anchor_norm / g_ratio every update, so
     # re-derive this rather than trusting it if the rank scheme or sigma changes.
     lambda_z: float = 10.0
+    # Weight of the "keep the best point" term: lambda_bc * (1 - cos(z_beta,
+    # best_z)), where best_z is the lowest-cost CANDIDATE ever rolled out for
+    # that (clip, body) cell -- train_es.update_best_buffer.
+    #
+    # 0.0 = OFF, and off is bit-identical to the loop before this existed: no
+    # buffer is built, no branch taken, no RNG drawn. Turn it on only
+    # deliberately, and read the logged bc_ratio when you do.
+    #
+    # What it is for: scripts/single_z_search.py escapes the basin around z0 and
+    # the adapter does not, and one of the two things it does differently is
+    # keep the best candidate it ever evaluated instead of only following the
+    # gradient. This gives the adapter that memory. The term's gradient is
+    # EXACT, unlike the ES term's zeroth-order estimate, so it can dominate at a
+    # bc_ratio well under 1 -- start at 0.1..1.0, not at lambda_z's 10.
+    #
+    # Known caveat, measured: two searches of the same cell with different seeds
+    # land ~42 degrees apart at equal cost (outputs/zmap_fit/seed_disagreement.png),
+    # so "the best z" for a cell is one draw from a broad set, not a point. Here
+    # that bites less than it did for the offline targets -- every candidate is
+    # within sigma of the CURRENT z_beta, so the buffer tracks the iterate rather
+    # than naming an absolute answer -- but a target that stops improving while
+    # z_beta moves on will go stale, which is what bc_deg is logged for.
+    lambda_bc: float = 0.0
     # Per-frame weight decay inside every L_align sub-term: frame t counts
     # gamma ** t, normalised by the weights' sum (see losses._discounted_mean).
     # 1.0 is the plain mean and reproduces every number recorded before this
