@@ -1,0 +1,13 @@
+{
+  "label": "x_leg050",
+  "scale_actuators": false,
+  "leg_scale": 0.5,
+  "arm_scale": 0.55,
+  "torso_scale": 0.8,
+  "head_scale": 1.05,
+  "leg_girth": 0.7,
+  "arm_girth": 0.7,
+  "torso_girth": 0.85,
+  "head_girth": 1.1,
+  "split": "train"
+}

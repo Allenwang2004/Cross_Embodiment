@@ -428,7 +428,7 @@ def main():
     parser.add_argument("--xmls", nargs="+",
                         default=["assets/robots/adult/robot.xml",
                                  "assets/robots/child/robot.xml",
-                                 "assets/robot_torque/robot_torque.xml"],
+                                 "assets/robots_torque/robots_torque.xml"],
                         help="--mode replay: the bodies to run it on")
     parser.add_argument("--video", default=None,
                         help="--mode replay: write a side-by-side mp4 of the bodies")

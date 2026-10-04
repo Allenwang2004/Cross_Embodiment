@@ -9,7 +9,7 @@ mismatches are removed one at a time:
     A  raw actuators, raw obs      the adult's z on a body it was never trained
                                    for, driven by the adult's own actuator
                                    strength -- nothing corrected
-    B  + actuator adjustment       assets/robot_torque/child/robot_torque_full.xml,
+    B  + actuator adjustment       assets/robots_torque/child/robots_torque_full.xml,
                                    the measured isometric law from
                                    torque_aggregate_motion_k.py --joint-dynamics
     C  + obs canonicalisation      the actor's view rescaled to adult proportions
@@ -42,7 +42,7 @@ What is held fixed
   * the reference is `data/child/retargeting_motion/...`, the same one training
     scores against.
   * all four conditions use geometrically IDENTICAL bodies -- verified here, not
-    assumed (--skip-geom-check to bypass). robot_torque_full.xml changes
+    assumed (--skip-geom-check to bypass). robots_torque_full.xml changes
     actuator gain/bias/forcerange, armature, damping and stiffness; it does not
     move a single body or geom. If it did, the reference would mean something
     different in different cells and the ladder would be meaningless.
@@ -53,7 +53,7 @@ What is held fixed
 Usage (from project root):
     uv run scripts/loss_test.py
     uv run scripts/loss_test.py --clips 80 --tasks upright
-    uv run scripts/loss_test.py --torque-variant robot_torque --n-envs 16
+    uv run scripts/loss_test.py --torque-variant robots_torque --n-envs 16
 
 Writes <out>/per_clip.csv, <out>/summary.csv and <out>/loss_test.png.
 """
@@ -603,10 +603,10 @@ def main():
     p.add_argument("--raw-xml", default=None,
                    help="default assets/robots/<body>/robot.xml -- adult actuators")
     p.add_argument("--torque-xml", default=None,
-                   help="default assets/robot_torque/<body>/<variant>.xml")
-    p.add_argument("--torque-variant", default="robot_torque_full",
-                   choices=["robot_torque", "robot_torque_move_only", "robot_torque_full"],
-                   help="robot_torque_full is the --joint-dynamics one: it rewrites "
+                   help="default assets/robots_torque/<body>/<variant>.xml")
+    p.add_argument("--torque-variant", default="robots_torque_full",
+                   choices=["robots_torque", "robots_torque_move_only", "robots_torque_full"],
+                   help="robots_torque_full is the --joint-dynamics one: it rewrites "
                         "armature/damping/stiffness too, not just the actuators")
     p.add_argument("--obs-scale-ref", default="assets/robots/adult/robot.xml")
     p.add_argument("--tasks", default=None,
@@ -655,7 +655,7 @@ def main():
     raw_xml = (Path(args.raw_xml) if args.raw_xml
                else REPO_ROOT / "assets" / "robots" / args.body / "robot.xml")
     torque_xml = (Path(args.torque_xml) if args.torque_xml
-                  else REPO_ROOT / "assets" / "robot_torque" / args.body /
+                  else REPO_ROOT / "assets" / "robots_torque" / args.body /
                   f"{args.torque_variant}.xml")
     for x in (raw_xml, torque_xml):
         if not x.exists():

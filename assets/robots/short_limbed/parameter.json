@@ -9,5 +9,5 @@
   "arm_girth": 1.0,
   "torso_girth": 1.0,
   "head_girth": 1.0,
-  "split": "train"
+  "split": "test"
 }

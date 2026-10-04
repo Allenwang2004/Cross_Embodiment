@@ -1,0 +1,12 @@
+{
+  "label": "m2c_t750",
+  "scale_actuators": false,
+  "leg_scale": 0.715,
+  "arm_scale": 0.7375,
+  "torso_scale": 0.8125,
+  "head_scale": 1.0375,
+  "leg_girth": 0.775,
+  "arm_girth": 0.775,
+  "torso_girth": 0.8875,
+  "head_girth": 1.1125
+}

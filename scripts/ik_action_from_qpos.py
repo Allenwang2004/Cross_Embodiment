@@ -24,7 +24,7 @@ and the angle it holds at equilibrium is a bijection in ctrl. Inverting it,
 
 is the exact ctrl that COMMANDS angle q -- one line, no solver, no residual.
 This is the same identity pd_track_bodies.py drives its servo with, stated there
-in jnt_range form; the two agree to 4.4e-16 on adult, child and robot_torque
+in jnt_range form; the two agree to 4.4e-16 on adult, child and robots_torque
 alike, and this file asserts that agreement per actuator rather than assuming
 it (--range-tol). The jnt_range form is the one to quote; the coefficient form
 above is the one to compute with, because it stays correct if a rescaled MJCF
@@ -245,7 +245,7 @@ def main():
     p.add_argument("--clip", default=None, help="a single .npz instead of --motion-dir")
     p.add_argument("--out-dir", default="data/ik_retargeting_action",
                    help="where the action records go; the layout mirrors --motion-dir")
-    p.add_argument("--xml", default="assets/robot_torque/robot_torque.xml",
+    p.add_argument("--xml", default="assets/robots_torque/robots_torque.xml",
                    help="the body the qpos is expressed on. Only its actuator "
                         "coefficients and nq are read, and all bodies here share "
                         "one jnt_range, so this changes nothing about the answer "

@@ -42,7 +42,7 @@ defines the objective is taken from ESConfig and the rollout is the one
 train_es performs:
 
   * <dataset>/robots/<body>/robot.xml, the manifest's target_xml -- NOT
-    assets/robot_torque/child/, which is what single_z_search defaults to and
+    assets/robots_torque/child/, which is what single_z_search defaults to and
     which is a body the 10-body manifest does not even contain.
   * humenv's Default reset. single_z_search's --init reference scores z0 better
     (measured L_align 0.045 vs 0.052) but the landscape has the same shape, and

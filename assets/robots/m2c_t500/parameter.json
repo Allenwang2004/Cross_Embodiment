@@ -1,0 +1,12 @@
+{
+  "label": "m2c_t500",
+  "scale_actuators": false,
+  "leg_scale": 0.81,
+  "arm_scale": 0.825,
+  "torso_scale": 0.875,
+  "head_scale": 1.025,
+  "leg_girth": 0.85,
+  "arm_girth": 0.85,
+  "torso_girth": 0.925,
+  "head_girth": 1.075
+}

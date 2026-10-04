@@ -1,0 +1,12 @@
+{
+  "label": "m2k_t125",
+  "scale_actuators": false,
+  "leg_scale": 0.9812,
+  "arm_scale": 0.985,
+  "torso_scale": 0.99,
+  "head_scale": 1.0,
+  "leg_girth": 1.0312,
+  "arm_girth": 1.0312,
+  "torso_girth": 1.0375,
+  "head_girth": 1.0063
+}

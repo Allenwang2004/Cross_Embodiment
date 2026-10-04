@@ -1,0 +1,320 @@
+<mujoco model="humanoid">
+  <option integrator="implicitfast" />
+
+  <visual>
+    <global offwidth="1280" offheight="960" />
+    <headlight active="1" ambient="0.34 0.34 0.34" diffuse="0.5 0.5 0.5" />
+  </visual>
+
+  <default>
+    <joint damping="2" stiffness="2" armature="0.01" limited="true" solimplimit="0 .99 .01" />
+    <geom condim="1" friction="0.7 0.005 0.0001" solimp=".99 .99 .003" solref="0.015 1" margin="0.001" rgba="0.8 0.6 .4 1" />
+    <default class="smplcontact">
+      <geom condim="3" friction="1. 0.005 0.0001" solref="0.015 1" solimp="0.98 0.98 0.001" priority="1" />
+    </default>
+    <default class="stiff_medium">
+      <joint stiffness="10" />
+    </default>
+    <default class="stiff_medium_higher">
+      <joint stiffness="50" />
+    </default>
+    <default class="stiff_high">
+      <joint stiffness="100" />
+    </default>
+  </default>
+
+  <asset>
+    <texture type="skybox" builtin="gradient" rgb1="0.99 0.99 0.99" rgb2="0.608 0.828 0.892" width="100" />
+    <texture builtin="flat" height="1278" mark="cross" markrgb="1 1 1" name="texgeom" random="0.01" rgb1="0.8 0.6 0.4" rgb2="0.8 0.6 0.4" type="cube" width="127" />
+    <texture name="texplane" type="2d" builtin="checker" markrgb="1 1 1" rgb1="0.756 0.772 0.76" rgb2="0.6 0.6 0.6" width="100" height="100" />
+    <material name="MatPlane" reflectance="0.5" texture="texplane" texrepeat="1 1" texuniform="true" />
+    <material name="geom" texture="texgeom" texuniform="true" />
+  </asset>
+
+  <worldbody>
+    <light name="tracking_light" pos="0 0 7" dir="0 0 -1" directional="true" cutoff="100" exponent="1" diffuse="1 1 1" specular="0.1 0.1 0.1" mode="trackcom" />
+    <camera name="back" pos="0 3 2.4" xyaxes="-1 0 0 0 -1 2" mode="trackcom" />
+    <camera name="side" pos="-3 0 2.4" xyaxes="0 -1 0 1 0 2" mode="trackcom" />
+    <camera name="front_side" pos="-2.8 -2.8 0.8" xyaxes="0.5 -0.5 0 0.1 0.1 1" mode="trackcom" />
+    <geom condim="3" name="floor" pos="0 0 0" rgba="1 1 1 1" size="100 100 .2" type="plane" material="MatPlane" />
+    <body name="Pelvis" pos="-0.0018 -0.2233 0.804655" euler="90 0 0">
+      <site name="Pelvis" size="0.01" />
+      <freejoint name="Pelvis" />
+      <geom type="box" pos="-0.0000 -0.0121 -0.0055" size="0.100882 0.0681351 0.0783271" quat="1.0000 0.0000 0.0000 0.0000" density="3165.830099" name="Pelvis" />
+      <body name="L_Hip" pos="0.0595963 -0.0783755 -0.005831">
+        <joint name="L_Hip_x" type="hinge" pos="0 0 0" axis="1 0 0" stiffness="5.858664803921569" range="-160.0 22.92" class="stiff_medium" damping="8.157736128308313" armature="0.00504845091018475"/>
+        <joint name="L_Hip_y" type="hinge" pos="0 0 0" axis="0 1 0" stiffness="5.863729215686274" range="-70.0 70.0" class="stiff_medium" damping="5.549398567342286" armature="0.005251917905219361"/>
+        <joint name="L_Hip_z" type="hinge" pos="0 0 0" axis="0 0 1" stiffness="5.862767647058824" range="-28.65 90.0" class="stiff_medium" damping="5.4402314378193095" armature="0.005048147884879089"/>
+        <geom type="capsule" density="2040.816327" fromto="0.00591675 -0.0643125 -0.00077175 0.0234955 -0.257422 -0.003087" size="0.0545812" name="L_Hip" />
+        <body name="L_Knee" pos="0.0294122 -0.321734 -0.00385875">
+          <joint name="L_Knee_x" type="hinge" pos="0 0 0" axis="1 0 0" range="-5.16 171.89" damping="4.373676816880887" armature="0.005082830100464531" stiffness="1.1760825490196078"/>
+          <joint name="L_Knee_y" type="hinge" pos="0 0 0" axis="0 1 0" range="-4.58 6.88" damping="4.455800905934737" armature="0.005287404884048694" stiffness="1.1734349215686275"/>
+          <joint name="L_Knee_z" type="hinge" pos="0 0 0" axis="0 0 1" range="-6.88 4.58" damping="4.376293001364985" armature="0.005081346337037272" stiffness="1.1778337843137254"/>
+          <geom type="capsule" density="1234.567901" fromto="-0.00231525 -0.068257 -0.00746025 -0.00934675 -0.273028 -0.0300125" size="0.0480138" name="L_Knee" />
+          <body name="L_Ankle" pos="-0.011662 -0.341285 -0.0374728">
+            <joint name="L_Ankle_x" type="hinge" pos="0 0 0" axis="1 0 0" range="-45.84 45.84" class="stiff_medium" damping="3.3708241485250974" armature="0.005265384386623121" stiffness="5.9943156862745095"/>
+            <joint name="L_Ankle_y" type="hinge" pos="0 0 0" axis="0 1 0" range="-74.48 22.92" class="stiff_medium" damping="1.6868449891564883" armature="0.005274340362962429" stiffness="5.994316764705882"/>
+            <joint name="L_Ankle_z" type="hinge" pos="0 0 0" axis="0 0 1" range="-4.58 4.58" class="stiff_medium" damping="3.3923859416463378" armature="0.005332957912796404" stiffness="5.994319019607843"/>
+            <geom type="box" pos="0.0199798 -0.0204943 0.0207515" size="0.0428663 0.04118 0.0754375" quat="1.0000 0.0000 0.0000 0.0000" density="449.071558" name="L_Ankle" class="smplcontact" />
+            <body name="L_Toe" pos="0.022638 -0.0478485 0.1023">
+              <joint name="L_Toe_x" type="hinge" pos="0 0 0" axis="1 0 0" range="-91.67 22.92" armature="0.005366936148607184" damping="1.1343911155734243" stiffness="1.1988620392156863"/>
+              <joint name="L_Toe_y" type="hinge" pos="0 0 0" axis="0 1 0" range="-4.58 4.58" armature="0.0054080350435417495" damping="1.1387262431516134" stiffness="1.1988619215686276"/>
+              <joint name="L_Toe_z" type="hinge" pos="0 0 0" axis="0 0 1" range="-4.58 4.58" armature="0.005491136579323398" damping="1.1474414573845786" stiffness="1.1988610000000002"/>
+              <geom type="box" pos="-0.0025725 0.00471625 0.021266" size="0.0424225 0.01775 0.04402" quat="1.0000 0.0000 0.0000 0.0000" density="423.206892" name="L_Toe" class="smplcontact" />
+            </body>
+          </body>
+        </body>
+      </body>
+      <body name="R_Hip" pos="-0.0580528 -0.0776037 -0.00368725">
+        <joint name="R_Hip_x" type="hinge" pos="0 0 0" axis="1 0 0" stiffness="5.858664803921569" range="-160.0 22.92" class="stiff_medium" damping="8.157736128308313" armature="0.00504845091018475"/>
+        <joint name="R_Hip_y" type="hinge" pos="0 0 0" axis="0 1 0" stiffness="5.863729215686274" range="-70.0 70.0" class="stiff_medium" damping="5.549398567342286" armature="0.005251917905219361"/>
+        <joint name="R_Hip_z" type="hinge" pos="0 0 0" axis="0 0 1" stiffness="5.862767647058824" range="-90.0 28.65" class="stiff_medium" damping="5.4402314378193095" armature="0.005048147884879089"/>
+        <geom type="capsule" density="2040.816327" fromto="-0.00660275 -0.0655987 -0.0015435 -0.0262395 -0.262481 -0.00608825" size="0.0537825" name="R_Hip" />
+        <body name="R_Knee" pos="-0.0328423 -0.32808 -0.00763175">
+          <joint name="R_Knee_x" type="hinge" pos="0 0 0" axis="1 0 0" range="-5.16 171.89" damping="4.373676816880887" armature="0.005082830100464531" stiffness="1.1760825490196078"/>
+          <joint name="R_Knee_y" type="hinge" pos="0 0 0" axis="0 1 0" range="-6.88 4.58" damping="4.455800905934737" armature="0.005287404884048694" stiffness="1.1734349215686275"/>
+          <joint name="R_Knee_z" type="hinge" pos="0 0 0" axis="0 0 1" range="-4.58 6.88" damping="4.376293001364985" armature="0.005081346337037272" stiffness="1.1778337843137254"/>
+          <geom type="capsule" density="1234.567901" fromto="0.002744 -0.0683427 -0.00728875 0.0108045 -0.273285 -0.0289835" size="0.0480138" name="R_Knee" />
+          <body name="R_Ankle" pos="0.0135485 -0.341628 -0.0362722">
+            <joint name="R_Ankle_x" type="hinge" pos="0 0 0" axis="1 0 0" range="-45.84 45.84" class="stiff_medium" damping="3.3708241485250974" armature="0.005265384386623121" stiffness="5.9943156862745095"/>
+            <joint name="R_Ankle_y" type="hinge" pos="0 0 0" axis="0 1 0" range="-22.92 74.48" class="stiff_medium" damping="1.6868449891564883" armature="0.005274340362962429" stiffness="5.994316764705882"/>
+            <joint name="R_Ankle_z" type="hinge" pos="0 0 0" axis="0 0 1" range="-4.58 4.58" class="stiff_medium" damping="3.3923859416463378" armature="0.005332957912796404" stiffness="5.994319019607843"/>
+            <geom type="box" pos="-0.018179 -0.0149205 0.021952" size="0.0428663 0.0424225 0.0767687" quat="1.0000 0.0000 0.0000 0.0000" density="434.700981" name="R_Ankle" class="smplcontact" />
+            <body name="R_Toe" pos="-0.0217805 -0.0412457 0.10573">
+              <joint name="R_Toe_x" type="hinge" pos="0 0 0" axis="1 0 0" range="-91.67 22.92" armature="0.005366936148607184" damping="1.1343911155734243" stiffness="1.1988620392156863"/>
+              <joint name="R_Toe_y" type="hinge" pos="0 0 0" axis="0 1 0" range="-4.58 4.58" armature="0.0054080350435417495" damping="1.1387262431516134" stiffness="1.1988619215686276"/>
+              <joint name="R_Toe_z" type="hinge" pos="0 0 0" axis="0 0 1" range="-4.58 4.58" armature="0.005491136579323398" damping="1.1474414573845786" stiffness="1.1988610000000002"/>
+              <geom type="box" pos="0.0036015 0.00385875 0.0194653" size="0.0425112 0.01917 0.0437537" quat="1.0000 0.0000 0.0000 0.0000" density="407.384095" name="R_Toe" class="smplcontact" />
+            </body>
+          </body>
+        </body>
+      </body>
+      <body name="Torso" pos="-0.0022655 0.0987758 -0.0241955">
+        <joint name="Torso_x" type="hinge" pos="0 0 0" axis="1 0 0" range="-25.78 57.3" class="stiff_medium" damping="12.039171533837884" armature="0.00788915989130321" stiffness="8.16544632653061"/>
+        <joint name="Torso_y" type="hinge" pos="0 0 0" axis="0 1 0" range="-57.3 57.3" class="stiff_high" damping="13.382041007777447" armature="0.00536794449664452" stiffness="83.402046"/>
+        <joint name="Torso_z" type="hinge" pos="0 0 0" axis="0 0 1" range="-34.38 34.38" class="stiff_high" damping="15.04605082396192" armature="0.0070186082636561654" stiffness="80.63694285714286"/>
+        <geom type="capsule" density="2040.816327" fromto="0.0022655 0.055097 0.0004531 0.0027186 0.0673307 0.00054372" size="0.0725705" name="Torso" />
+        <body name="Spine" pos="0.0049841 0.122518 0.00099682">
+          <joint name="Spine_x" type="hinge" pos="0 0 0" axis="1 0 0" stiffness="8.297193921568628" range="-25.78 57.3" class="stiff_medium" damping="12.659779290950436" armature="0.00858496462568865"/>
+          <joint name="Spine_y" type="hinge" pos="0 0 0" axis="0 1 0" stiffness="8.448736938775511" range="-57.3 57.3" class="stiff_high" damping="5.379984706205011" armature="0.005352914666555094"/>
+          <joint name="Spine_z" type="hinge" pos="0 0 0" axis="0 0 1" stiffness="16.868757959183675" range="-34.38 34.38" class="stiff_high" damping="9.08524195232766" armature="0.006796062935797872"/>
+          <geom type="capsule" density="2040.816327" fromto="0.00063434 0.0215676 0.0103307 0.00072496 0.0263704 0.0126868" size="0.0712494" name="Spine" />
+          <body name="Chest" pos="0.0013593 0.047938 0.0230175">
+            <joint name="Chest_x" type="hinge" pos="0 0 0" axis="1 0 0" stiffness="8.55014304347826" range="-25.78 57.3" class="stiff_medium" damping="13.127413391062227" armature="0.008957821925111208"/>
+            <joint name="Chest_y" type="hinge" pos="0 0 0" axis="0 1 0" stiffness="7.7291955" range="-57.3 57.3" class="stiff_high" damping="5.136209430674413" armature="0.005332995061498634"/>
+            <joint name="Chest_z" type="hinge" pos="0 0 0" axis="0 0 1" stiffness="17.504206808510638" range="-34.38 34.38" class="stiff_high" damping="9.147043915709407" armature="0.0066387543062597825"/>
+            <geom type="capsule" density="2040.816327" fromto="-0.00081558 0.0618028 -0.0156773 -0.0009062 0.0754865 -0.0192114" size="0.0945587" name="Chest" />
+            <body name="Neck" pos="-0.00253736 0.193836 -0.038876">
+              <joint name="Neck_x" type="hinge" pos="0 0 0" axis="1 0 0" range="-28.65 57.3" class="stiff_medium_higher" damping="11.998311156594458" armature="0.01233371859807078" stiffness="58.360124509803924"/>
+              <joint name="Neck_y" type="hinge" pos="0 0 0" axis="0 1 0" range="-40.11 40.11" class="stiff_medium_higher" damping="12.127396289478726" armature="0.012534841074194407" stiffness="58.66597745098039"/>
+              <joint name="Neck_z" type="hinge" pos="0 0 0" axis="0 0 1" range="-40.11 40.11" class="stiff_medium_higher" damping="12.098455989329596" armature="0.012345106429410238" stiffness="59.283667647058834"/>
+              <geom type="capsule" density="1000" fromto="0.0009062 0.0117806 0.00933386 0.00371542 0.0471224 0.0372448" size="0.0411453" name="Neck" />
+              <body name="Head" pos="0.00529776 0.066222 0.0522644">
+                <joint name="Head_x" type="hinge" pos="0 0 0" axis="1 0 0" range="-28.65 57.3" class="stiff_medium_higher" damping="2.463602297655868" armature="0.01264024522543157" stiffness="60.019961764705876"/>
+                <joint name="Head_y" type="hinge" pos="0 0 0" axis="0 1 0" range="-40.11 40.11" class="stiff_medium_higher" damping="2.5081869877916896" armature="0.013101890437867114" stiffness="60.019983333333336"/>
+                <joint name="Head_z" type="hinge" pos="0 0 0" axis="0 0 1" range="-40.11 40.11" class="stiff_medium_higher" damping="2.4613733842754315" armature="0.012617385631485043" stiffness="60.019950980392146"/>
+                <geom type="box" pos="-0.00427896 0.0892469 -0.0118181" size="0.0640057 0.121885 0.0802712" quat="1.0000 0.0000 0.0000 0.0000" density="1018.069894" name="Head" />
+                <geom type="capsule" name="nose" size="0.021124 0.010562" pos="0 0.071316 0.05094" quat="1 0 0 0" mass="0" contype="0" conaffinity="0" />
+              </body>
+            </body>
+            <body name="L_Thorax" pos="0.0684614 0.105733 -0.0296261">
+              <joint name="L_Thorax_x" type="hinge" pos="0 0 0" axis="1 0 0" range="-10.89 4.58" class="stiff_medium_higher" damping="11.286888481800954" armature="0.005312322668026983" stiffness="29.97602450980392"/>
+              <joint name="L_Thorax_y" type="hinge" pos="0 0 0" axis="0 1 0" range="-28.65 17.19" class="stiff_medium_higher" damping="11.181288330629739" armature="0.005216124048121922" stiffness="29.960274999999996"/>
+              <joint name="L_Thorax_z" type="hinge" pos="0 0 0" axis="0 0 1" range="-31.51 40.11" class="stiff_medium_higher" damping="11.181237861054253" armature="0.005216037190089436" stiffness="29.960503431372548"/>
+              <geom type="capsule" density="1000" fromto="0.0158122 0.00529968 -0.00156384 0.0632486 0.0211987 -0.00616848" size="0.0462387" name="L_Thorax" />
+              <body name="L_Shoulder" pos="0.0790608 0.0264984 -0.00773232">
+                <joint name="L_Shoulder_x" type="hinge" pos="0 0 0" axis="1 0 0" range="-97.4 97.4" class="stiff_medium" damping="3.398666602922135" armature="0.005350103227600931" stiffness="5.99725431372549"/>
+                <joint name="L_Shoulder_y" type="hinge" pos="0 0 0" axis="0 1 0" range="-108.86 80.21" class="stiff_medium" damping="3.355897158561662" armature="0.005219560579754148" stiffness="5.993504607843137"/>
+                <joint name="L_Shoulder_z" type="hinge" pos="0 0 0" axis="0 0 1" range="-97.4 85.94" class="stiff_medium" damping="3.355852138773699" armature="0.0052194481154941835" stiffness="5.99347294117647"/>
+                <geom type="capsule" density="1000" fromto="0.0450907 -0.00225888 -0.0047784 0.18045 -0.00886176 -0.0191136" size="0.0458838" name="L_Shoulder" />
+                <body name="L_Elbow" pos="0.22554 -0.0111206 -0.023892">
+                  <joint name="L_Elbow_x" type="hinge" pos="0 0 0" axis="1 0 0" range="-17.19 4.58" damping="2.850367207384555" armature="0.005410333252588446" stiffness="1.201344588235294"/>
+                  <joint name="L_Elbow_y" type="hinge" pos="0 0 0" axis="0 1 0" range="-180.0 17.19" damping="2.8041443950265847" armature="0.005236300841579246" stiffness="1.201340568627451"/>
+                  <joint name="L_Elbow_z" type="hinge" pos="0 0 0" axis="0 0 1" range="-100.84 4.58" damping="2.8040717701946605" armature="0.005235710865560959" stiffness="1.201413705882353"/>
+                  <geom type="capsule" density="1000" fromto="0.0432662 0.00156384 -0.00017376 0.173239 0.00625536 -0.00078192" size="0.0359437" name="L_Elbow" />
+                  <body name="L_Wrist" pos="0.216505 0.0078192 -0.00104256">
+                    <joint name="L_Wrist_x" type="hinge" pos="0 0 0" axis="1 0 0" range="-180.0 22.92" armature="0.0054277975453075" damping="1.1460982892064178" stiffness="1.2100131568627452"/>
+                    <joint name="L_Wrist_y" type="hinge" pos="0 0 0" axis="0 1 0" range="-17.19 17.19" armature="0.005293043706218315" damping="1.1314797091739586" stiffness="1.209366862745098"/>
+                    <joint name="L_Wrist_z" type="hinge" pos="0 0 0" axis="0 0 1" range="-22.92 22.92" armature="0.005285531244232116" damping="1.1307752240654079" stiffness="1.2095781372549022"/>
+                    <geom type="capsule" density="1000" fromto="0.0145958 -0.00139008 -0.0026064 0.0583834 -0.0056472 -0.0104256" size="0.0282225" name="L_Wrist" class="smplcontact" />
+                    <body name="L_Hand" pos="0.0729792 -0.00712416 -0.0129451">
+                      <joint name="L_Hand_x" type="hinge" pos="0 0 0" axis="1 0 0" range="-17.19 17.19" armature="0.005496063469789025" damping="1.1554951138080702" stiffness="1.2146593333333335"/>
+                      <joint name="L_Hand_y" type="hinge" pos="0 0 0" axis="0 1 0" range="-51.57 51.57" armature="0.0053851004928507674" damping="1.143771088870239" stiffness="1.2146591372549023"/>
+                      <joint name="L_Hand_z" type="hinge" pos="0 0 0" axis="0 0 1" range="-91.67 91.67" armature="0.00535552189235073" damping="1.1406255184100385" stiffness="1.2146590000000002"/>
+                      <geom type="box" pos="0.0428318 0.0008688 -0.00503904" size="0.0519187 0.0140225 0.0477475" quat="1.0000 0.0000 0.0000 0.0000" density="400.552564" name="L_Hand" class="smplcontact" />
+                    </body>
+                  </body>
+                </body>
+              </body>
+            </body>
+            <body name="R_Thorax" pos="-0.0710678 0.103213 -0.0335357">
+              <joint name="R_Thorax_x" type="hinge" pos="0 0 0" axis="1 0 0" range="-10.89 4.58" class="stiff_medium_higher" damping="11.286888481800954" armature="0.005312322668026983" stiffness="29.97602450980392"/>
+              <joint name="R_Thorax_y" type="hinge" pos="0 0 0" axis="0 1 0" range="-17.19 28.65" class="stiff_medium_higher" damping="11.181288330629739" armature="0.005216124048121922" stiffness="29.960274999999996"/>
+              <joint name="R_Thorax_z" type="hinge" pos="0 0 0" axis="0 0 1" range="-40.11 31.51" class="stiff_medium_higher" damping="11.181237861054253" armature="0.005216037190089436" stiffness="29.960503431372548"/>
+              <geom type="capsule" density="1000" fromto="-0.016681 0.0056472 -0.00156384 -0.0667238 0.0225888 -0.00634224" size="0.0453512" name="R_Thorax" />
+              <body name="R_Shoulder" pos="-0.0834048 0.0283229 -0.00790608">
+                <joint name="R_Shoulder_x" type="hinge" pos="0 0 0" axis="1 0 0" range="-97.4 97.4" class="stiff_medium" damping="3.398666602922135" armature="0.005350103227600931" stiffness="5.99725431372549"/>
+                <joint name="R_Shoulder_y" type="hinge" pos="0 0 0" axis="0 1 0" range="-80.21 108.86" class="stiff_medium" damping="3.355897158561662" armature="0.005219560579754148" stiffness="5.993504607843137"/>
+                <joint name="R_Shoulder_z" type="hinge" pos="0 0 0" axis="0 0 1" range="-85.94 97.4" class="stiff_medium" damping="3.355852138773699" armature="0.0052194481154941835" stiffness="5.99347294117647"/>
+                <geom type="capsule" density="1000" fromto="-0.0440482 -0.00234576 -0.00373584 -0.176366 -0.00929616 -0.0148565" size="0.0471263" name="R_Shoulder" />
+                <body name="R_Elbow" pos="-0.220415 -0.011555 -0.0185923">
+                  <joint name="R_Elbow_x" type="hinge" pos="0 0 0" axis="1 0 0" range="-17.19 4.58" damping="2.850367207384555" armature="0.005410333252588446" stiffness="1.201344588235294"/>
+                  <joint name="R_Elbow_y" type="hinge" pos="0 0 0" axis="0 1 0" range="-17.19 180.0" damping="2.8041443950265847" armature="0.005236300841579246" stiffness="1.201340568627451"/>
+                  <joint name="R_Elbow_z" type="hinge" pos="0 0 0" axis="0 0 1" range="-4.58 100.84" damping="2.8040717701946605" armature="0.005235710865560959" stiffness="1.201413705882353"/>
+                  <geom type="capsule" density="1000" fromto="-0.0443957 0.00139008 -0.00095568 -0.177409 0.00538656 -0.00382272" size="0.03621" name="R_Elbow" />
+                  <body name="R_Wrist" pos="-0.221805 0.00677664 -0.00486528">
+                    <joint name="R_Wrist_x" type="hinge" pos="0 0 0" axis="1 0 0" range="-180.0 22.92" armature="0.0054277975453075" damping="1.1460982892064178" stiffness="1.2100131568627452"/>
+                    <joint name="R_Wrist_y" type="hinge" pos="0 0 0" axis="0 1 0" range="-17.19 17.19" armature="0.005293043706218315" damping="1.1314797091739586" stiffness="1.209366862745098"/>
+                    <joint name="R_Wrist_z" type="hinge" pos="0 0 0" axis="0 0 1" range="-22.92 22.92" armature="0.005285531244232116" damping="1.1307752240654079" stiffness="1.2095781372549022"/>
+                    <geom type="capsule" density="1000" fromto="-0.0146827 -0.00104256 -0.00182448 -0.0588178 -0.00425712 -0.00721104" size="0.0289325" name="R_Wrist" class="smplcontact" />
+                    <body name="R_Hand" pos="-0.0735005 -0.00529968 -0.00894864">
+                      <joint name="R_Hand_x" type="hinge" pos="0 0 0" axis="1 0 0" range="-17.19 17.19" armature="0.005496063469789025" damping="1.1554951138080702" stiffness="1.2146593333333335"/>
+                      <joint name="R_Hand_y" type="hinge" pos="0 0 0" axis="0 1 0" range="-51.57 51.57" armature="0.0053851004928507674" damping="1.143771088870239" stiffness="1.2146591372549023"/>
+                      <joint name="R_Hand_z" type="hinge" pos="0 0 0" axis="0 0 1" range="-91.67 91.67" armature="0.00535552189235073" damping="1.1406255184100385" stiffness="1.2146590000000002"/>
+                      <geom type="box" pos="-0.0401386 -0.00078192 -0.00686352" size="0.0504987 0.014555 0.0484575" quat="1.0000 0.0000 0.0000 0.0000" density="403.679611" name="R_Hand" class="smplcontact" />
+                    </body>
+                  </body>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <general name="L_Hip_x" joint="L_Hip_x" biastype="affine" gainprm="168.33705336355118" biasprm="-126.15155956197023 -105.45596647058825 -1.0876981504411085" ctrllimited="true" ctrlrange="-1 1" forcerange="-210.9119329411765 210.9119329411765" />
+    <general name="L_Hip_y" joint="L_Hip_y" biastype="affine" gainprm="128.95014038647886" biasprm="0.0 -105.54712588235293 -1.1098797134684573" ctrllimited="true" ctrlrange="-1 1" forcerange="-211.09425176470586 211.09425176470586" />
+    <general name="L_Hip_z" joint="L_Hip_z" biastype="affine" gainprm="109.2673227437685" biasprm="56.498527183566765 -105.52981764705883 -1.088046287563862" ctrllimited="true" ctrlrange="-1 1" forcerange="-211.05963529411767 211.05963529411767" />
+    <general name="L_Knee_x" joint="L_Knee_x" biastype="affine" gainprm="163.53985875237092" biasprm="154.0073462286518 -105.84742941176471 -1.0934192042202218" ctrllimited="true" ctrlrange="-1 1" forcerange="-211.69485882352942 211.69485882352942" />
+    <general name="L_Knee_y" joint="L_Knee_y" biastype="affine" gainprm="10.561692225773275" biasprm="2.1197113542127863 -105.60914294117647 -1.1139502264836842" ctrllimited="true" ctrlrange="-1 1" forcerange="-211.21828588235294 211.21828588235294" />
+    <general name="L_Knee_z" joint="L_Knee_z" biastype="affine" gainprm="10.601284906716362" biasprm="-2.1276575292711724 -106.00504058823529 -1.0940732503412463" ctrllimited="true" ctrlrange="-1 1" forcerange="-212.01008117647058 212.01008117647058" />
+    <general name="L_Ankle_x" joint="L_Ankle_x" biastype="affine" gainprm="43.162252098599154" biasprm="0.0 -53.94884117647059 -1.1236080495083658" ctrllimited="true" ctrlrange="-1 1" forcerange="-107.89768235294117 107.89768235294117" />
+    <general name="L_Ankle_y" joint="L_Ankle_y" biastype="affine" gainprm="45.855193179991495" biasprm="-24.27406324805299 -53.94885088235294 -1.1245633261043255" ctrllimited="true" ctrlrange="-1 1" forcerange="-107.89770176470589 107.89770176470589" />
+    <general name="L_Ankle_z" joint="L_Ankle_z" biastype="affine" gainprm="4.312461268317647" biasprm="0.0 -53.94887117647059 -1.1307953138821125" ctrllimited="true" ctrlrange="-1 1" forcerange="-107.89774235294118 107.89774235294118" />
+    <general name="L_Toe_x" joint="L_Toe_x" biastype="affine" gainprm="43.15844623010053" biasprm="-25.893561203590288 -43.15903341176471 -0.4537564462293697" ctrllimited="true" ctrlrange="-1 1" forcerange="-86.31806682352942 86.31806682352942" />
+    <general name="L_Toe_y" joint="L_Toe_y" biastype="affine" gainprm="3.4499635978091856" biasprm="0.0 -43.1590291764706 -0.4554904972606454" ctrllimited="true" ctrlrange="-1 1" forcerange="-86.3180583529412 86.3180583529412" />
+    <general name="L_Toe_z" joint="L_Toe_z" biastype="affine" gainprm="3.449960945812187" biasprm="0.0 -43.15899600000001 -0.4589765829538315" ctrllimited="true" ctrlrange="-1 1" forcerange="-86.31799200000002 86.31799200000002" />
+    <general name="R_Hip_x" joint="R_Hip_x" biastype="affine" gainprm="168.33705336355118" biasprm="-126.15155956197023 -105.45596647058825 -1.0876981504411085" ctrllimited="true" ctrlrange="-1 1" forcerange="-210.9119329411765 210.9119329411765" />
+    <general name="R_Hip_y" joint="R_Hip_y" biastype="affine" gainprm="128.95014038647886" biasprm="0.0 -105.54712588235293 -1.1098797134684573" ctrllimited="true" ctrlrange="-1 1" forcerange="-211.09425176470586 211.09425176470586" />
+    <general name="R_Hip_z" joint="R_Hip_z" biastype="affine" gainprm="109.2673227437685" biasprm="-56.498527183566765 -105.52981764705883 -1.088046287563862" ctrllimited="true" ctrlrange="-1 1" forcerange="-211.05963529411767 211.05963529411767" />
+    <general name="R_Knee_x" joint="R_Knee_x" biastype="affine" gainprm="163.53985875237092" biasprm="154.0073462286518 -105.84742941176471 -1.0934192042202218" ctrllimited="true" ctrlrange="-1 1" forcerange="-211.69485882352942 211.69485882352942" />
+    <general name="R_Knee_y" joint="R_Knee_y" biastype="affine" gainprm="10.561692225773275" biasprm="-2.1197113542127863 -105.60914294117647 -1.1139502264836842" ctrllimited="true" ctrlrange="-1 1" forcerange="-211.21828588235294 211.21828588235294" />
+    <general name="R_Knee_z" joint="R_Knee_z" biastype="affine" gainprm="10.601284906716362" biasprm="2.1276575292711724 -106.00504058823529 -1.0940732503412463" ctrllimited="true" ctrlrange="-1 1" forcerange="-212.01008117647058 212.01008117647058" />
+    <general name="R_Ankle_x" joint="R_Ankle_x" biastype="affine" gainprm="43.162252098599154" biasprm="0.0 -53.94884117647059 -1.1236080495083658" ctrllimited="true" ctrlrange="-1 1" forcerange="-107.89768235294117 107.89768235294117" />
+    <general name="R_Ankle_y" joint="R_Ankle_y" biastype="affine" gainprm="45.855193179991495" biasprm="24.27406324805299 -53.94885088235294 -1.1245633261043255" ctrllimited="true" ctrlrange="-1 1" forcerange="-107.89770176470589 107.89770176470589" />
+    <general name="R_Ankle_z" joint="R_Ankle_z" biastype="affine" gainprm="4.312461268317647" biasprm="0.0 -53.94887117647059 -1.1307953138821125" ctrllimited="true" ctrlrange="-1 1" forcerange="-107.89774235294118 107.89774235294118" />
+    <general name="R_Toe_x" joint="R_Toe_x" biastype="affine" gainprm="43.15844623010053" biasprm="-25.893561203590288 -43.15903341176471 -0.4537564462293697" ctrllimited="true" ctrlrange="-1 1" forcerange="-86.31806682352942 86.31806682352942" />
+    <general name="R_Toe_y" joint="R_Toe_y" biastype="affine" gainprm="3.4499635978091856" biasprm="0.0 -43.1590291764706 -0.4554904972606454" ctrllimited="true" ctrlrange="-1 1" forcerange="-86.3180583529412 86.3180583529412" />
+    <general name="R_Toe_z" joint="R_Toe_z" biastype="affine" gainprm="3.449960945812187" biasprm="0.0 -43.15899600000001 -0.4589765829538315" ctrllimited="true" ctrlrange="-1 1" forcerange="-86.31799200000002 86.31799200000002" />
+    <general name="Torso_x" joint="Torso_x" biastype="affine" gainprm="142.08068096602494" biasprm="53.90446634628196 -195.97071183673464 -3.210445742356769" ctrllimited="true" ctrlrange="-1 1" forcerange="-293.95606775510197 293.95606775510197" />
+    <general name="Torso_y" joint="Torso_y" biastype="affine" gainprm="200.17965482607988" biasprm="0.0 -200.1649104 -2.6764082015554895" ctrllimited="true" ctrlrange="-1 1" forcerange="-300.24736559999997 300.24736559999997" />
+    <general name="Torso_z" joint="Torso_z" biastype="affine" gainprm="116.12575106879169" biasprm="0.0 -193.52866285714285 -3.009210164792384" ctrllimited="true" ctrlrange="-1 1" forcerange="-290.29299428571426 290.29299428571426" />
+    <general name="Spine_x" joint="Spine_x" biastype="affine" gainprm="144.3731200159049" biasprm="54.774202490386635 -199.1326541176471 -3.3759411442534497" ctrllimited="true" ctrlrange="-1 1" forcerange="-298.6989811764706 298.6989811764706" />
+    <general name="Spine_y" joint="Spine_y" biastype="affine" gainprm="202.78462282812973" biasprm="0.0 -202.76968653061226 -2.6899923531025056" ctrllimited="true" ctrlrange="-1 1" forcerange="-304.1545297959184 304.1545297959184" />
+    <general name="Spine_z" joint="Spine_z" biastype="affine" gainprm="121.46400385480027" biasprm="0.0 -202.42509551020407 -3.0284139841092204" ctrllimited="true" ctrlrange="-1 1" forcerange="-303.6376432653061 303.6376432653061" />
+    <general name="Chest_x" joint="Chest_x" biastype="affine" gainprm="148.77449405640374" biasprm="56.444054557749695 -205.2034330434782 -3.500643570949927" ctrllimited="true" ctrlrange="-1 1" forcerange="-307.80514956521733 307.80514956521733" />
+    <general name="Chest_y" joint="Chest_y" biastype="affine" gainprm="185.51435623932895" biasprm="0.0 -185.50069200000002 -2.5681047153372063" ctrllimited="true" ctrlrange="-1 1" forcerange="-278.251038 278.251038" />
+    <general name="Chest_z" joint="Chest_z" biastype="affine" gainprm="126.03957258789471" biasprm="0.0 -210.05048170212766 -3.0490146385698025" ctrllimited="true" ctrlrange="-1 1" forcerange="-315.0757225531915 315.0757225531915" />
+    <general name="Neck_x" joint="Neck_x" biastype="affine" gainprm="31.51678863484247" biasprm="10.505596211614156 -42.01928964705883 -0.9598648925275566" ctrllimited="true" ctrlrange="-1 1" forcerange="-84.03857929411765 84.03857929411765" />
+    <general name="Neck_y" joint="Neck_y" biastype="affine" gainprm="29.5698306297676" biasprm="0.0 -42.23950376470588 -0.9701917031582982" ctrllimited="true" ctrlrange="-1 1" forcerange="-84.47900752941176 84.47900752941176" />
+    <general name="Neck_z" joint="Neck_z" biastype="affine" gainprm="29.881169420550886" biasprm="0.0 -42.68424070588236 -0.9678764791463677" ctrllimited="true" ctrlrange="-1 1" forcerange="-85.36848141176472 85.36848141176472" />
+    <general name="Head_x" joint="Head_x" biastype="affine" gainprm="21.608777850725634" biasprm="7.202925950241878 -28.80958164705882 -0.9854409190623472" ctrllimited="true" ctrlrange="-1 1" forcerange="-57.61916329411764 57.61916329411764" />
+    <general name="Head_y" joint="Head_y" biastype="affine" gainprm="20.168199908269912" biasprm="0.0 -28.809592000000002 -1.0032747951166758" ctrllimited="true" ctrlrange="-1 1" forcerange="-57.619184000000004 57.619184000000004" />
+    <general name="Head_z" joint="Head_z" biastype="affine" gainprm="20.16818903688093" biasprm="0.0 -28.80957647058823 -0.9845493537101726" ctrllimited="true" ctrlrange="-1 1" forcerange="-57.61915294117646 57.61915294117646" />
+    <general name="L_Thorax_x" joint="L_Thorax_x" biastype="affine" gainprm="9.71231954131875" biasprm="-3.961521416013015 -71.94245882352942 -0.9029510785440764" ctrllimited="true" ctrlrange="-1 1" forcerange="-143.88491764705884 143.88491764705884" />
+    <general name="L_Thorax_y" joint="L_Thorax_y" biastype="affine" gainprm="28.763982638960346" biasprm="-7.190995659740087 -71.90465999999999 -0.8945030664503792" ctrllimited="true" ctrlrange="-1 1" forcerange="-143.80931999999999 143.80931999999999" />
+    <general name="L_Thorax_z" joint="L_Thorax_z" biastype="affine" gainprm="44.940928089091635" biasprm="5.396425322063502 -71.90520823529411 -0.8944990288843404" ctrllimited="true" ctrlrange="-1 1" forcerange="-143.81041647058822 143.81041647058822" />
+    <general name="L_Shoulder_x" joint="L_Shoulder_x" biastype="affine" gainprm="48.93617576339532" biasprm="0.0 -28.78682070588235 -0.9063110941125694" ctrllimited="true" ctrlrange="-1 1" forcerange="-57.5736414117647 57.5736414117647" />
+    <general name="L_Shoulder_y" joint="L_Shoulder_y" biastype="affine" gainprm="47.46703198742214" biasprm="-7.192735317288012 -28.768822117647062 -0.8949059089497766" ctrllimited="true" ctrlrange="-1 1" forcerange="-57.537644235294124 57.537644235294124" />
+    <general name="L_Shoulder_z" joint="L_Shoulder_z" biastype="affine" gainprm="46.02824173257908" biasprm="-2.877078925795557 -28.768670117647055 -0.8948939036729864" ctrllimited="true" ctrlrange="-1 1" forcerange="-57.53734023529411 57.53734023529411" />
+    <general name="L_Elbow_x" joint="L_Elbow_x" biastype="affine" gainprm="8.216292619570593" biasprm="-4.759184654698449 -43.248405176470584 -0.4560587531815289" ctrllimited="true" ctrlrange="-1 1" forcerange="-86.49681035294117 86.49681035294117" />
+    <general name="L_Elbow_y" joint="L_Elbow_y" biastype="affine" gainprm="74.4219256171222" biasprm="-61.44649175781564 -43.248260470588235 -0.4486631032042536" ctrllimited="true" ctrlrange="-1 1" forcerange="-86.49652094117647 86.49652094117647" />
+    <general name="L_Elbow_z" joint="L_Elbow_z" biastype="affine" gainprm="39.789223763219454" biasprm="-36.33191689857243 -43.25089341176471 -0.4486514832311457" ctrllimited="true" ctrlrange="-1 1" forcerange="-86.50178682352941 86.50178682352941" />
+    <general name="L_Wrist_x" joint="L_Wrist_x" biastype="affine" gainprm="12.856228078781536" biasprm="-9.951982587300432 -7.260078941176472 -0.45843931568256713" ctrllimited="true" ctrlrange="-1 1" forcerange="-14.520157882352944 14.520157882352944" />
+    <general name="L_Wrist_y" joint="L_Wrist_y" biastype="affine" gainprm="2.1770207035065985" biasprm="0.0 -7.256201176470588 -0.4525918836695835" ctrllimited="true" ctrlrange="-1 1" forcerange="-14.512402352941177 14.512402352941177" />
+    <general name="L_Wrist_z" joint="L_Wrist_z" biastype="affine" gainprm="2.90320136751632" biasprm="0.0 -7.257468823529413 -0.45231008962616315" ctrllimited="true" ctrlrange="-1 1" forcerange="-14.514937647058826 14.514937647058826" />
+    <general name="L_Hand_x" joint="L_Hand_x" biastype="affine" gainprm="2.1865478522967807" biasprm="0.0 -7.287956000000001 -0.46219804552322813" ctrllimited="true" ctrlrange="-1 1" forcerange="-14.575912000000002 14.575912000000002" />
+    <general name="L_Hand_y" joint="L_Hand_y" biastype="affine" gainprm="6.5596424979888175" biasprm="0.0 -7.287954823529414 -0.4575084355480956" ctrllimited="true" ctrlrange="-1 1" forcerange="-14.575909647058827 14.575909647058827" />
+    <general name="L_Hand_z" joint="L_Hand_z" biastype="affine" gainprm="11.660313357416772" biasprm="0.0 -7.287954000000001 -0.4562502073640154" ctrllimited="true" ctrlrange="-1 1" forcerange="-14.575908000000002 14.575908000000002" />
+    <general name="R_Thorax_x" joint="R_Thorax_x" biastype="affine" gainprm="9.71231954131875" biasprm="-3.961521416013015 -71.94245882352942 -0.9029510785440764" ctrllimited="true" ctrlrange="-1 1" forcerange="-143.88491764705884 143.88491764705884" />
+    <general name="R_Thorax_y" joint="R_Thorax_y" biastype="affine" gainprm="28.763982638960346" biasprm="7.190995659740082 -71.90465999999999 -0.8945030664503792" ctrllimited="true" ctrlrange="-1 1" forcerange="-143.80931999999999 143.80931999999999" />
+    <general name="R_Thorax_z" joint="R_Thorax_z" biastype="affine" gainprm="44.940928089091635" biasprm="-5.396425322063502 -71.90520823529411 -0.8944990288843404" ctrllimited="true" ctrlrange="-1 1" forcerange="-143.81041647058822 143.81041647058822" />
+    <general name="R_Shoulder_x" joint="R_Shoulder_x" biastype="affine" gainprm="48.93617576339532" biasprm="0.0 -28.78682070588235 -0.9063110941125694" ctrllimited="true" ctrlrange="-1 1" forcerange="-57.5736414117647 57.5736414117647" />
+    <general name="R_Shoulder_y" joint="R_Shoulder_y" biastype="affine" gainprm="47.46703198742214" biasprm="7.192735317288012 -28.768822117647062 -0.8949059089497766" ctrllimited="true" ctrlrange="-1 1" forcerange="-57.537644235294124 57.537644235294124" />
+    <general name="R_Shoulder_z" joint="R_Shoulder_z" biastype="affine" gainprm="46.02824173257908" biasprm="2.877078925795551 -28.768670117647055 -0.8948939036729864" ctrllimited="true" ctrlrange="-1 1" forcerange="-57.53734023529411 57.53734023529411" />
+    <general name="R_Elbow_x" joint="R_Elbow_x" biastype="affine" gainprm="8.216292619570593" biasprm="-4.759184654698449 -43.248405176470584 -0.4560587531815289" ctrllimited="true" ctrlrange="-1 1" forcerange="-86.49681035294117 86.49681035294117" />
+    <general name="R_Elbow_y" joint="R_Elbow_y" biastype="affine" gainprm="74.4219256171222" biasprm="61.44649175781564 -43.248260470588235 -0.4486631032042536" ctrllimited="true" ctrlrange="-1 1" forcerange="-86.49652094117647 86.49652094117647" />
+    <general name="R_Elbow_z" joint="R_Elbow_z" biastype="affine" gainprm="39.789223763219454" biasprm="36.33191689857242 -43.25089341176471 -0.4486514832311457" ctrllimited="true" ctrlrange="-1 1" forcerange="-86.50178682352941 86.50178682352941" />
+    <general name="R_Wrist_x" joint="R_Wrist_x" biastype="affine" gainprm="12.856228078781536" biasprm="-9.951982587300432 -7.260078941176472 -0.45843931568256713" ctrllimited="true" ctrlrange="-1 1" forcerange="-14.520157882352944 14.520157882352944" />
+    <general name="R_Wrist_y" joint="R_Wrist_y" biastype="affine" gainprm="2.1770207035065985" biasprm="0.0 -7.256201176470588 -0.4525918836695835" ctrllimited="true" ctrlrange="-1 1" forcerange="-14.512402352941177 14.512402352941177" />
+    <general name="R_Wrist_z" joint="R_Wrist_z" biastype="affine" gainprm="2.90320136751632" biasprm="0.0 -7.257468823529413 -0.45231008962616315" ctrllimited="true" ctrlrange="-1 1" forcerange="-14.514937647058826 14.514937647058826" />
+    <general name="R_Hand_x" joint="R_Hand_x" biastype="affine" gainprm="2.1865478522967807" biasprm="0.0 -7.287956000000001 -0.46219804552322813" ctrllimited="true" ctrlrange="-1 1" forcerange="-14.575912000000002 14.575912000000002" />
+    <general name="R_Hand_y" joint="R_Hand_y" biastype="affine" gainprm="6.5596424979888175" biasprm="0.0 -7.287954823529414 -0.4575084355480956" ctrllimited="true" ctrlrange="-1 1" forcerange="-14.575909647058827 14.575909647058827" />
+    <general name="R_Hand_z" joint="R_Hand_z" biastype="affine" gainprm="11.660313357416772" biasprm="0.0 -7.287954000000001 -0.4562502073640154" ctrllimited="true" ctrlrange="-1 1" forcerange="-14.575908000000002 14.575908000000002" />
+  </actuator>
+  <contact>
+    <exclude body1="Torso" body2="Chest" />
+    <exclude body1="Head" body2="Chest" />
+    <exclude body1="R_Knee" body2="R_Toe" />
+    <exclude body1="R_Knee" body2="L_Ankle" />
+    <exclude body1="R_Knee" body2="L_Toe" />
+    <exclude body1="L_Knee" body2="L_Toe" />
+    <exclude body1="L_Knee" body2="R_Ankle" />
+    <exclude body1="L_Knee" body2="R_Toe" />
+    <exclude body1="L_Shoulder" body2="Chest" />
+    <exclude body1="R_Shoulder" body2="Chest" />
+  </contact>
+  <sensor>
+    <framelinvel name="sensor_Pelvis_framelinvel" objtype="xbody" objname="Pelvis" />
+    <framelinvel name="sensor_L_Hip_framelinvel" objtype="xbody" objname="L_Hip" />
+    <framelinvel name="sensor_L_Knee_framelinvel" objtype="xbody" objname="L_Knee" />
+    <framelinvel name="sensor_L_Ankle_framelinvel" objtype="xbody" objname="L_Ankle" />
+    <framelinvel name="sensor_L_Toe_framelinvel" objtype="xbody" objname="L_Toe" />
+    <framelinvel name="sensor_R_Hip_framelinvel" objtype="xbody" objname="R_Hip" />
+    <framelinvel name="sensor_R_Knee_framelinvel" objtype="xbody" objname="R_Knee" />
+    <framelinvel name="sensor_R_Ankle_framelinvel" objtype="xbody" objname="R_Ankle" />
+    <framelinvel name="sensor_R_Toe_framelinvel" objtype="xbody" objname="R_Toe" />
+    <framelinvel name="sensor_Torso_framelinvel" objtype="xbody" objname="Torso" />
+    <framelinvel name="sensor_Spine_framelinvel" objtype="xbody" objname="Spine" />
+    <framelinvel name="sensor_Chest_framelinvel" objtype="xbody" objname="Chest" />
+    <framelinvel name="sensor_Neck_framelinvel" objtype="xbody" objname="Neck" />
+    <framelinvel name="sensor_Head_framelinvel" objtype="xbody" objname="Head" />
+    <framelinvel name="sensor_L_Thorax_framelinvel" objtype="xbody" objname="L_Thorax" />
+    <framelinvel name="sensor_L_Shoulder_framelinvel" objtype="xbody" objname="L_Shoulder" />
+    <framelinvel name="sensor_L_Elbow_framelinvel" objtype="xbody" objname="L_Elbow" />
+    <framelinvel name="sensor_L_Wrist_framelinvel" objtype="xbody" objname="L_Wrist" />
+    <framelinvel name="sensor_L_Hand_framelinvel" objtype="xbody" objname="L_Hand" />
+    <framelinvel name="sensor_R_Thorax_framelinvel" objtype="xbody" objname="R_Thorax" />
+    <framelinvel name="sensor_R_Shoulder_framelinvel" objtype="xbody" objname="R_Shoulder" />
+    <framelinvel name="sensor_R_Elbow_framelinvel" objtype="xbody" objname="R_Elbow" />
+    <framelinvel name="sensor_R_Wrist_framelinvel" objtype="xbody" objname="R_Wrist" />
+    <framelinvel name="sensor_R_Hand_framelinvel" objtype="xbody" objname="R_Hand" />
+    <frameangvel name="sensor_Pelvis_frameangvel" objtype="xbody" objname="Pelvis" />
+    <frameangvel name="sensor_L_Hip_frameangvel" objtype="xbody" objname="L_Hip" />
+    <frameangvel name="sensor_L_Knee_frameangvel" objtype="xbody" objname="L_Knee" />
+    <frameangvel name="sensor_L_Ankle_frameangvel" objtype="xbody" objname="L_Ankle" />
+    <frameangvel name="sensor_L_Toe_frameangvel" objtype="xbody" objname="L_Toe" />
+    <frameangvel name="sensor_R_Hip_frameangvel" objtype="xbody" objname="R_Hip" />
+    <frameangvel name="sensor_R_Knee_frameangvel" objtype="xbody" objname="R_Knee" />
+    <frameangvel name="sensor_R_Ankle_frameangvel" objtype="xbody" objname="R_Ankle" />
+    <frameangvel name="sensor_R_Toe_frameangvel" objtype="xbody" objname="R_Toe" />
+    <frameangvel name="sensor_Torso_frameangvel" objtype="xbody" objname="Torso" />
+    <frameangvel name="sensor_Spine_frameangvel" objtype="xbody" objname="Spine" />
+    <frameangvel name="sensor_Chest_frameangvel" objtype="xbody" objname="Chest" />
+    <frameangvel name="sensor_Neck_frameangvel" objtype="xbody" objname="Neck" />
+    <frameangvel name="sensor_Head_frameangvel" objtype="xbody" objname="Head" />
+    <frameangvel name="sensor_L_Thorax_frameangvel" objtype="xbody" objname="L_Thorax" />
+    <frameangvel name="sensor_L_Shoulder_frameangvel" objtype="xbody" objname="L_Shoulder" />
+    <frameangvel name="sensor_L_Elbow_frameangvel" objtype="xbody" objname="L_Elbow" />
+    <frameangvel name="sensor_L_Wrist_frameangvel" objtype="xbody" objname="L_Wrist" />
+    <frameangvel name="sensor_L_Hand_frameangvel" objtype="xbody" objname="L_Hand" />
+    <frameangvel name="sensor_R_Thorax_frameangvel" objtype="xbody" objname="R_Thorax" />
+    <frameangvel name="sensor_R_Shoulder_frameangvel" objtype="xbody" objname="R_Shoulder" />
+    <frameangvel name="sensor_R_Elbow_frameangvel" objtype="xbody" objname="R_Elbow" />
+    <frameangvel name="sensor_R_Wrist_frameangvel" objtype="xbody" objname="R_Wrist" />
+    <frameangvel name="sensor_R_Hand_frameangvel" objtype="xbody" objname="R_Hand" />
+    <subtreelinvel name="Chest_subtreelinvel" body="Chest" />
+    <gyro name="Pelvis_gyro" site="Pelvis" />
+  </sensor>
+</mujoco>

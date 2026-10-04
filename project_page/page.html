@@ -1,0 +1,435 @@
+<title>Across Bodies, Not Motions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a single reading column (text 42rem, figures 60rem) in the manner of a
+   paper project page; the simulator's own palette -- sky blue, checker grey,
+   wooden-mannequin tan -- supplies the accents. */
+:root {
+  --bg: #f7f8fa;
+  --surface: #ffffff;
+  --plate: #fcfcfb;
+  --ink: #171a20;
+  --ink-2: #4a505c;
+  --ink-3: #7a8190;
+  --rule: #dde1e8;
+  --sky: #2167a1;          /* accent: MuJoCo sky, deepened */
+  --tan: #b27a43;          /* the mannequin */
+  --body: #2a78d6;         /* "transfers across bodies" */
+  --motion: #d23b3a;       /* "fails across motions" */
+  --ok: #1a8a5a;
+  --warn: #b7791f;
+  --display: "Bricolage Grotesque", "Helvetica Neue", Arial, sans-serif;
+  --text: "Newsreader", "Iowan Old Style", Georgia, serif;
+  --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111418; --surface: #181c22; --plate: #f4f5f7; --ink: #e8eaee; --ink-2: #b3b9c5;
+    --ink-3: #858d9c; --rule: #2b313b; --sky: #6aa9dd; --tan: #d5a26d; --body: #5b9ff0;
+    --motion: #f07170; --ok: #45c08a; --warn: #e0a84a; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111418; --surface: #181c22; --plate: #f4f5f7; --ink: #e8eaee; --ink-2: #b3b9c5;
+  --ink-3: #858d9c; --rule: #2b313b; --sky: #6aa9dd; --tan: #d5a26d; --body: #5b9ff0;
+  --motion: #f07170; --ok: #45c08a; --warn: #e0a84a; color-scheme: dark;
+}
+body { background: var(--bg); color: var(--ink); font-family: var(--text); font-size: 1.12rem; line-height: 1.62; }
+.wrap { max-width: 60rem; margin: 0 auto; padding-inline: 1.25rem; padding-block: 3rem 5rem; display: flex; flex-direction: column; gap: 3.25rem; }
+.prose { max-width: 42rem; margin-inline: auto; width: 100%; }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; color: var(--ink); }
+h1 { font-size: clamp(2.1rem, 5.2vw, 3.4rem); font-weight: 700; line-height: 1.05; letter-spacing: -0.02em; }
+h2 { font-size: 1.7rem; font-weight: 700; letter-spacing: -0.01em; }
+h3 { font-size: 1.18rem; font-weight: 500; }
+p { margin: 0; }
+a { color: var(--sky); text-underline-offset: 3px; }
+a:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid var(--sky); outline-offset: 3px; border-radius: 4px; }
+.eyebrow { font-family: var(--mono); font-size: .74rem; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+code, .m { font-family: var(--mono); font-size: .88em; }
+
+/* header */
+header { text-align: center; display: flex; flex-direction: column; gap: 1.1rem; align-items: center; }
+.sub { font-family: var(--text); font-style: italic; font-size: 1.25rem; color: var(--ink-2); max-width: 40rem; }
+.authors { font-family: var(--display); font-size: 1.05rem; color: var(--ink); }
+.affil { font-size: .98rem; color: var(--ink-3); }
+.links { display: flex; flex-wrap: wrap; gap: .6rem; justify-content: center; }
+.btn { font-family: var(--display); font-size: .95rem; font-weight: 500; text-decoration: none; color: var(--bg); background: var(--ink); padding: .5rem 1.05rem; border-radius: 999px; }
+.btn.ghost { background: transparent; color: var(--ink-3); border: 1px solid var(--rule); cursor: default; }
+
+/* media */
+figure { margin: 0; display: flex; flex-direction: column; gap: .7rem; }
+.plate { background: var(--plate); border: 1px solid var(--rule); border-radius: 10px; padding: .6rem; overflow: hidden; }
+.plate img, .plate video { display: block; width: 100%; height: auto; max-width: 100%; border-radius: 4px; }
+figcaption { font-size: .98rem; color: var(--ink-2); padding-inline: calc(.6rem + 1px); }
+figcaption b { color: var(--ink); font-weight: 500; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; }
+.pair > * { min-width: 0; }
+
+/* at-a-glance */
+.glance { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px; background: var(--rule); border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; }
+.glance > div { background: var(--surface); padding: 1.1rem 1rem 1.2rem; display: flex; flex-direction: column; gap: .35rem; min-width: 0; }
+.glance .v { font-family: var(--mono); font-size: 1.9rem; font-weight: 500; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.glance .l { font-size: .92rem; color: var(--ink-2); line-height: 1.4; }
+.v.bad { color: var(--motion); } .v.good { color: var(--body); } .v.tan { color: var(--tan); }
+
+/* beta strip: the eight body parameters */
+.beta { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; }
+.beta > div { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: .5rem .4rem; text-align: center; min-width: 0; }
+.beta .k { font-family: var(--mono); font-size: .72rem; color: var(--ink-3); }
+.beta .n { font-family: var(--display); font-size: .86rem; line-height: 1.2; }
+.beta .hot { border-color: var(--tan); box-shadow: inset 0 -3px 0 var(--tan); }
+
+/* claims */
+.claims { display: flex; flex-direction: column; gap: 0; border-top: 1px solid var(--rule); }
+.claim { display: grid; grid-template-columns: 3.2rem 1fr 6.5rem; gap: 1rem; padding: .9rem 0; border-bottom: 1px solid var(--rule); align-items: baseline; }
+.claim > * { min-width: 0; }
+.claim .id { font-family: var(--mono); color: var(--ink-3); font-size: .9rem; }
+.claim .t { font-size: 1.02rem; }
+.claim .t small { display: block; font-family: var(--mono); font-size: .8rem; color: var(--ink-3); margin-top: .2rem; }
+.pill { font-family: var(--mono); font-size: .72rem; letter-spacing: .06em; text-transform: uppercase; padding: .18rem .5rem; border-radius: 999px; justify-self: end; white-space: nowrap; border: 1px solid currentColor; }
+.pill.ok { color: var(--ok); } .pill.weak { color: var(--warn); }
+
+/* tables */
+.tbl { overflow-x: auto; border: 1px solid var(--rule); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: .95rem; }
+th, td { padding: .55rem .8rem; text-align: right; border-bottom: 1px solid var(--rule); font-variant-numeric: tabular-nums; }
+th:first-child, td:first-child { text-align: left; }
+thead th { font-family: var(--display); font-weight: 500; color: var(--ink-2); font-size: .88rem; }
+tbody tr:last-child td { border-bottom: 0; }
+td.hi { color: var(--body); font-weight: 500; }
+td.lo { color: var(--motion); }
+
+/* equations / setup */
+.eq { font-family: var(--mono); font-size: .95rem; background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; padding: .8rem 1rem; overflow-x: auto; white-space: nowrap; color: var(--ink); }
+
+/* journey timeline */
+.journey { display: flex; flex-direction: column; border-left: 2px solid var(--rule); margin-left: .4rem; }
+.step { position: relative; padding: 0 0 1.6rem 1.5rem; display: grid; grid-template-columns: 1fr 13rem; gap: 1.1rem; }
+.step > * { min-width: 0; }
+.step::before { content: ""; position: absolute; left: -.45rem; top: .45rem; width: .8rem; height: .8rem; border-radius: 50%; background: var(--bg); border: 2px solid var(--ink-3); }
+.step.turn::before { border-color: var(--body); background: var(--body); }
+.step .when { font-family: var(--mono); font-size: .78rem; color: var(--ink-3); letter-spacing: .04em; }
+.step h3 { margin-block: .15rem .35rem; }
+.step p { font-size: 1rem; color: var(--ink-2); }
+.step .why { color: var(--ink); }
+.step .thumb { background: var(--plate); border: 1px solid var(--rule); border-radius: 6px; padding: 4px; align-self: start; }
+.step .thumb img { display: block; width: 100%; border-radius: 3px; }
+.verdict { font-family: var(--mono); font-size: .8rem; margin-top: .45rem; }
+.verdict.x { color: var(--motion); } .verdict.y { color: var(--ok); }
+
+.note { font-size: 1rem; color: var(--ink-2); border-left: 3px solid var(--tan); padding: .2rem 0 .2rem 1rem; }
+ol.todo { margin: 0; padding-left: 1.3rem; display: flex; flex-direction: column; gap: .7rem; }
+ol.todo li::marker { font-family: var(--mono); color: var(--ink-3); }
+ol.todo b { font-family: var(--display); font-weight: 500; }
+footer { text-align: center; font-size: .9rem; color: var(--ink-3); }
+section { display: flex; flex-direction: column; gap: 1.3rem; }
+.sechead { display: flex; flex-direction: column; gap: .35rem; }
+
+@media (max-width: 720px) {
+  .glance { grid-template-columns: 1fr 1fr; }
+  .pair { grid-template-columns: 1fr; }
+  .beta { grid-template-columns: repeat(4, 1fr); }
+  .step { grid-template-columns: 1fr; }
+  .claim { grid-template-columns: 2.4rem 1fr; }
+  .claim .pill { grid-column: 2; justify-self: start; }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+.lang { font-family: var(--display); font-size: .9rem; }
+.lang a { color: var(--ink-3); }
+</style>
+
+<div class="wrap">
+
+<header>
+  <!--LANG-->
+  <div class="eyebrow">Frozen behavior foundation model · humanoid · 8-D morphology</div>
+  <h1>Across Bodies, Not Motions</h1>
+  <p class="sub">Where latent adaptation of a frozen behavior foundation model can be shared, and where it cannot</p>
+  <div class="authors">Author names</div>
+  <div class="affil">Affiliation · 2026</div>
+  <div class="links">
+    <a class="btn" href="https://github.com/Allenwang2004/Cross_Enbodiment">Code</a>
+    <a class="btn" href="https://github.com/Allenwang2004/Cross_Enbodiment/blob/main/docs/research_journey.md">Full report</a>
+    <span class="btn ghost">Paper · in preparation</span>
+  </div>
+</header>
+
+<figure>
+  <div class="plate"><video src="static/videos/v1_problem.mp4" autoplay muted loop playsinline controls></video></div>
+  <figcaption><b>The problem.</b> One latent <span class="m">z0</span>, two bodies. On the adult the frozen model walks (bfm cost 0.305); on a child-proportioned body the same latent falls over (0.966). The model was trained on the adult only, and its latent is the only thing we are allowed to change.</figcaption>
+</figure>
+
+<section class="prose">
+  <div class="sechead"><div class="eyebrow">Abstract</div><h2>TL;DR</h2></div>
+  <p>Meta Motivo controls a humanoid through a 256-dimensional latent <span class="m">z</span>. When the body's proportions change, the latent inferred on the adult stops working. We set out to learn a map from body parameters to the latent, and found that the answer depends on which axis you try to share along.</p>
+  <p>A latent corrected for one <em>motion</em> is useless for any other motion: corrections for different motions are mutually orthogonal, which is why every attempt to learn a single motion-conditioned adapter plateaued. Underneath is non-uniqueness: twenty searches on the same body and motion, from the same start, reach the same cost at latents 58–79° apart. There is no consistent target to learn, and an adapter trained from rollouts ends up applying one shared correction to every motion. A latent corrected for one <em>body</em>, however, transfers to nearby bodies and degrades smoothly with morphological distance. Tracking the latent along a path in body-parameter space yields an ordered, interpolable trajectory, and a controlled sweep of all eight body parameters shows the sensitivity is concentrated in limb length.</p>
+</section>
+
+<section>
+  <div class="sechead prose"><div class="eyebrow">Results at a glance</div></div>
+  <div class="glance">
+    <div><span class="v good">0.52–0.66×</span><span class="l">cost on a new body that reuses the latent of an already-solved neighbouring body, with no search (‖Δβ‖ ≈ 0.06–0.09)</span></div>
+    <div><span class="v good">72–86%</span><span class="l">of its own search gain recovered on a new body with no search, by interpolating the latents of its two solved neighbours</span></div>
+  </div>
+  <p class="prose" style="font-size:.95rem;color:var(--ink-2)">All costs are reported as <span class="m">cost / cost of z0</span> on the same motion and body: 1.0 means no better than doing nothing, lower is better.</p>
+</section>
+
+<section class="prose">
+  <div class="sechead"><div class="eyebrow">Setup</div><h2>A frozen policy, a latent, and a body</h2></div>
+  <p>The policy is Meta Motivo M-1 (FB-CPR), frozen. Its latent lives on a sphere, <span class="m">‖z‖ = 16</span> in 256 dimensions. A body is described by eight scale factors; the adult is all ones.</p>
+  <div class="beta" aria-label="body parameters">
+    <div class="hot"><div class="k">β₁</div><div class="n">leg length</div></div>
+    <div class="hot"><div class="k">β₂</div><div class="n">arm length</div></div>
+    <div><div class="k">β₃</div><div class="n">torso length</div></div>
+    <div><div class="k">β₄</div><div class="n">head size</div></div>
+    <div><div class="k">β₅</div><div class="n">leg girth</div></div>
+    <div><div class="k">β₆</div><div class="n">arm girth</div></div>
+    <div><div class="k">β₇</div><div class="n">torso girth</div></div>
+    <div><div class="k">β₈</div><div class="n">head girth</div></div>
+  </div>
+  <p>Each body gets its own torque-calibrated actuators, and every rollout is scored against that body's retargeted reference motion with the model's own tracking cost:</p>
+  <div class="eq">cost(z) = 1 − mean<sub>t</sub> cos( B(s<sub>t</sub>), B(g<sub>t</sub>) )</div>
+  <p>To study how the best latent depends on the body, we build <b>morphology paths</b>: bodies interpolated in parameter space from the adult to a target, each built by the same pipeline so only β changes.</p>
+  <div class="eq">β(t) = (1 − t)·1 + t·β<sub>target</sub>,&nbsp;&nbsp; t = 0, ⅛, …, 1</div>
+  <p>On every body we find a latent two ways. <b>Independent search</b> starts from <span class="m">z0</span> each time. <b>Continuation</b> starts body <i>k</i> from the solution found on body <i>k − 1</i>. We built four such paths (shrink everything, shorten limbs only, grow everything, thicken) and sixteen axis-aligned paths that change one parameter at a time, for a library of 100 bodies.</p>
+</section>
+
+<section>
+  <div class="sechead prose"><div class="eyebrow">Key observation</div><h2>There is no single best latent</h2></div>
+  <figure>
+    <div class="plate"><img src="static/images/f14_nonunique.png" alt="Twenty searches on one problem reach the same cost at latents 58 to 79 degrees apart"></div>
+    <figcaption><b>Twenty searches, one problem.</b> Same child body, same motion, same starting latent <span class="m">z0</span>, same budget (4,992 rollouts); only the random seed differs. Every search reaches the same cost (walking 0.255–0.271× <span class="m">z0</span>, rotation 0.27–0.33×), yet the solutions are 58–79° apart, and the directions they moved away from <span class="m">z0</span> are nearly unrelated (mean cos +0.18). With one best latent, the right panel would pile up near 0°.</figcaption>
+  </figure>
+  <figure>
+    <div class="plate"><video src="static/videos/v4_nonunique_walk.mp4" autoplay muted loop playsinline controls></video></div>
+    <figcaption><b>Different latents, almost the same motion (walking).</b> Left, the reference retargeted to the child body; right, the 4 of the 20 searched latents that lie furthest apart. They are 69–75° apart from each other in latent space and all cost 0.236–0.245; their joint angles differ by only 4.1° on average, less than they differ from the reference (5.6°), while z0's rollout is 15.8° off. Their heading and path do differ, though (mean heading off by 7–34°, end points up to 8 m apart): the bfm cost is computed on observations expressed in the robot's own heading frame and without horizontal position, so it cannot see either. The next video keeps only solutions whose heading and path are also right.</figcaption>
+  </figure>
+  <figure>
+    <div class="plate"><video src="static/videos/v5_nonunique_samepath.mp4" autoplay muted loop playsinline controls></video></div>
+    <figcaption><b>Heading and path right as well, and still not unique.</b> The 3 best solutions once heading and root-position errors are added to the cost: posture (bfm 0.234–0.239), heading (6–7° off on average) and end point (0.17–0.73 m) all close to the reference, totals within 0.017 of each other; yet they are 60–68° apart in latent space.</figcaption>
+  </figure>
+  <figure>
+    <div class="plate"><video src="static/videos/v6_stage1_same_seeds.mp4" autoplay muted loop playsinline controls></video></div>
+    <figcaption><b>The same 4 seeds, stage 1 (bfm only).</b> Posture is good for all of them (bfm 0.231–0.245), but B, C and D are 43–61° off the reference heading on average and end 10–13 m away; only A follows the reference path (7° off, 0.72 m at the end).</figcaption>
+  </figure>
+  <figure>
+    <div class="plate"><video src="static/videos/v6_nonunique_align.mp4" autoplay muted loop playsinline controls></video></div>
+    <figcaption><b>After a second stage on L_align.</b> Starting from the 4 latents above, 2,048 more rollouts on L_align, which compares joint angles, hand and foot positions and root heading frame by frame. Each latent moves only 17–19°, and the heading comes back to 6–7° off, end points within 0.17–1.29 m, L_align 0.052–0.068. The 4 latents are still 71–76° apart (68–73° in stage 1), and their joint angles differ by only 4.7°. All 20 seeds agree: median L_align 0.056, median pairwise latent angle 68°.</figcaption>
+  </figure>
+  <figure>
+    <div class="plate"><video src="static/videos/v4_nonunique_rotate.mp4" autoplay muted loop playsinline controls></video></div>
+    <figcaption><b>The same for rotation.</b> Four latents 72–74° apart, costs 0.095–0.104; joint angles 4.3° apart on average, 4.6° from the reference.</figcaption>
+  </figure>
+  <figure>
+    <div class="plate"><img src="static/images/f17_lowdim.png" alt="The good latents spread along a few directions, and one can walk further along them than along a random direction"></div>
+    <figcaption><b>The good latents lie in a low-dimensional region.</b> On the child body, about 2,000 latents at the cost floor were collected for walking and for rotation (from the ES traces of the 20 searches). Left: principal components of these latents at their centre. The first 24–28 directions hold 80% of the spread and the first 55–65 hold 95%; an even spread over all 255 directions would follow the dashed line. Right: how far one can walk from the centre along each group of principal directions before the cost leaves the floor. The first 32 directions allow about 50°; directions ranked past 100 allow about 20°, less than a random direction (25°). The good region is not a ball: it extends far along a few dozen directions and is narrow in all the others.</figcaption>
+  </figure>
+  <div class="prose" style="display:flex;flex-direction:column;gap:1rem">
+    <p>For a fixed body and motion, the good latents form a region, not a point, and the region is low-dimensional: it extends mainly along a few dozen directions (figure above). That one fact explains why the two obvious ways to learn a map fail:</p>
+    <ol class="todo">
+      <li><b>No target to supervise.</b> Which good latent a search returns depends on its random seed, so the "answer" for a motion is arbitrary. The answers searched for 40 headstand trials are mutually orthogonal (mean cos +0.003); the trial nearest in <span class="m">z0</span> predicts no better than a random one; and a network fitted to them memorises the training trials exactly but does worse than no correction on held-out ones (cos +0.808 vs +0.851).</li>
+      <li><b>Training from rollouts pushes every motion the same way.</b> Without a well-defined target, the adapter has to learn from rollout feedback: evolution strategies alone, or with a memory of the best latent found so far for each motion. Every variant ends up applying one correction to all motions. Mean pairwise cos is +0.97 with plain ES and +0.84 to +0.97 with the best-latent memory; with several heads, each head learns a single direction (+0.98). The shared direction is already there at initialisation (+0.94), and nothing in training pulls it apart. The best-latent memory samples around the adapter's own output, so its targets inherit the shared direction (+0.6 to +0.7, against +0.003 for independent searches). The learned correction is orthogonal to what each motion needs (+0.014).</li>
+    </ol>
+  </div>
+  <figure>
+    <div class="plate"><img src="static/images/f06_cross_clip_transfer.png" alt="10 by 10 heatmap of headstand trials borrowing each other's latent"></div>
+    <figcaption><b>Supplement 1: no single latent serves several motions.</b> Ten headstand trials; each trial's searched latent is rolled out on every other trial. Diagonal (own latent) 0.45, off-diagonal median 1.99, and only 21 of 90 pairs beat <span class="m">z0</span>. The best single latent for all ten is <span class="m">z0</span> itself.</figcaption>
+  </figure>
+  <figure>
+    <div class="plate"><img src="static/images/f05_target_structure.png" alt="Pairwise cosine of correction directions"></div>
+    <figcaption><b>Supplement 2: the targets are orthogonal, the adapter learns one direction.</b> The corrections searched for 40 headstand trials are mutually orthogonal (mean pairwise cos +0.003). An adapter trained on these trials applies almost the same correction to all of them (+0.973), orthogonal to what each one needs (+0.014).</figcaption>
+  </figure>
+  <div class="prose">
+    <p>Non-uniqueness is also why the body axis behaves differently. Continuation picks one branch of the region and follows it, so neighbouring bodies get consistent answers that can be shared and interpolated (Findings 1–3).</p>
+  </div>
+</section>
+
+<section>
+  <div class="sechead prose"><div class="eyebrow">Finding 1</div><h2>A correction carries over to nearby bodies, not to other motions</h2></div>
+  <div class="prose"><p>Take the correction found on one body or motion (the step from <span class="m">z0</span> to its best latent), move it along the sphere to the new target's own <span class="m">z0</span>, and take the same angle from there. The control takes the same angle in a random direction: if the correction carried no information, the two would do equally well.</p></div>
+  <figure>
+    <div class="plate"><img src="static/images/f16_correction_transfer.png" alt="A correction moved to a neighbouring body, another headstand trial, or a different kind of motion, against a random direction of the same angle"></div>
+    <figcaption><b>A correction moved to a new body vs to a new motion.</b> Coloured dots are the moved correction, grey dots a random direction of the same angle, black bars medians. Moved to a neighbouring body (4 paths, 8 motions, both directions, 512 pairs) the cost drops to 0.61, against 1.15 for a random direction; the correction wins in 461 of 512. On the child body, moved to another trial of the same headstand task (10 trials, every pair: 1.19 vs 1.22) or to a different kind of motion (8 motions, every pair: 1.03 vs 1.07), it does no better than a random direction.</figcaption>
+  </figure>
+  <figure>
+    <div class="plate"><img src="static/images/f11_transfer_body.png" alt="Transfer cost versus morphological distance on four paths"></div>
+    <figcaption><b>The correction fades with body distance.</b> A body's solution used as is on the other bodies of its path. <span class="m">z0</span> is the same on every body for a given motion, so this moves the whole correction. On all four paths: 0.52–0.66 one step away, rising smoothly with ‖Δβ‖ and settling at about 1.0, the level of no adaptation, never worse.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <div class="sechead prose"><div class="eyebrow">Finding 2</div><h2>Continuation exposes an ordered, interpolable trajectory</h2></div>
+  <figure>
+    <div class="plate"><img src="static/images/f10_trajectories_m2c.png" alt="Latent trajectories along the adult-to-child path for eight motions"></div>
+    <figcaption><b>How the two methods find a latent (adult → child path, 8 motions).</b> Squares and dashed lines are <b>independent search</b>: every body starts from <span class="m">z0</span> (red star). Circles and solid lines are <b>continuation</b>: body k starts from the solution of body k − 1. Colour is the body's position on the path (dark purple = adult, yellow = child). Continuation moves outward in body order; independent solutions have no order. This projects 256 dimensions onto two principal directions: most of the difference between independent solutions lies outside them, so they look clustered here. The next figure shows the actual distances.</figcaption>
+  </figure>
+  <figure>
+    <div class="plate"><img src="static/images/f15_path_angles.png" alt="Angle between the best latents of two bodies, continuation versus independent search"></div>
+    <figcaption><b>How far apart two bodies' best latents are (256-D).</b> Left and middle: angle between the solutions of any two bodies on the adult → child path, averaged over 8 motions; the numbers beside the diagonal are adjacent bodies. Continuation's neighbours are only 15–25° apart and the angle grows with distance, an ordered path. Independent search is about 30° apart whatever the distance, with no order. Right: the same on all four paths. Continuation is 12–20° apart one step away and grows steadily; independent search is 23–32° apart from the first step on and barely changes.</figcaption>
+  </figure>
+  <div class="prose" style="display:flex;flex-direction:column;gap:1rem">
+    <p>Remove one body from a path and predict its latent from its two neighbours by spherical interpolation, with no search on that body:</p>
+    <div class="tbl"><table>
+      <thead><tr><th>bfm cost / z0</th><th>shrink all</th><th>shorter limbs</th><th>grow all</th><th>thicker</th></tr></thead>
+      <tbody>
+        <tr><td>continuation: search on that body (upper bound)</td><td>0.497</td><td>0.453</td><td>0.409</td><td>0.347</td></tr>
+        <tr><td>continuation: neighbours interpolated</td><td class="hi">0.596</td><td class="hi">0.559</td><td class="hi">0.489</td><td class="hi">0.528</td></tr>
+        <tr><td>continuation: nearest neighbour as is</td><td>0.673</td><td>0.659</td><td>0.552</td><td>0.603</td></tr>
+        <tr><td>independent: search on that body (upper bound)</td><td>0.554</td><td>0.588</td><td>0.422</td><td>0.598</td></tr>
+        <tr><td>independent: neighbours interpolated</td><td>0.690</td><td>0.683</td><td>0.618</td><td>0.756</td></tr>
+      </tbody>
+    </table></div>
+    <p>Interpolating continuation's solutions recovers 72–86% of the gain a search on that body gets, and beats copying the nearest neighbour in 33–44 of 56 cases. Independent solutions interpolate too, but recover less (61–77%). The figure above is why: continuation's neighbours are 12–20° apart, so their midpoint stays on the same path; independent neighbours are 23–32° apart, so their midpoint falls between two unrelated points.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sechead prose"><div class="eyebrow">Finding 3</div><h2>A nearby body is a good starting point</h2></div>
+  <figure>
+    <div class="plate"><video src="static/videos/v2_adapted.mp4" autoplay muted loop playsinline controls></video></div>
+    <figcaption><b>Adapting to the child body</b> (absolute bfm cost). <span class="m">z0</span> falls (0.966). A 512-rollout search from <span class="m">z0</span> stays up but crouches (0.751). A 4,608-rollout search from <span class="m">z0</span> (0.240) and continuation (0.275) both track the reference. Continuation searches the 9 bodies of the adult → child path in order, 512 rollouts each, each starting from the previous body's solution: 4,608 in total. The video shows the last (child) body. The 4,608-rollout search from <span class="m">z0</span> is the control with the same total budget.</figcaption>
+  </figure>
+  <div class="prose" style="display:flex;flex-direction:column;gap:1rem">
+    <p>Starting the search from the neighbouring body's solution reaches half of <span class="m">z0</span>'s cost on the far end of each path in 16–32 rollouts, against 128–256 from <span class="m">z0</span>: a 4–16× reduction. This assumes the neighbour is already solved: only the search on the last body is counted, not what the earlier bodies cost.</p>
+    <p class="note">Continuation is <b>not</b> a better optimizer. Given the same total budget, one long search from <span class="m">z0</span> reaches the same quality (median 0.287 against 0.332; continuation wins 1 of 8 motions). Search from <span class="m">z0</span> is not trapped, only slow, because the target latent for a distant body lies far from <span class="m">z0</span>. What a nearby body buys is a short trip.</p>
+  </div>
+  <figure>
+    <div class="plate"><img src="static/images/f09_continuation_m2c.png" alt="Continuation versus independent search along the adult-to-child path"></div>
+    <figcaption><b>Along the adult → child path.</b> Naive transfer holds until t ≈ 0.5 and then degrades to 2.14×. From the neighbour's solution, 8 of 9 bodies need 16 rollouts to reach 0.5× <span class="m">z0</span>; from <span class="m">z0</span>, 16–304.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <div class="sechead prose"><div class="eyebrow">Finding 4</div><h2>Limb length is what matters</h2></div>
+  <figure>
+    <div class="plate"><img src="static/images/f12_sensitivity.png" alt="Per-dimension sensitivity bar chart"></div>
+    <figcaption><b>One parameter at a time</b>, each taken to the smallest and largest value it reaches among 19 real body designs. Shortening the legs to 0.5× raises <span class="m">z0</span>'s cost 2.72×; shortening the arms to 0.55×, 1.68×. Torso, head and girth stay within 0.97–1.07× (thinner legs, 1.29×). Shrinking hurts far more than growing.</figcaption>
+  </figure>
+  <div class="pair">
+    <figure>
+      <div class="plate"><video src="static/videos/v3_leg05_rotate.mp4" autoplay muted loop playsinline controls></video></div>
+      <figcaption><b>Legs at 0.5×, rotation.</b> <span class="m">z0</span> falls (0.774); the continuation latent stays up and turns (0.266).</figcaption>
+    </figure>
+    <figure>
+      <div class="plate"><video src="static/videos/v3_leg05_crawl.mp4" autoplay muted loop playsinline controls></video></div>
+      <figcaption><b>Legs at 0.5×, crawl: a failure case.</b> After search the cost is still 0.804 of <span class="m">z0</span>'s. Short legs are the hardest direction.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section>
+  <div class="sechead prose"><div class="eyebrow">Limitation</div><h2>Arbitrary new bodies are not solved yet</h2></div>
+  <figure>
+    <div class="plate"><img src="static/images/f13_real_bodies.png" alt="Warm-to-cold final cost ratio and zero-shot cost versus distance to the nearest library body"></div>
+    <figcaption><b>15 real body designs, none on a path.</b> One row per body, sorted by β distance d to the nearest body in the 100-body library; rows above the line are near (d ≤ 0.2). Dots are clips, black bars are medians. Left: after 1,024 rollouts each, the final cost of the warm start (from the nearest library body's latent) over that of the cold start (from <span class="m">z0</span>); below 1 means the warm start ended better. Right: cost of that latent used as is, with no search.</figcaption>
+  </figure>
+  <div class="prose" style="display:flex;flex-direction:column;gap:1rem">
+    <p>A <b>library</b> is a set of bodies whose latents are already solved: every library body has a continuation latent for each of the 8 clips. For a new body we either start the search from the latent of the library body nearest in β (warm start), or predict the new body's latent from the whole library. Both predictors work on corrections: <b>kernel regression</b> averages the library bodies' corrections weighted by β distance; the <b>linear model</b> assumes the correction varies linearly with β and fits it to the library. Either way the predicted correction is taken from the new body's <span class="m">z0</span> (for a given motion, <span class="m">z0</span> is the same on every body). We compare two libraries:</p>
+    <ul style="margin:0;padding-left:1.3rem;display:flex;flex-direction:column;gap:.5rem">
+      <li><b>36-body library</b>: the 4 paths from the adult (→ child, → short limbs, → giant, → short and stocky), 9 bodies each. All 4 paths start from the same adult.</li>
+      <li><b>100-body library</b>: those 36, plus 16 axis-aligned paths (each of the 8 body parameters shrunk and grown, 4 bodies per path, 64 in all).</li>
+    </ul>
+    <div class="tbl"><table>
+      <thead><tr><th>held-out real bodies</th><th>36-body library<br>(4 paths)</th><th>100-body library<br>(+ 16 axis paths)</th></tr></thead>
+      <tbody>
+        <tr><td>gain recovered, zero search, kernel regression</td><td>15%</td><td>21%</td></tr>
+        <tr><td>gain recovered, linear model, near (‖Δβ‖ ≤ 0.2)</td><td>4%</td><td>33%</td></tr>
+        <tr><td>warm start ends better than cold after 1,024 rollouts, near / far</td><td>71% / 44%</td><td>70% / 46%</td></tr>
+      </tbody>
+    </table></div>
+    <p>Each motion is handled separately: predictions and warm starts use only the library's latents for <b>that same motion</b> on other bodies. The cold start searches from <span class="m">z0</span>, the warm start from the nearest library body's latent, 1,024 rollouts each; 50% means no difference.</p>
+    <p>Real bodies change several parameters at once, so single-axis paths do not come close to them in Euclidean β distance. Finding 4 points to the fix: cover the two limb-length dimensions densely instead of all eight.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sechead prose"><div class="eyebrow">Summary of claims</div><h2>What the evidence supports</h2></div>
+  <div class="claims prose">
+    <div class="claim"><span class="id">C0</span><span class="t">For a fixed body and motion the best latent is not unique, so there is no target to supervise; adapters trained from rollouts apply one shared correction to all motions.<small>20 searches: equal cost, 58–79° apart · adapter pairwise cos +0.84 to +0.97</small></span><span class="pill ok">supported</span></div>
+    <div class="claim"><span class="id">C1</span><span class="t">Naive transfer degrades with morphological distance, and the model's own inference on the retargeted motion does not recover it.<small>child 2.14× · retarget inference 1.10× z0</small></span><span class="pill ok">supported</span></div>
+    <div class="claim"><span class="id">C2</span><span class="t">Latent search recovers performance at a cost set by how far the solution lies from z0.<small>16 rollouts (headstand) · 936 (walking) to 0.5×</small></span><span class="pill ok">supported</span></div>
+    <div class="claim"><span class="id">C3</span><span class="t">Latent corrections do not transfer across motions.<small>another headstand trial 1.19, another kind of motion 1.03 · random direction 1.22 / 1.07</small></span><span class="pill ok">supported</span></div>
+    <div class="claim"><span class="id">C4</span><span class="t">Latent corrections transfer across bodies and decay smoothly with distance.<small>neighbouring body 0.61 (random direction 1.15) · ≈1.0 at the far end · 4 paths</small></span><span class="pill ok">supported</span></div>
+    <div class="claim"><span class="id">C5</span><span class="t">Continuation exposes an ordered latent trajectory parameterised by the body.<small>8 of 8 motions · PC1 55% vs 27%</small></span><span class="pill ok">supported</span></div>
+    <div class="claim"><span class="id">C6</span><span class="t">Along a path, the latent is interpolable, and continuation's solutions interpolate best.<small>72–86% of the gain with zero search</small></span><span class="pill ok">supported</span></div>
+    <div class="claim"><span class="id">C7</span><span class="t">Body parameters predict the latent for an arbitrary new body.<small>21–33% of the gain · warm start better in 70% of near cases</small></span><span class="pill weak">weak</span></div>
+    <div class="claim"><span class="id">C8</span><span class="t">Sensitivity concentrates in limb length; shrinking hurts more than growing.<small>legs 0.5× → 2.72× · others ≤ 1.07×</small></span><span class="pill ok">supported</span></div>
+  </div>
+</section>
+
+<section class="prose">
+  <div class="sechead"><div class="eyebrow">How we got here</div><h2>The dead ends that shaped the question</h2></div>
+  <p>The project started as "learn one adapter <span class="m">z = G(β, z0)</span> for every body and motion". Each stage below was a reasonable next step, and each failure narrowed the question.</p>
+  <div class="journey">
+    <div class="step">
+      <div><div class="when">up to Sep 21</div><h3>One adapter for all bodies</h3>
+      <p class="why">An MLP on (β, z0), trained by evolution strategies because the cost needs a physics rollout.</p>
+      <p>About 7% gain on training bodies and none on new ones. Later we found the data held no child body, used adult actuators, and started from a T-pose, so these numbers were not comparable to anything.</p>
+      <div class="verdict x">✗ setup defects; rebuilt the pipeline</div></div>
+    </div>
+    <div class="step">
+      <div><div class="when">Sep 22</div><h3>What does a good latent look like?</h3>
+      <p class="why">Before mapping bodies to latents, check whether "the best latent" is even well defined.</p>
+      <p>It is a region, not a point: a flat cap of about 32–64 dimensions. The cap's centre already beat z0 on 8 of 11 other bodies, an early hint of the body-axis result we would only follow up five days later.</p>
+      <div class="verdict y">✓ the solution set is large</div></div>
+      <div class="thumb"><img src="static/images/f02_plateau_cross_body.png" alt="plateau rolled out on other bodies"></div>
+    </div>
+    <div class="step">
+      <div><div class="when">Sep 22–23</div><h3>Fix one body, learn z0 → z</h3>
+      <p class="why">With β constant the question reduces to whether z0 → z is learnable at all.</p>
+      <p>Held-out motions improved by 48%. It looked like success.</p>
+      <div class="verdict y">✓ on average</div></div>
+    </div>
+    <div class="step">
+      <div><div class="when">Sep 23–25</div><h3>Split by motion family</h3>
+      <p class="why">Most clips are walking; the average could hide the rest.</p>
+      <p>Only walking learned (0.52); headstand got worse than doing nothing (1.22). Reweighting, balanced sampling, a bounded head and longer training all stayed within noise. Training on headstand alone with 14× the budget still failed.</p>
+      <div class="verdict x">✗ not budget, not interference, not infeasibility</div></div>
+      <div class="thumb"><img src="static/images/f03_only_move_learns.png" alt="per-family results"></div>
+    </div>
+    <div class="step">
+      <div><div class="when">Sep 26</div><h3>Is there a function to learn?</h3>
+      <p class="why">Search each headstand trial on its own and look at the answers.</p>
+      <p>The corrections are orthogonal and do not transfer between motions. A supervised fit memorises them perfectly and predicts nothing for unseen motions. Along the motion axis there is no function.</p>
+      <div class="verdict x">✗ the motion axis is closed</div></div>
+      <div class="thumb"><img src="static/images/f07_fitted_map_rollout.png" alt="supervised fit judged by rollout"></div>
+    </div>
+    <div class="step">
+      <div><div class="when">Sep 26–27</div><h3>Why headstand in particular?</h3>
+      <p class="why">Test distance, a barrier, and precision in turn.</p>
+      <p>Not distance, not a barrier: its good region is only about 14° wide against 60° for walking. Even a 1° error, the best a supervised fit achieves on 500 targets, wipes out the gain.</p>
+      <div class="verdict y">✓ narrow optima; precision, not exploration</div></div>
+      <div class="thumb"><img src="static/images/f08_geodesic_profile.png" alt="cost along the path from z0"></div>
+    </div>
+    <div class="step turn">
+      <div><div class="when">Sep 27</div><h3>Turn to the body axis</h3>
+      <p class="why">The original claim was about generalising to new bodies, and that axis had never been measured directly.</p>
+      <p>Morphology paths, continuation, and budget-matched controls produced Findings 1–3.</p>
+      <div class="verdict y">✓ transfer across bodies</div></div>
+    </div>
+    <div class="step turn">
+      <div><div class="when">Sep 28</div><h3>Cover all eight parameters fairly</h3>
+      <p class="why">Four diagonal paths covered only four directions of body space.</p>
+      <p>Sixteen axis paths located the sensitivity in limb length (Finding 4) and doubled zero-search recovery on real bodies, which is still modest.</p>
+      <div class="verdict y">✓ limb length · ⚠ generalisation</div></div>
+    </div>
+  </div>
+</section>
+
+<section class="prose">
+  <div class="sechead"><div class="eyebrow">Next</div><h2>Before this is a paper</h2></div>
+  <ol class="todo">
+    <li><b>More motions and seeds.</b> The morphology study uses 8 motions and one seed per search. Scale to 40+ motions, repeat searches, and report confidence intervals; extend the budget-matched control to every path.</li>
+    <li><b>Required baselines.</b> Latent adaptation without body information (ReLA and LoLA from Sikchi et al., 2025), per-frame latent sequences as in BFMTrack, and policy fine-tuning along a morphology homotopy as a reference point.</li>
+    <li><b>Close the generalisation gap.</b> Grid the two limb-length dimensions, weight distances by limb length, and report full rollouts-versus-cost adaptation curves on held-out bodies.</li>
+    <li><b>Task-level evidence.</b> Fall rate and joint tracking error alongside the model's own tracking cost, and a video for each claim.</li>
+    <li><b>Generality and explanation.</b> A second foundation model or skeleton, and an account of why limb length and shrinking dominate (contact geometry, stride, centre-of-mass height).</li>
+  </ol>
+</section>
+
+<footer>Figures and videos replay recorded simulator rollouts; nothing on this page is re-simulated for display.</footer>
+
+</div>

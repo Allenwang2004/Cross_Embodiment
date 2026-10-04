@@ -154,7 +154,7 @@ def render_panels(model, data, renderer, seqs, labels, camera, n_frames, font=No
 
 
 @torch.no_grad()
-def rollout(model, env, z_env, steps, device, obs_mul, init_qpos=None):
+def rollout(model, env, z_env, steps, device, obs_mul, init_qpos=None, return_obs=False):
     """Deterministic rollout, one z per slot. init_qpos: length-n_slots list of
     per-slot qpos (or None entries), so slots carrying different clips can each
     start on their own reference.
@@ -169,13 +169,17 @@ def rollout(model, env, z_env, steps, device, obs_mul, init_qpos=None):
             if q is not None:
                 e.unwrapped.set_physics(qpos=q, qvel=np.zeros(e.unwrapped.model.nv))
         obs = {"proprio": np.stack([e.unwrapped.get_obs()["proprio"] for e in env.envs])}
-    hist = []
+    hist, obs_hist = [], []
     for _ in range(steps):
         p = obs["proprio"] if obs_mul is None else obs["proprio"] * obs_mul
         o = torch.as_tensor(p, dtype=torch.float32, device=device)
         mu = model._actor(model._normalize(o), z_env, model.cfg.actor_std).mean
         obs, _, _, _, info = env.step(mu.cpu().numpy())
         hist.append(info["qpos"].copy())
+        if return_obs:
+            obs_hist.append(obs["proprio"] if obs_mul is None else obs["proprio"] * obs_mul)
+    if return_obs:
+        return np.stack(hist, axis=1), np.stack(obs_hist, axis=1).astype(np.float32)
     return np.stack(hist, axis=1)
 
 
@@ -215,6 +219,19 @@ def main():
                         "which, per task, rather than letting the word 'test' "
                         "carry an assumption it does not support")
     p.add_argument("--trials", type=int, default=1, help="trials per task")
+    p.add_argument("--score-loss", default=None, choices=["bfm", "joint"],
+                   help="objective for the cost column. Default: whatever the FIRST checkpoint "
+                        "was trained with (cfg.align_loss). 'bfm' is 1 - mean_t cos(B(s), B(g)), "
+                        "the BFMTrack latent alignment; 'joint' is lambda_align*L_align + "
+                        "lambda_phys*L_phys. A checkpoint trained on bfm and scored on joint is "
+                        "being judged by a different quantity than it optimised -- the two "
+                        "disagree per clip, so this defaults to matching the training run")
+    p.add_argument("--clip-list", default=None,
+                   help="file of '<task> <trial>' lines naming the EXACT clips to roll out, "
+                        "overriding --tasks-file/--trials. scripts/dump_heldout_clips.py writes "
+                        "one for a checkpoint's own held-out split -- that split is a seeded "
+                        "sample of specific (task, trial) pairs scattered over many tasks, which "
+                        "'every task in a file, trials 0..N-1' cannot express")
     p.add_argument("--init-from-reference", action="store_true",
                    help="start the rollout from the retargeted clip's frame 0 "
                         "(qvel 0) instead of humenv's Default standing reset. "
@@ -267,11 +284,24 @@ def main():
                   f"{score_cfg.lambda_align:g}/{score_cfg.lambda_phys:g} instead")
 
     ds_dir = REPO_ROOT / a.dataset
-    tasks_path = Path(a.tasks_file) if a.tasks_file else ds_dir / "splits" / "test_tasks.txt"
-    if not tasks_path.exists():
-        raise SystemExit(f"{tasks_path} not found -- see scripts/split_tasks.py "
-                         "and scripts/split_tasks_by_fall.py")
-    wanted = load_task_list(tasks_path)
+    want_pairs = None
+    if a.clip_list:
+        cl = Path(a.clip_list)
+        if not cl.is_absolute():
+            cl = REPO_ROOT / cl
+        want_pairs = set()
+        for line in load_task_list(cl):
+            parts = line.replace(",", " ").split()
+            if len(parts) < 2:
+                raise SystemExit(f"{cl}: '{line}' is not '<task> <trial>'")
+            want_pairs.add((parts[0], int(parts[1])))
+        wanted = sorted({t for t, _ in want_pairs})
+    else:
+        tasks_path = Path(a.tasks_file) if a.tasks_file else ds_dir / "splits" / "test_tasks.txt"
+        if not tasks_path.exists():
+            raise SystemExit(f"{tasks_path} not found -- see scripts/split_tasks.py "
+                             "and scripts/split_tasks_by_fall.py")
+        wanted = load_task_list(tasks_path)
     dataset = CrossEmbodimentDataset(ds_dir, task_filter=wanted)
 
     def trained_tasks_of(cfg_i):
@@ -293,12 +323,25 @@ def main():
         if not bodies:
             raise SystemExit(f"{bp} named no body present in the manifest; pass --bodies")
 
-    rows_by_body = {b: [i for i in by_body[b] if dataset.rows[i]["trial"] < a.trials]
-                    for b in bodies}
+    if want_pairs is not None:
+        rows_by_body = {b: [i for i in by_body[b]
+                            if (dataset.rows[i]["reward_name"], int(dataset.rows[i]["trial"])) in want_pairs]
+                        for b in bodies}
+        for b, rs in rows_by_body.items():
+            if len(rs) != len(want_pairs):
+                have = {(dataset.rows[i]["reward_name"], int(dataset.rows[i]["trial"])) for i in rs}
+                miss = sorted(want_pairs - have)[:5]
+                raise SystemExit(f"{b}: the manifest has {len(rs)} of the {len(want_pairs)} listed "
+                                 f"clips; missing e.g. {miss}")
+    else:
+        rows_by_body = {b: [i for i in by_body[b] if dataset.rows[i]["trial"] < a.trials]
+                        for b in bodies}
     steps = a.steps or score_cfg.steps_per_episode
 
-    print(f"{M} checkpoint(s), {len(bodies)} bodies, {len(wanted)} tasks x "
-          f"{a.trials} trial(s), {steps} steps")
+    print(f"{M} checkpoint(s), {len(bodies)} bodies, "
+          + (f"{len(want_pairs)} listed clips" if want_pairs is not None
+             else f"{len(wanted)} tasks x {a.trials} trial(s)")
+          + f", {steps} steps")
     for (nm, cfg_i, ck), lab in zip(loaded, names):
         tset, tg = trained_tasks_of(cfg_i)
         tb = list(ck.get("bodies", []))
@@ -308,14 +351,20 @@ def main():
                                     else "MLP (no residual)")
               + f", project={cfg_i.adapter_project_z}, obs_scale={cfg_i.obs_scale}, "
                 f"lambda_z={cfg_i.lambda_z:g}, lambda_bc={getattr(cfg_i,'lambda_bc',0.0):g}")
+        src = Path(a.clip_list).name if a.clip_list else tasks_path.name
         print(f"      trained: task group '{tg}' "
-              f"({sum(t in tset for t in wanted)}/{len(wanted)} of {tasks_path.name}), "
+              f"({sum(t in tset for t in wanted)}/{len(wanted)} tasks of {src}), "
               f"bodies {' '.join(tb) or '?'}")
         print(f"      unseen here: bodies "
               f"{' '.join(b for b in bodies if b not in tb) or 'none'} | tasks "
               f"{' '.join(t for t in wanted if t not in tset) or 'none'}")
-    print(f"  scoring all panels with {score_cfg.lambda_align:g} * L_align + "
-          f"{score_cfg.lambda_phys:g} * L_phys")
+    score_loss = a.score_loss or ("bfm" if getattr(score_cfg, "align_loss", "joint") == "bfm" else "joint")
+    if score_loss == "bfm":
+        print("  scoring all panels with bfm: cost = 1 - mean_t cos(B(s_t), B(g_t))  "
+              "(L_align / L_phys still logged, in joint space)")
+    else:
+        print(f"  scoring all panels with {score_cfg.lambda_align:g} * L_align + "
+              f"{score_cfg.lambda_phys:g} * L_phys")
     print(f"  init: " + ("reference frame 0 (qvel 0)" if a.init_from_reference
                          else "humenv Default standing reset"))
 
@@ -330,6 +379,12 @@ def main():
             alpha=cfg_i.adapter_alpha, alpha_learnable=cfg_i.adapter_alpha_learnable,
             project=getattr(cfg_i, "adapter_project_z", True),
             residual=getattr(cfg_i, "adapter_residual", True),
+            # The geodesic head has one extra output unit, so a checkpoint
+            # trained with it will not even load into the residual form -- the
+            # head has to come from the checkpoint's own cfg, exactly as
+            # project/residual already do.
+            head=getattr(cfg_i, "adapter_head", "residual"),
+            theta_max_deg=getattr(cfg_i, "adapter_theta_max_deg", 60.0),
         ).to(a.device)
         ad.load_state_dict(ck["adapter"])
         ad.eval()
@@ -374,6 +429,12 @@ def main():
         z0_mul = (np.ones(obs_dim, dtype=np.float32) if z0_mul is None
                   else np.asarray(z0_mul, dtype=np.float32))
 
+        env1 = Bg_cache = None
+        if score_loss == "bfm":
+            from model import bfm_align
+            env1, _ = make_humenv(num_envs=1, task=None, xml=str(xml), state_init="Default")
+            Bg_cache = {}
+
         rend = rdata = font = None
         if vdir:
             rdata = mujoco.MjData(fk)
@@ -400,9 +461,26 @@ def main():
             init = None
             if a.init_from_reference:
                 init = [c["qpos_ref"][0] for c in chunk] * (M + 1) + [None] * pad
-            q = rollout(model, env, z_env, steps, a.device, mul, init)
+            if score_loss == "bfm":
+                q, obs_hist = rollout(model, env, z_env, steps, a.device, mul, init, return_obs=True)
+            else:
+                q = rollout(model, env, z_env, steps, a.device, mul, init)
             refs = [c["qpos_ref"] for c in chunk] * (M + 1) + [chunk[0]["qpos_ref"]] * pad
             cost, la, lp = compute_batch_cost(fk, score_cfg, q, refs)
+            if score_loss == "bfm":
+                # B(g) per clip, cached: the reference is the same for every panel
+                # of one clip, so it is embedded once and reused across the M+1 slots.
+                for c in chunk:
+                    key = (c["reward_name"], c["trial"])
+                    if key not in Bg_cache:
+                        Bg_cache[key] = bfm_align.reference_embeddings(
+                            model, env1, c["qpos_ref"], a.device, z0_mul)
+                cost = np.empty(len(refs), dtype=np.float32)
+                for slot in range(len(refs)):
+                    c = chunk[slot % k] if slot < (M + 1) * k else chunk[0]
+                    Bg = Bg_cache[(c["reward_name"], c["trial"])]
+                    cost[slot] = bfm_align.batch_bfm_align(
+                        model, obs_hist[slot:slot + 1], Bg, a.device)[0]
 
             for j, c in enumerate(chunk):
                 z0_slot = M * k + j
@@ -435,6 +513,12 @@ def main():
                         fps=score_cfg.control_fps)
                 if vdir:
                     def cap(name, ck_, lak, lpk):
+                        # the caption must name the objective the cost column IS,
+                        # not the joint-space one it used to always be: a bfm run
+                        # captioned "1*La + 0*Lp" reads as a number it is not
+                        if score_loss == "bfm":
+                            return (f"{name}\n bfm {rec[ck_]:.3f}   "
+                                    f"(La {rec[lak]:.2f}  Lp {rec[lpk]:.2f})")
                         return (f"{name}\n cost {rec[ck_]:.3f} = "
                                 f"{score_cfg.lambda_align:g}*La {rec[lak]:.3f} + "
                                 f"{score_cfg.lambda_phys:g}*Lp {rec[lpk]:.3f}")
@@ -451,6 +535,8 @@ def main():
         if rend is not None:
             rend.close()
         env.close()
+        if env1 is not None:
+            env1.close()
 
     with open(out_dir / "per_clip.csv", "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=list(records[0])); w.writeheader(); w.writerows(records)

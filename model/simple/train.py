@@ -666,6 +666,11 @@ def plot_loss_curve(loss_history, align_history, l_phys_history, out_path, body_
     print(f"wrote training curves -> {out_path}")
 
 
+def _exact_obs(xml, ref_xml):
+    from model.exact_obs import ExactObs
+    return ExactObs(xml, ref_xml)
+
+
 def make_body_ctx(cfg, dataset_dir, label, xml_rel):
     """One body's fixed resources: its vectorized env, a standalone MjModel for
     the L_align/L_phys forward kinematics, and its obs canonicaliser.
@@ -694,8 +699,12 @@ def make_body_ctx(cfg, dataset_dir, label, xml_rel):
         # from the two rest poses and do not change during training.
         "obs_mul": build_obs_multiplier(
             xml, REPO_ROOT / cfg.obs_scale_ref_xml,
-            mode=cfg.obs_scale, parts=cfg.obs_scale_parts, verbose=False,
+            mode="none" if cfg.obs_scale == "exact" else cfg.obs_scale,
+            parts=cfg.obs_scale_parts, verbose=False,
         ),
+        # obs_scale "exact": the actor and B see the adult-equivalent observation of each state
+        # (reverse retargeting, model/exact_obs.py) instead of raw x a fixed multiplier
+        "exact": _exact_obs(xml, REPO_ROOT / cfg.obs_scale_ref_xml) if cfg.obs_scale == "exact" else None,
     }
 
 

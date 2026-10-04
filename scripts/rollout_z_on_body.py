@@ -34,9 +34,9 @@ only control channel and should not be spent re-deriving a unit conversion.
 Usage (from project root):
     uv run scripts/rollout_z_on_body.py \
         --z data/z/move-ego-0-4/move-ego-0-4_0.npy \
-        --xml assets/robot_torque/robot_torque.xml \
+        --xml assets/robots_torque/robots_torque.xml \
         --reference data/retargeting_motion/move-ego-0-4/move-ego-0-4_0.npz \
-        --out outputs/rollout_z_on_body/move-ego-0-4_0_robot_torque_init_sym.mp4 \
+        --out outputs/rollout_z_on_body/move-ego-0-4_0_robots_torque_init_sym.mp4 \
         --init-from-reference
 
     # same rollout, but the actor is shown an adult-sized obs

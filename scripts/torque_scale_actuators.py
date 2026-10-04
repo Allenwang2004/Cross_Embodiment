@@ -110,7 +110,7 @@ static part and a velocity part accordingly.
 
 Usage:
   uv run scripts/torque_scale_actuators.py
-  uv run scripts/torque_scale_actuators.py --out assets/robots/child/robot_torque.xml
+  uv run scripts/torque_scale_actuators.py --out assets/robots/child/robots_torque.xml
   uv run scripts/torque_scale_actuators.py --symmetry none   # per-actuator k
   uv run scripts/torque_scale_actuators.py --joint-dynamics  # + joint dynamics
 """
@@ -132,7 +132,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_CSV = ROOT / "outputs/torque_ratio_per_joint/move-ego-90-2_0_gravity/_ratios.csv"
 DEFAULT_SRC = ROOT / "assets/robots/child/robot.xml"
-DEFAULT_OUT = ROOT / "assets/robots/child/robot_torque.xml"
+DEFAULT_OUT = ROOT / "assets/robots/child/robots_torque.xml"
 
 
 def fmt(x: float) -> str:

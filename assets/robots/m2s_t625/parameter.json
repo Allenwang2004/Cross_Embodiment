@@ -1,0 +1,12 @@
+{
+  "label": "m2s_t625",
+  "scale_actuators": false,
+  "leg_scale": 0.7812,
+  "arm_scale": 0.8,
+  "torso_scale": 1.0,
+  "head_scale": 1.0,
+  "leg_girth": 1.0,
+  "arm_girth": 1.0,
+  "torso_girth": 1.0,
+  "head_girth": 1.0
+}

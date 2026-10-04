@@ -1,0 +1,12 @@
+{
+  "label": "m2g_t875",
+  "scale_actuators": false,
+  "leg_scale": 1.2188,
+  "arm_scale": 1.2188,
+  "torso_scale": 1.175,
+  "head_scale": 1.0438,
+  "leg_girth": 1.1312,
+  "arm_girth": 1.1312,
+  "torso_girth": 1.1312,
+  "head_girth": 1.0438
+}

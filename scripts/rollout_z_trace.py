@@ -26,8 +26,18 @@ Usage (from project root):
 
     uv run scripts/rollout_z_trace.py --trace ... --gens 0,5,10,25,50,100,300,624
 
-Writes <out>/trace.mp4 (the grid) and <out>/trace.csv (each checkpoint's
-L_align / L_phys / distance travelled / upright fraction).
+The first panel is always the retargeting motion itself (the reference the
+search is aligned to), so every checkpoint is read against the target rather
+than against each other. Each panel's caption shows the objective the run
+actually minimised -- L_align for an --objective align run, L_phys for phys,
+their sum for both -- and cos(z, z0), how far that checkpoint's z has drifted
+from the clip's original z. The gen -1 panel is z0 itself, and is labelled so.
+
+Writes <out>/trace_<which>.mp4 (the grid), <out>/trace.csv (each checkpoint's
+L_align / L_phys / objective / cos(z, z0) / distance travelled / upright fraction)
+and <out>/trace_<which>_qpos.npz (the rolled-out qpos of every panel, so other
+scores -- scripts/compare_align_losses.py -- are computed on exactly the
+trajectories in the video rather than on a re-rollout that may land elsewhere).
 """
 
 from __future__ import annotations
@@ -114,7 +124,8 @@ def main():
     p.add_argument("--obs-scale", default=None)
     p.add_argument("--obs-scale-ref", default="assets/robots/adult/robot.xml")
     p.add_argument("--steps", type=int, default=None)
-    p.add_argument("--cols", type=int, default=4)
+    p.add_argument("--cols", type=int, default=3,
+                   help="3 makes the default (reference + 8 checkpoints) a 3x3 grid")
     p.add_argument("--size", type=int, default=320, help="panel pixels")
     p.add_argument("--camera", default="front_side")
     p.add_argument("--fps", type=float, default=30.0)
@@ -142,6 +153,11 @@ def main():
     # of it silently would produce a video of a different experiment.
     clip = args.clip or summary["clip"]
     xml = Path(args.xml) if args.xml else Path(summary["xml"])
+    if not xml.exists() and "assets/robot_torque/" in str(xml):
+        moved = Path(str(xml).replace("assets/robot_torque/", "assets/robots_torque/"))
+        if moved.exists():                     # the directory was renamed after these runs
+            print(f"NOTE: {xml} is gone; using the renamed {moved}")
+            xml = moved
     init_mode = args.init or summary.get("init", "default")
     obs_scale = args.obs_scale or summary.get("obs_scale", "auto")
     steps = args.steps or summary["steps"]
@@ -164,6 +180,17 @@ def main():
     ref = np.load(REPO_ROOT / "data" / args.body / "retargeting_motion"
                   / task / f"{stem}.npz")["qpos"]
 
+    # z0 for the cosine column: the clip's original z, the same file the search
+    # started from. The trace's gen -1 row is z0 too; prefer the source of truth.
+    z0_path = REPO_ROOT / "data" / "origin_z" / task / f"{stem}.npy"
+    z0 = np.load(z0_path).reshape(-1) if z0_path.exists() else zs[0].astype(np.float64)
+    cos_z0 = sel_z @ z0 / (np.linalg.norm(sel_z, axis=1) * np.linalg.norm(z0))
+
+    # the objective this run minimised, named the way the run was launched
+    objective = summary.get("objective", "both")
+    lam_a, lam_p = summary.get("lambda_align", 1.0), summary.get("lambda_phys", 1.0)
+    obj_name = {"align": "L_align", "phys": "L_phys", "bfm": "1-cos(B)"}.get(objective, "sum")
+
     cfg = ESConfig(device=args.device)
     cfg.phys_weights = summary["phys_weights"]
     cfg.phys_fall_ref = summary["phys_fall_ref"]
@@ -185,6 +212,21 @@ def main():
     env.close()
 
     _, aligns, physes = compute_batch_cost(fk, cfg, qpos, [ref] * n)
+    bfm_cost = None
+    if objective == "bfm":
+        # score the panels the way the search scored them: B() on the same
+        # rescaled obs, reference through obs_from_qpos
+        from model import bfm_align
+        env1, _ = make_humenv(num_envs=1, task=None, xml=str(xml), state_init="Default")
+        Bg = bfm_align.reference_embeddings(model, env1, ref, args.device, obs_mul)
+        bfm_cost = [bfm_align.bfm_align_loss(
+            bfm_align.embed(model, bfm_align.obs_from_qpos(env1, qpos[i], obs_mul=obs_mul), args.device), Bg)
+            for i in range(n)]
+        env1.close()
+    np.savez_compressed(out_dir / f"trace_{args.which}_qpos.npz",
+                        gen=sel_gen.astype(np.int32), z=sel_z.astype(np.float32),
+                        qpos=qpos.astype(np.float32), ref=ref.astype(np.float32),
+                        cos_z0=cos_z0.astype(np.float32), xml=str(xml), clip=clip)
 
     rows = []
     for i, g in enumerate(sel_gen):
@@ -193,31 +235,44 @@ def main():
         up = 2.0 * (qy * qz + qw * qx)
         rows.append(dict(gen=int(g), evals=int((g + 1) * 2 * summary["pairs"]),
                          L_align=float(aligns[i]), L_phys=float(physes[i]),
-                         sum=float(aligns[i] + physes[i]),
+                         objective=obj_name,
+                         cost=float(bfm_cost[i]) if bfm_cost is not None
+                              else float(lam_a * aligns[i] + lam_p * physes[i]),
+                         cos_z0=float(cos_z0[i]),
                          travel=float(np.linalg.norm(q[-1, :2] - q[0, :2])),
                          upright_frac=float((up > 0.8).mean())))
     with open(out_dir / "trace.csv", "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0])); w.writeheader(); w.writerows(rows)
-    print(f"{'gen':>6s}{'evals':>8s}{'L_align':>9s}{'L_phys':>9s}{'sum':>8s}"
-          f"{'travel':>9s}{'upright':>9s}")
+    print(f"objective {objective}: cost = {lam_a:g} * L_align + {lam_p:g} * L_phys  ({obj_name})")
+    print(f"{'gen':>6s}{'evals':>8s}{'L_align':>9s}{'L_phys':>9s}{'cost':>9s}"
+          f"{'cos_z0':>8s}{'travel':>9s}{'upright':>9s}")
     for r in rows:
         print(f"{r['gen']:6d}{r['evals']:8d}{r['L_align']:9.4f}{r['L_phys']:9.4f}"
-              f"{r['sum']:8.4f}{r['travel']:9.2f}{100 * r['upright_frac']:8.0f}%")
+              f"{r['cost']:9.4f}{r['cos_z0']:8.3f}{r['travel']:9.2f}{100 * r['upright_frac']:8.0f}%")
 
     # --- kinematic playback of what was just simulated -----------------------
     renderer = mujoco.Renderer(fk, height=args.size, width=args.size)
     data = mujoco.MjData(fk)
-    panels = []
-    for i, g in enumerate(sel_gen):
+
+    def play(q, text, sub, ended=None):
         frames = []
         for t in range(steps):
-            data.qpos[:] = qpos[i, t]
+            data.qpos[:] = q[min(t, len(q) - 1)]      # a shorter reference holds its last frame
             mujoco.mj_forward(fk, data)
             renderer.update_scene(data, camera=args.camera)
-            frames.append(label(renderer.render().copy(),
-                                f"gen {int(g)}  ({rows[i]['evals']} evals)",
-                                f"sum {rows[i]['sum']:.3f}"))
-        panels.append(frames)
+            frames.append(label(renderer.render().copy(), text,
+                                ended if (ended and t >= len(q)) else sub))
+        return frames
+
+    # panel 0: the target itself, so the checkpoints are read against it. The
+    # loss only scores frames both trajectories have (losses._align_length), so
+    # once a shorter reference runs out its panel says so instead of pretending.
+    panels = [play(ref, "retargeting motion", f"reference, {len(ref)} frames  (L_align 0)",
+                   ended=f"reference ended -- L_align scores frames 0-{len(ref) - 1} only")]
+    for i, g in enumerate(sel_gen):
+        head = "origin z  (gen -1)" if g < 0 else f"gen {int(g)}  ({rows[i]['evals']} evals)"
+        panels.append(play(qpos[i], head,
+                           f"{obj_name} {rows[i]['cost']:.3f}   cos(z, z0) {rows[i]['cos_z0']:.3f}"))
     renderer.close()
 
     cols = min(args.cols, len(panels))
@@ -233,7 +288,7 @@ def main():
         grid.append(np.concatenate(band, axis=0))
     out_mp4 = out_dir / f"trace_{args.which}.mp4"
     imageio.mimsave(out_mp4, grid, fps=args.fps)
-    print(f"\n-> {out_mp4}\n-> {out_dir / 'trace.csv'}")
+    print(f"\n-> {out_mp4}\n-> {out_dir / 'trace.csv'}\n-> {out_dir / f'trace_{args.which}_qpos.npz'}")
 
 
 if __name__ == "__main__":

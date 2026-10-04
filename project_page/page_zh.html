@@ -1,0 +1,434 @@
+<title>跨體型,不跨動作</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=Noto+Sans+TC:wght@500;700&family=Noto+Serif+TC:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a single reading column (text 42rem, figures 60rem) in the manner of a
+   paper project page; the simulator's own palette -- sky blue, checker grey,
+   wooden-mannequin tan -- supplies the accents. */
+:root {
+  --bg: #f7f8fa;
+  --surface: #ffffff;
+  --plate: #fcfcfb;
+  --ink: #171a20;
+  --ink-2: #4a505c;
+  --ink-3: #7a8190;
+  --rule: #dde1e8;
+  --sky: #2167a1;          /* accent: MuJoCo sky, deepened */
+  --tan: #b27a43;          /* the mannequin */
+  --body: #2a78d6;         /* "transfers across bodies" */
+  --motion: #d23b3a;       /* "fails across motions" */
+  --ok: #1a8a5a;
+  --warn: #b7791f;
+  --display: "Bricolage Grotesque", "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+  --text: "Newsreader", "Noto Serif TC", "PingFang TC", "Songti TC", serif;
+  --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, "Noto Sans TC", "PingFang TC", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111418; --surface: #181c22; --plate: #f4f5f7; --ink: #e8eaee; --ink-2: #b3b9c5;
+    --ink-3: #858d9c; --rule: #2b313b; --sky: #6aa9dd; --tan: #d5a26d; --body: #5b9ff0;
+    --motion: #f07170; --ok: #45c08a; --warn: #e0a84a; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111418; --surface: #181c22; --plate: #f4f5f7; --ink: #e8eaee; --ink-2: #b3b9c5;
+  --ink-3: #858d9c; --rule: #2b313b; --sky: #6aa9dd; --tan: #d5a26d; --body: #5b9ff0;
+  --motion: #f07170; --ok: #45c08a; --warn: #e0a84a; color-scheme: dark;
+}
+body { background: var(--bg); color: var(--ink); font-family: var(--text); font-size: 1.08rem; line-height: 1.85; }
+.wrap { max-width: 60rem; margin: 0 auto; padding-inline: 1.25rem; padding-block: 3rem 5rem; display: flex; flex-direction: column; gap: 3.25rem; }
+.prose { max-width: 42rem; margin-inline: auto; width: 100%; }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; color: var(--ink); }
+h1 { font-size: clamp(2.1rem, 5.2vw, 3.4rem); font-weight: 700; line-height: 1.2; letter-spacing: 0.02em; }
+h2 { font-size: 1.7rem; font-weight: 700; letter-spacing: -0.01em; }
+h3 { font-size: 1.18rem; font-weight: 500; }
+p { margin: 0; }
+a { color: var(--sky); text-underline-offset: 3px; }
+a:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid var(--sky); outline-offset: 3px; border-radius: 4px; }
+.eyebrow { font-family: var(--mono); font-size: .74rem; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+code, .m { font-family: var(--mono); font-size: .88em; }
+
+/* header */
+header { text-align: center; display: flex; flex-direction: column; gap: 1.1rem; align-items: center; }
+.sub { font-family: var(--text); font-style: normal; font-size: 1.25rem; color: var(--ink-2); max-width: 40rem; }
+.authors { font-family: var(--display); font-size: 1.05rem; color: var(--ink); }
+.affil { font-size: .98rem; color: var(--ink-3); }
+.links { display: flex; flex-wrap: wrap; gap: .6rem; justify-content: center; }
+.btn { font-family: var(--display); font-size: .95rem; font-weight: 500; text-decoration: none; color: var(--bg); background: var(--ink); padding: .5rem 1.05rem; border-radius: 999px; }
+.btn.ghost { background: transparent; color: var(--ink-3); border: 1px solid var(--rule); cursor: default; }
+
+/* media */
+figure { margin: 0; display: flex; flex-direction: column; gap: .7rem; }
+.plate { background: var(--plate); border: 1px solid var(--rule); border-radius: 10px; padding: .6rem; overflow: hidden; }
+.plate img, .plate video { display: block; width: 100%; height: auto; max-width: 100%; border-radius: 4px; }
+figcaption { font-size: .98rem; color: var(--ink-2); padding-inline: calc(.6rem + 1px); }
+figcaption b { color: var(--ink); font-weight: 500; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; }
+.pair > * { min-width: 0; }
+
+/* at-a-glance */
+.glance { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px; background: var(--rule); border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; }
+.glance > div { background: var(--surface); padding: 1.1rem 1rem 1.2rem; display: flex; flex-direction: column; gap: .35rem; min-width: 0; }
+.glance .v { font-family: var(--mono); font-size: 1.9rem; font-weight: 500; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.glance .l { font-size: .92rem; color: var(--ink-2); line-height: 1.4; }
+.v.bad { color: var(--motion); } .v.good { color: var(--body); } .v.tan { color: var(--tan); }
+
+/* beta strip: the eight body parameters */
+.beta { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; }
+.beta > div { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: .5rem .4rem; text-align: center; min-width: 0; }
+.beta .k { font-family: var(--mono); font-size: .72rem; color: var(--ink-3); }
+.beta .n { font-family: var(--display); font-size: .86rem; line-height: 1.2; }
+.beta .hot { border-color: var(--tan); box-shadow: inset 0 -3px 0 var(--tan); }
+
+/* claims */
+.claims { display: flex; flex-direction: column; gap: 0; border-top: 1px solid var(--rule); }
+.claim { display: grid; grid-template-columns: 3.2rem 1fr 6.5rem; gap: 1rem; padding: .9rem 0; border-bottom: 1px solid var(--rule); align-items: baseline; }
+.claim > * { min-width: 0; }
+.claim .id { font-family: var(--mono); color: var(--ink-3); font-size: .9rem; }
+.claim .t { font-size: 1.02rem; }
+.claim .t small { display: block; font-family: var(--mono); font-size: .8rem; color: var(--ink-3); margin-top: .2rem; }
+.pill { font-family: var(--mono); font-size: .72rem; letter-spacing: .06em; text-transform: uppercase; padding: .18rem .5rem; border-radius: 999px; justify-self: end; white-space: nowrap; border: 1px solid currentColor; }
+.pill.ok { color: var(--ok); } .pill.weak { color: var(--warn); }
+
+/* tables */
+.tbl { overflow-x: auto; border: 1px solid var(--rule); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: .95rem; }
+th, td { padding: .55rem .8rem; text-align: right; border-bottom: 1px solid var(--rule); font-variant-numeric: tabular-nums; }
+th:first-child, td:first-child { text-align: left; }
+thead th { font-family: var(--display); font-weight: 500; color: var(--ink-2); font-size: .88rem; }
+tbody tr:last-child td { border-bottom: 0; }
+td.hi { color: var(--body); font-weight: 500; }
+td.lo { color: var(--motion); }
+
+/* equations / setup */
+.eq { font-family: var(--mono); font-size: .95rem; background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; padding: .8rem 1rem; overflow-x: auto; white-space: nowrap; color: var(--ink); }
+
+/* journey timeline */
+.journey { display: flex; flex-direction: column; border-left: 2px solid var(--rule); margin-left: .4rem; }
+.step { position: relative; padding: 0 0 1.6rem 1.5rem; display: grid; grid-template-columns: 1fr 13rem; gap: 1.1rem; }
+.step > * { min-width: 0; }
+.step::before { content: ""; position: absolute; left: -.45rem; top: .45rem; width: .8rem; height: .8rem; border-radius: 50%; background: var(--bg); border: 2px solid var(--ink-3); }
+.step.turn::before { border-color: var(--body); background: var(--body); }
+.step .when { font-family: var(--mono); font-size: .78rem; color: var(--ink-3); letter-spacing: .04em; }
+.step h3 { margin-block: .15rem .35rem; }
+.step p { font-size: 1rem; color: var(--ink-2); }
+.step .why { color: var(--ink); }
+.step .thumb { background: var(--plate); border: 1px solid var(--rule); border-radius: 6px; padding: 4px; align-self: start; }
+.step .thumb img { display: block; width: 100%; border-radius: 3px; }
+.verdict { font-family: var(--mono); font-size: .8rem; margin-top: .45rem; }
+.verdict.x { color: var(--motion); } .verdict.y { color: var(--ok); }
+
+.note { font-size: 1rem; color: var(--ink-2); border-left: 3px solid var(--tan); padding: .2rem 0 .2rem 1rem; }
+ol.todo { margin: 0; padding-left: 1.3rem; display: flex; flex-direction: column; gap: .7rem; }
+ol.todo li::marker { font-family: var(--mono); color: var(--ink-3); }
+ol.todo b { font-family: var(--display); font-weight: 500; }
+footer { text-align: center; font-size: .9rem; color: var(--ink-3); }
+section { display: flex; flex-direction: column; gap: 1.3rem; }
+.sechead { display: flex; flex-direction: column; gap: .35rem; }
+
+@media (max-width: 720px) {
+  .glance { grid-template-columns: 1fr 1fr; }
+  .pair { grid-template-columns: 1fr; }
+  .beta { grid-template-columns: repeat(4, 1fr); }
+  .step { grid-template-columns: 1fr; }
+  .claim { grid-template-columns: 2.4rem 1fr; }
+  .claim .pill { grid-column: 2; justify-self: start; }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+.lang { font-family: var(--display); font-size: .9rem; }
+.lang a { color: var(--ink-3); }
+</style>
+<div class="wrap">
+
+<header>
+  <!--LANG-->
+  <div class="eyebrow">凍結的行為基礎模型 · 人形機器人 · 8 維體型參數</div>
+  <h1>跨體型,不跨動作</h1>
+  <p class="sub">凍結的行為基礎模型做跨體型適應時,latent 的修正在哪裡可以共享、在哪裡不行</p>
+  <div class="authors">作者姓名</div>
+  <div class="affil">單位 · 2026</div>
+  <div class="links">
+    <a class="btn" href="https://github.com/Allenwang2004/Cross_Enbodiment">程式碼</a>
+    <a class="btn" href="https://github.com/Allenwang2004/Cross_Enbodiment/blob/main/docs/research_journey.md">完整報告</a>
+    <span class="btn ghost">論文 · 準備中</span>
+  </div>
+</header>
+
+<figure>
+  <div class="plate"><video src="static/videos/v1_problem.mp4" autoplay muted loop playsinline controls></video></div>
+  <figcaption><b>問題本身。</b>同一個 latent <span class="m">z0</span>,兩個身體。在成人身上模型能正常走路(bfm cost 0.305);換成小孩比例的身體,同一個 latent 直接跌倒(0.966)。模型只在成人身上訓練過,而我們唯一能改的就是這個 latent。</figcaption>
+</figure>
+
+<section class="prose">
+  <div class="sechead"><div class="eyebrow">摘要</div><h2>一句話版本</h2></div>
+  <p>Meta Motivo 用一個 256 維的 latent <span class="m">z</span> 控制人形機器人。身體比例一改變,在成人身上推論出的 latent 就失效了。我們原本想學一個「身體參數 → latent」的映射,結果發現答案取決於要沿哪個軸共享。</p>
+  <p>針對某個<em>動作</em>修正好的 latent,拿到其他動作上完全沒用:不同動作需要的修正方向互相垂直,這也是所有「以動作為條件的 adapter」都卡住的原因。背後的原因是最佳 latent 不唯一:同一個身體、同一個動作,從同一個起點搜尋 20 次,成本幾乎一樣,解卻彼此相差 58–79°。沒有一致的目標可以學,用 rollout 回饋訓練的 adapter 最後只會對所有動作套用同一個修正。但針對某個<em>身體</em>修正好的 latent,可以轉移到體型相近的身體,效果隨體型距離平滑衰減。沿著體型參數追蹤 latent,會得到一條有序、可以內插的軌跡;而逐一改變 8 個體型參數的對照實驗顯示,敏感度集中在四肢長度。</p>
+</section>
+
+<section>
+  <div class="sechead prose"><div class="eyebrow">結果一覽</div></div>
+  <div class="glance">
+    <div><span class="v good">0.52–0.66×</span><span class="l">新身體直接借用相鄰已解身體的 latent、不做任何搜尋時的成本(‖Δβ‖ ≈ 0.06–0.09)</span></div>
+    <div><span class="v good">72–86%</span><span class="l">新身體不做搜尋,只用前後兩個已解身體的 latent 內插,就拿回自己搜尋可得改善的比例</span></div>
+  </div>
+  <p class="prose" style="font-size:.95rem;color:var(--ink-2)">所有成本都寫成 <span class="m">cost / 同一動作、同一身體上 z0 的 cost</span>:1.0 代表跟什麼都不調一樣,越低越好。</p>
+</section>
+
+<section class="prose">
+  <div class="sechead"><div class="eyebrow">實驗設定</div><h2>一個凍結的策略、一個 latent、一個身體</h2></div>
+  <p>策略是 Meta Motivo M-1(FB-CPR),全程凍結。它的 latent 在一個球面上,256 維、<span class="m">‖z‖ = 16</span>。身體用 8 個縮放係數描述,成人全部等於 1。</p>
+  <div class="beta" aria-label="體型參數">
+    <div class="hot"><div class="k">β₁</div><div class="n">腿長</div></div>
+    <div class="hot"><div class="k">β₂</div><div class="n">手長</div></div>
+    <div><div class="k">β₃</div><div class="n">軀幹長</div></div>
+    <div><div class="k">β₄</div><div class="n">頭部大小</div></div>
+    <div><div class="k">β₅</div><div class="n">腿粗</div></div>
+    <div><div class="k">β₆</div><div class="n">手粗</div></div>
+    <div><div class="k">β₇</div><div class="n">軀幹粗</div></div>
+    <div><div class="k">β₈</div><div class="n">頭部粗細</div></div>
+  </div>
+  <p>每個身體都有依自身力矩需求校準的致動器;每次 rollout 都拿該身體的重定向參考動作,用模型自己的追蹤成本評分:</p>
+  <div class="eq">cost(z) = 1 − mean<sub>t</sub> cos( B(s<sub>t</sub>), B(g<sub>t</sub>) )</div>
+  <p>為了研究最佳 latent 如何隨身體變化,我們建立<b>形體路徑</b>:在參數空間裡從成人內插到目標身體,每個中間身體都用同一套流程產生,所以唯一改變的只有 β。</p>
+  <div class="eq">β(t) = (1 − t)·1 + t·β<sub>target</sub>,&nbsp;&nbsp; t = 0, ⅛, …, 1</div>
+  <p>每個身體上用兩種方式找 latent。<b>獨立搜尋</b>每次都從 <span class="m">z0</span> 出發;<b>連續追蹤</b>讓第 <i>k</i> 個身體從第 <i>k − 1</i> 個身體找到的解出發。我們做了四條路徑(整體縮小、只縮四肢、整體放大、變粗),以及 16 條一次只改一個參數的軸向路徑,身體庫共 100 個身體。</p>
+</section>
+
+<section>
+  <div class="sechead prose"><div class="eyebrow">關鍵觀察</div><h2>最佳 latent 不只一個</h2></div>
+  <figure>
+    <div class="plate"><img src="static/images/f14_nonunique.png" alt="同一個問題搜尋 20 次:成本相同,解彼此相差 58 到 79 度"></div>
+    <figcaption><b>同一個問題,搜尋 20 次。</b>同一個小孩身體、同一個動作、同一個起點 <span class="m">z0</span>、同樣的預算(4,992 次 rollout),只有亂數種子不同。每一次都降到幾乎一樣的成本(走路 0.255–0.271× <span class="m">z0</span>,旋轉 0.27–0.33×),但解之間相差 58–79°,各自離開 <span class="m">z0</span> 的方向也幾乎不相關(cos 平均 +0.18)。如果最佳 latent 只有一個,右圖應該集中在 0° 附近。</figcaption>
+  </figure>
+  <figure>
+    <div class="plate"><video src="static/videos/v4_nonunique_walk.mp4" autoplay muted loop playsinline controls></video></div>
+    <figcaption><b>不同的解,做出幾乎一樣的動作(走路)。</b>左邊是重定向到小孩身體的參考動作,右邊 4 格是 20 次搜尋中彼此相差最遠的 4 個解。它們在 latent 空間兩兩相差 69–75°,成本都在 0.236–0.245 之間;實際動作的關節角彼此平均只差 4.1°,比它們跟參考動作的差距(5.6°)還小,而 z0 跟參考動作差 15.8°。不過它們的朝向和走的路線並不相同(平均朝向偏 7°–34°,終點相差最多 8 公尺):bfm cost 用的觀測值以機器人自己的朝向為座標、也不含水平位置,所以看不到這兩件事。下一段影片只看朝向和路線也正確的解。</figcaption>
+  </figure>
+  <figure>
+    <div class="plate"><video src="static/videos/v5_nonunique_samepath.mp4" autoplay muted loop playsinline controls></video></div>
+    <figcaption><b>朝向和路線也一致時,解仍然不唯一。</b>在 cost 加上朝向與位置誤差後,分數最好的 3 個解:姿勢(bfm 0.234–0.239)、朝向(平均偏 6–7°)、終點位置(0.17–0.73 m)都跟參考相近,總分只差 0.017;但它們在 latent 空間兩兩相差 60–68°。</figcaption>
+  </figure>
+  <figure>
+    <div class="plate"><video src="static/videos/v6_stage1_same_seeds.mp4" autoplay muted loop playsinline controls></video></div>
+    <figcaption><b>同樣 4 個種子,第一階段(只用 bfm)。</b>姿勢都好(bfm 0.231–0.245),但 B、C、D 的朝向平均偏 43–61°,終點離參考 10–13 公尺;只有 A 的路線正確(偏 7°,終點差 0.72 m)。</figcaption>
+  </figure>
+  <figure>
+    <div class="plate"><video src="static/videos/v6_nonunique_align.mp4" autoplay muted loop playsinline controls></video></div>
+    <figcaption><b>第二階段改用 L_align 之後。</b>從上面 4 個解出發,改用逐幀比對關節角度、手腳位置和根部朝向的 L_align,再搜尋 2,048 次。每個解只移動約 17–19°,朝向就都修正到 6–7°,終點離參考 0.17–1.29 m,L_align 0.052–0.068。但 4 個解彼此仍相差 71–76°(第一階段時是 68–73°),做出的動作關節角只差 4.7°。看全部 20 個種子也一樣:L_align 中位數 0.056,latent 兩兩相差中位數 68°。</figcaption>
+  </figure>
+  <figure>
+    <div class="plate"><video src="static/videos/v4_nonunique_rotate.mp4" autoplay muted loop playsinline controls></video></div>
+    <figcaption><b>同樣的現象(旋轉)。</b>4 個解兩兩相差 72–74°,成本 0.095–0.104;關節角彼此平均差 4.3°,跟參考動作差 4.6°。</figcaption>
+  </figure>
+  <figure>
+    <div class="plate"><img src="static/images/f17_lowdim.png" alt="好解的分布集中在少數方向,沿這些方向能走得比隨機方向遠"></div>
+    <figcaption><b>這些好解集中在一個低維區域。</b>同一個小孩身體上,走路和旋轉各收集約 2,000 個成本都在底部的 latent(取自 20 次搜尋的 ES 軌跡)。左:對這些 latent 在它們的中心做主成分分析,前 24–28 個方向就佔了 80% 的分布、前 55–65 個佔 95%;如果平均散在 255 個方向,會是虛線。右:從中心沿各組主方向往外走,成本維持在底部的最大角度。前 32 個方向可以走約 50°,排在 100 名之後的方向只能走約 20°,比隨機方向(25°)還短。所以好解不是一顆球,而是在幾十個方向上延伸很遠、其他方向都很窄的一片區域。</figcaption>
+  </figure>
+  <div class="prose" style="display:flex;flex-direction:column;gap:1rem">
+    <p>對一個固定的身體和動作,好的 latent 是一整片區域,不是一個點;而且這片區域是低維的,主要沿著幾十個方向延伸(上圖)。這一點直接解釋了兩種直覺的學法為什麼會失敗:</p>
+    <ol class="todo">
+      <li><b>沒有可以監督的目標。</b>搜尋最後停在區域裡的哪一點,取決於亂數種子,所以每個動作的「答案」是任意的。40 個倒立動作各自搜尋出的答案互相垂直(cos 平均 +0.003);拿 <span class="m">z0</span> 最接近的動作的答案來猜,不比隨便挑一個好;用監督式學習擬合這些答案,訓練過的動作完全記住,沒看過的動作卻比不修正還差(cos +0.808 對 +0.851)。</li>
+      <li><b>改用 rollout 回饋訓練,所有動作被往同一個方向修正。</b>沒有明確的目標,adapter 只能靠 rollout 的回饋學:單純用 ES,或 ES 加上「記住每個動作目前最好的 latent」。每一種做法最後都對所有動作套用同一個修正:純 ES 的兩兩 cos 是 +0.97,加上最佳解記憶是 +0.84 到 +0.97;用多頭時,每個頭各自學成一個方向(+0.98)。這個共同方向在初始化時就已經存在(+0.94),訓練也沒有把它拆開。最佳解記憶是在 adapter 自己的輸出附近抽樣,記下來的目標也帶著同一個方向(+0.6 到 +0.7,獨立搜尋的目標是 +0.003)。學到的修正跟每個動作真正需要的方向互相垂直(+0.014)。</li>
+    </ol>
+  </div>
+  <figure>
+    <div class="plate"><img src="static/images/f06_cross_clip_transfer.png" alt="10×10 倒立 trial 互相借用 latent 的熱圖"></div>
+    <figcaption><b>補充 1:沒有一個 latent 能同時給多個動作用。</b>10 個倒立 trial,把某個 trial 搜尋到的整個 latent 拿給另一個 trial 用。對角線(自己的解)0.45,非對角線中位數 1.99,90 組裡只有 21 組比 <span class="m">z0</span> 好。要挑一個 latent 同時給這 10 個 trial 用,最好的選擇就是 <span class="m">z0</span> 本身。</figcaption>
+  </figure>
+  <figure>
+    <div class="plate"><img src="static/images/f05_target_structure.png" alt="修正方向兩兩之間的 cos"></div>
+    <figcaption><b>補充 2:目標互相垂直,adapter 卻只學到一個方向。</b>40 個倒立 trial 各自搜尋出的修正方向互相垂直(兩兩 cos 平均 +0.003)。在這些 trial 上訓練的 adapter,對每個 trial 的修正方向卻幾乎一樣(+0.973),而且跟每個 trial 真正需要的方向垂直(+0.014)。</figcaption>
+  </figure>
+  <div class="prose">
+    <p>解不唯一也說明了身體軸為什麼不一樣。連續追蹤會選定區域中的一條分支一路跟下去,所以相鄰身體的解彼此一致,可以共享、也可以內插(發現一到三)。</p>
+  </div>
+</section>
+
+<section>
+  <div class="sechead prose"><div class="eyebrow">發現一</div><h2>修正量能搬到相近的身體,搬不到其他動作</h2></div>
+  <div class="prose"><p>把在某個身體或動作上找到的修正量(從 <span class="m">z0</span> 走到最佳解的那一步),沿球面搬到新目標自己的 <span class="m">z0</span> 上,用同樣的角度走過去。對照組走同樣的角度、但方向隨機:如果修正量本身不帶資訊,兩者應該一樣好。</p></div>
+  <figure>
+    <div class="plate"><img src="static/images/f16_correction_transfer.png" alt="修正量搬到相鄰身體、其他倒立 trial、不同類別動作,與同角度隨機方向的比較"></div>
+    <figcaption><b>修正量搬到新身體 vs 新動作。</b>彩色點是搬過去的修正量,灰色點是同角度的隨機方向,黑線是中位數。搬到相鄰身體(4 條路徑、8 個動作、前後兩個方向,共 512 組)成本降到 0.61,隨機方向是 1.15,512 組中有 461 組修正量較好。在小孩身體上把修正量搬到同一個倒立任務的其他 trial(10 個 trial 兩兩互搬,1.19 對 1.22),或搬到不同類別的動作(8 個動作兩兩互搬,1.03 對 1.07),都跟隨機方向沒有差別。</figcaption>
+  </figure>
+  <figure>
+    <div class="plate"><img src="static/images/f11_transfer_body.png" alt="四條路徑上,把一個身體的 latent 用在其他身體的成本隨形體距離的變化"></div>
+    <figcaption><b>修正量隨身體距離衰減。</b>把某個身體的解直接用在同一條路徑的其他身體上。同一個動作在每個身體上的 <span class="m">z0</span> 都一樣,所以這就等於把修正量整個搬過去。四條路徑都一樣:相鄰一步 0.52–0.66,隨 ‖Δβ‖ 平滑上升,最遠回到約 1.0,跟不調一樣,不會變得更差。</figcaption>
+  </figure>
+</section>
+
+<section>
+  <div class="sechead prose"><div class="eyebrow">發現二</div><h2>連續追蹤揭露一條有序、可內插的軌跡</h2></div>
+  <figure>
+    <div class="plate"><img src="static/images/f10_trajectories_m2c.png" alt="成人到小孩路徑上 8 個動作的 latent 軌跡"></div>
+    <figcaption><b>兩種方法怎麼找解(大人 → 小孩路徑,8 個動作)。</b>方塊與虛線是<b>獨立搜尋</b>:每個身體都從 <span class="m">z0</span>(紅星)出發各自搜尋。圓點與實線是<b>連續追蹤</b>:第 k 個身體從第 k − 1 個身體的解出發。顏色是身體在路徑上的位置(深紫 = 大人,黃 = 小孩)。連續追蹤依身體順序往外走成一條線;獨立搜尋的解沒有順序。這張圖是把 256 維投影到兩個主方向上:獨立搜尋的解彼此的差異大多落在其他維度,所以在這裡看起來擠在一起,實際距離見下一張圖。</figcaption>
+  </figure>
+  <figure>
+    <div class="plate"><img src="static/images/f15_path_angles.png" alt="兩個身體的最佳 latent 之間的角度,連續追蹤與獨立搜尋"></div>
+    <figcaption><b>兩個身體的最佳 latent 相差多少度(256 維)。</b>左、中:大人 → 小孩路徑上任兩個身體的解之間的角度,8 個動作平均,對角線旁的數字是相鄰兩個身體。連續追蹤的相鄰解只差 15–25°,隔得越遠差越多,排成一條有順序的路徑;獨立搜尋不論隔多遠都差約 30°,彼此沒有順序。右:四條路徑都是這樣,連續追蹤相隔一步只差 12–20°,之後隨距離穩定增加;獨立搜尋從第一步就差 23–32°,之後幾乎不變。</figcaption>
+  </figure>
+  <div class="prose" style="display:flex;flex-direction:column;gap:1rem">
+    <p>把路徑上某個身體拿掉,只用它兩側鄰居的 latent 做球面內插來預測,完全不在這個身體上搜尋:</p>
+    <div class="tbl"><table>
+      <thead><tr><th>bfm cost / z0</th><th>整體縮小</th><th>只縮四肢</th><th>整體放大</th><th>變粗</th></tr></thead>
+      <tbody>
+        <tr><td>連續追蹤:在該身體上搜尋(上限)</td><td>0.497</td><td>0.453</td><td>0.409</td><td>0.347</td></tr>
+        <tr><td>連續追蹤:鄰居內插</td><td class="hi">0.596</td><td class="hi">0.559</td><td class="hi">0.489</td><td class="hi">0.528</td></tr>
+        <tr><td>連續追蹤:直接用最近鄰</td><td>0.673</td><td>0.659</td><td>0.552</td><td>0.603</td></tr>
+        <tr><td>獨立搜尋:在該身體上搜尋(上限)</td><td>0.554</td><td>0.588</td><td>0.422</td><td>0.598</td></tr>
+        <tr><td>獨立搜尋:鄰居內插</td><td>0.690</td><td>0.683</td><td>0.618</td><td>0.756</td></tr>
+      </tbody>
+    </table></div>
+    <p>用連續追蹤的解內插,拿回該身體自己搜尋可得改善的 72–86%,並在 56 組中有 33–44 組勝過直接用最近鄰。獨立搜尋的解也能內插,但拿回的比例較低(61–77%)。差別就在上圖:連續追蹤的相鄰解只差 12–20°,中點仍落在同一條路徑上;獨立搜尋的相鄰解差 23–32°,中點落在兩個不相關的點之間。</p>
+  </div>
+</section>
+
+<section>
+  <div class="sechead prose"><div class="eyebrow">發現三</div><h2>相近的身體是好的起點</h2></div>
+  <figure>
+    <div class="plate"><video src="static/videos/v2_adapted.mp4" autoplay muted loop playsinline controls></video></div>
+    <figcaption><b>適應到小孩身體</b>(絕對 bfm cost)。<span class="m">z0</span> 跌倒(0.966);從 <span class="m">z0</span> 搜 512 次能站著但姿勢蹲低(0.751);從 <span class="m">z0</span> 搜 4,608 次(0.240)與連續追蹤(0.275)都能跟上參考動作。連續追蹤:沿大人 → 小孩路徑上的 9 個身體依序搜尋,每個身體 512 次,都從前一個身體的解出發,總共 4,608 次;影片是最後一個(小孩)身體的結果。「從 <span class="m">z0</span> 搜 4,608 次」是跟它總預算相同的對照組。</figcaption>
+  </figure>
+  <div class="prose" style="display:flex;flex-direction:column;gap:1rem">
+    <p>在每條路徑最遠端的身體上,從相鄰身體的解出發,16–32 次 rollout 就把成本降到 <span class="m">z0</span> 的一半;從 <span class="m">z0</span> 出發要 128–256 次,差 4–16 倍。前提是相鄰身體的解已經算好:這裡只計最後一個身體上的搜尋,不含前面身體花掉的次數。</p>
+    <p class="note">連續追蹤<b>不是</b>更好的最佳化器。給同樣的總預算,一次從 <span class="m">z0</span> 出發的長搜尋能達到一樣的品質(中位數 0.287 對 0.332;8 個動作中連續追蹤只贏 1 個)。從 <span class="m">z0</span> 出發不會被困住,只是很慢,因為遠端身體的目標 latent 離 <span class="m">z0</span> 很遠。相近的身體換來的是一段短的路程。</p>
+  </div>
+  <figure>
+    <div class="plate"><img src="static/images/f09_continuation_m2c.png" alt="成人到小孩路徑上連續追蹤與獨立搜尋的比較"></div>
+    <figcaption><b>成人 → 小孩路徑。</b>樸素轉移在 t ≈ 0.5 之前都撐得住,之後退化到 2.14 倍。從鄰居的解出發,9 個身體中有 8 個只要 16 次 rollout 就達到 0.5× <span class="m">z0</span>;從 <span class="m">z0</span> 出發要 16–304 次。</figcaption>
+  </figure>
+</section>
+
+<section>
+  <div class="sechead prose"><div class="eyebrow">發現四</div><h2>關鍵在四肢長度</h2></div>
+  <figure>
+    <div class="plate"><img src="static/images/f12_sensitivity.png" alt="逐維敏感度長條圖"></div>
+    <figcaption><b>一次只改一個參數</b>,每個參數都走到 19 個真實身體設計中出現過的最小值與最大值。腿長縮到 0.5 倍,<span class="m">z0</span> 的成本變成 2.72 倍;手長縮到 0.55 倍,1.68 倍。軀幹、頭、粗細都在 0.97–1.07 倍之間(腿變細為 1.29 倍)。縮小的傷害遠大於放大。</figcaption>
+  </figure>
+  <div class="pair">
+    <figure>
+      <div class="plate"><video src="static/videos/v3_leg05_rotate.mp4" autoplay muted loop playsinline controls></video></div>
+      <figcaption><b>腿長 0.5 倍,旋轉動作。</b><span class="m">z0</span> 跌倒(0.774);連續追蹤的 latent 能站穩並完成轉身(0.266)。</figcaption>
+    </figure>
+    <figure>
+      <div class="plate"><video src="static/videos/v3_leg05_crawl.mp4" autoplay muted loop playsinline controls></video></div>
+      <figcaption><b>腿長 0.5 倍,爬行:失敗案例。</b>搜尋後成本仍是 <span class="m">z0</span> 的 0.804。縮短腿是最難的方向。</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section>
+  <div class="sechead prose"><div class="eyebrow">限制</div><h2>任意新身體還沒有解決</h2></div>
+  <figure>
+    <div class="plate"><img src="static/images/f13_real_bodies.png" alt="暖啟動與冷啟動的最終成本比,以及零搜尋成本,對應到最近庫身體的距離"></div>
+    <figcaption><b>15 個真實身體設計,都不在任何路徑上。</b>每一列是一個身體,依它和 100 個身體的庫中最近身體的 β 距離 d 排序,橫線以上是近處(d ≤ 0.2)。點是個別 clip,黑色短線是中位數。左:兩種起點各搜 1,024 次後,暖啟動(從最近庫身體的解出發)的最終成本 ÷ 冷啟動(從 <span class="m">z0</span> 出發)的最終成本,小於 1 代表暖啟動較好;右:直接使用最近庫身體的 latent、不做搜尋時的成本。</figcaption>
+  </figure>
+  <div class="prose" style="display:flex;flex-direction:column;gap:1rem">
+    <p><b>身體庫</b>是一組已經算好解的身體:每個庫身體在 8 個 clip 上都已經用連續追蹤搜出 latent。遇到新身體時,可以借 β 最接近的庫身體的解來當搜尋起點(暖啟動),或用整個庫直接預測新身體的 latent。兩種預測都是在修正量上做:<b>核迴歸</b>把庫裡身體的修正量依 β 距離加權平均;<b>線性模型</b>假設修正量隨 β 線性變化,用庫裡的身體擬合。算出修正量後,都從新身體的 <span class="m">z0</span> 走出去(同一個動作在每個身體上的 <span class="m">z0</span> 都相同)。我們比較兩個大小不同的庫:</p>
+    <ul style="margin:0;padding-left:1.3rem;display:flex;flex-direction:column;gap:.5rem">
+      <li><b>36 個身體的庫</b>:4 條從大人出發的路徑(→ 小孩、→ 短四肢、→ 巨人、→ 矮壯),每條 9 個身體。4 條路徑的起點是同一個大人。</li>
+      <li><b>100 個身體的庫</b>:上面的 36 個,再加 16 條單軸路徑(8 個身體參數各往變小、變大兩個方向走,每條 4 個身體,共 64 個)。</li>
+    </ul>
+    <div class="tbl"><table>
+      <thead><tr><th>保留的真實身體</th><th>36 個身體的庫<br>(4 條路徑)</th><th>100 個身體的庫<br>(再加 16 條單軸路徑)</th></tr></thead>
+      <tbody>
+        <tr><td>零搜尋拿回的收益,核迴歸</td><td>15%</td><td>21%</td></tr>
+        <tr><td>零搜尋拿回的收益,線性模型,近處(‖Δβ‖ ≤ 0.2)</td><td>4%</td><td>33%</td></tr>
+        <tr><td>暖啟動搜 1,024 次後比冷啟動好的比例,近 / 遠</td><td>71% / 44%</td><td>70% / 46%</td></tr>
+      </tbody>
+    </table></div>
+    <p>每個動作分開處理:預測或暖啟動都只用庫裡<b>同一個動作</b>在其他身體上的解。冷啟動從 <span class="m">z0</span> 搜、暖啟動從最近庫身體的解搜,兩者都搜 1,024 次;50% 代表沒有差別。</p>
+    <p>真實身體通常同時改變好幾個參數,單軸路徑在歐氏 β 距離上靠不近它們。發現四指出了解法:只在兩個四肢長度維度上做密集覆蓋,而不是八個維度全部擴充。</p>
+  </div>
+</section>
+
+<section>
+  <div class="sechead prose"><div class="eyebrow">論點總表</div><h2>證據支持到哪裡</h2></div>
+  <div class="claims prose">
+    <div class="claim"><span class="id">C0</span><span class="t">固定身體與動作時,最佳 latent 不唯一,因此沒有可以監督的目標;用 rollout 回饋訓練的 adapter 會對所有動作套用同一個修正。<small>搜尋 20 次:成本相同、相差 58–79° · adapter 兩兩 cos +0.84 到 +0.97</small></span><span class="pill ok">成立</span></div>
+    <div class="claim"><span class="id">C1</span><span class="t">樸素轉移隨形體距離退化,模型自己對重定向動作的推論也救不回來。<small>小孩 2.14× · 重定向推論 1.10× z0</small></span><span class="pill ok">成立</span></div>
+    <div class="claim"><span class="id">C2</span><span class="t">latent 搜尋能回收效能,成本取決於解離 z0 多遠。<small>倒立 16 次 · 走路 936 次到 0.5×</small></span><span class="pill ok">成立</span></div>
+    <div class="claim"><span class="id">C3</span><span class="t">latent 的修正不能跨動作轉移。<small>搬到其他倒立 trial 1.19、不同類別 1.03 · 同角度隨機方向 1.22 / 1.07</small></span><span class="pill ok">成立</span></div>
+    <div class="claim"><span class="id">C4</span><span class="t">latent 的修正可以跨身體轉移,且隨距離平滑衰減。<small>相鄰身體 0.61(同角度隨機方向 1.15)· 最遠端 ≈ 1.0 · 4 條路徑</small></span><span class="pill ok">成立</span></div>
+    <div class="claim"><span class="id">C5</span><span class="t">連續追蹤揭露一條由身體參數化的有序 latent 軌跡。<small>8/8 個動作 · 第一主成分 55% 對 27%</small></span><span class="pill ok">成立</span></div>
+    <div class="claim"><span class="id">C6</span><span class="t">沿路徑 latent 可以內插,且連續追蹤的解最好內插。<small>零搜尋拿回 72–86% 收益</small></span><span class="pill ok">成立</span></div>
+    <div class="claim"><span class="id">C7</span><span class="t">用身體參數預測任意新身體的 latent。<small>拿回 21–33% 收益 · 近處暖啟動 70% 較好</small></span><span class="pill weak">偏弱</span></div>
+    <div class="claim"><span class="id">C8</span><span class="t">敏感度集中在四肢長度,縮小比放大傷。<small>腿 0.5× → 2.72× · 其他 ≤ 1.07×</small></span><span class="pill ok">成立</span></div>
+  </div>
+</section>
+
+<section class="prose">
+  <div class="sechead"><div class="eyebrow">研究歷程</div><h2>塑造這個問題的那些死路</h2></div>
+  <p>這個研究一開始的目標是「學一個 adapter <span class="m">z = G(β, z0)</span>,服務所有身體和動作」。下面每一步都是當時合理的下一步,而每次失敗都把問題縮得更精確。</p>
+  <div class="journey">
+    <div class="step">
+      <div><div class="when">9 月 21 日以前</div><h3>一個 adapter 服務所有身體</h3>
+      <p class="why">在 (β, z0) 上接一個 MLP,因為成本要跑物理模擬才算得出來,用進化策略訓練。</p>
+      <p>訓練身體上只進步約 7%,新身體完全沒有轉移。後來發現資料裡沒有小孩身體、用的是成人的致動器、而且從 T-pose 開始,這些數字其實無法跟任何東西比較。</p>
+      <div class="verdict x">✗ 設定有缺陷,重建流程</div></div>
+    </div>
+    <div class="step">
+      <div><div class="when">9 月 22 日</div><h3>好的 latent 長什麼樣?</h3>
+      <p class="why">在把身體映射到 latent 之前,先確認「最佳 latent」這件事是否定義清楚。</p>
+      <p>它是一片區域,不是一個點:一個約 32–64 維的平坦區。這片區域的中心在其他 11 個身體中有 8 個比 z0 好 —— 這其實已經預告了體型軸的結果,只是五天後我們才回頭沿這條線走。</p>
+      <div class="verdict y">✓ 解集合很大</div></div>
+      <div class="thumb"><img src="static/images/f02_plateau_cross_body.png" alt="把平台拿到其他身體上跑"></div>
+    </div>
+    <div class="step">
+      <div><div class="when">9 月 22–23 日</div><h3>固定一個身體,學 z0 → z</h3>
+      <p class="why">β 固定後,問題縮成「z0 → z 到底能不能學」。</p>
+      <p>沒看過的動作進步了 48%,看起來成功了。</p>
+      <div class="verdict y">✓ 以平均來看</div></div>
+    </div>
+    <div class="step">
+      <div><div class="when">9 月 23–25 日</div><h3>按動作類別拆開看</h3>
+      <p class="why">大部分片段都是走路,平均值可能掩蓋了其他類別。</p>
+      <p>只有走路學起來(0.52);倒立比不調還差(1.22)。重新加權、平衡取樣、有界輸出、延長訓練,全部落在雜訊範圍內。只用倒立訓練、給 14 倍預算,仍然失敗。</p>
+      <div class="verdict x">✗ 不是預算、不是干擾、不是無解</div></div>
+      <div class="thumb"><img src="static/images/f03_only_move_learns.png" alt="各類別結果"></div>
+    </div>
+    <div class="step">
+      <div><div class="when">9 月 26 日</div><h3>有沒有函數可以學?</h3>
+      <p class="why">對每個倒立 trial 單獨搜尋,直接看答案長什麼樣。</p>
+      <p>修正方向互相垂直,在動作之間無法轉移。監督式擬合能完美背下它們,但對沒看過的動作毫無預測力。沿動作軸沒有函數。</p>
+      <div class="verdict x">✗ 動作軸走不通</div></div>
+      <div class="thumb"><img src="static/images/f07_fitted_map_rollout.png" alt="監督式擬合的 rollout 評估"></div>
+    </div>
+    <div class="step">
+      <div><div class="when">9 月 26–27 日</div><h3>為什麼偏偏是倒立?</h3>
+      <p class="why">依序檢驗距離、障礙、精度三個解釋。</p>
+      <p>不是距離,也不是有障礙:它的好區域只有約 14° 寬,走路有 60°。連 1° 的誤差(500 個目標下監督式擬合的極限)都會把收益吃光。</p>
+      <div class="verdict y">✓ 最佳解很窄;是精度問題,不是探索問題</div></div>
+      <div class="thumb"><img src="static/images/f08_geodesic_profile.png" alt="從 z0 出發沿路徑的成本"></div>
+    </div>
+    <div class="step turn">
+      <div><div class="when">9 月 27 日</div><h3>轉向體型軸</h3>
+      <p class="why">研究原本的主張是推廣到新身體,而這個軸從來沒有被直接量過。</p>
+      <p>形體路徑、連續追蹤與同預算對照,得到發現一到三。</p>
+      <div class="verdict y">✓ 跨體型可以轉移</div></div>
+    </div>
+    <div class="step turn">
+      <div><div class="when">9 月 28 日</div><h3>公平覆蓋八個參數</h3>
+      <p class="why">四條斜線路徑只覆蓋了體型空間的四個方向。</p>
+      <p>16 條軸向路徑找出敏感度集中在四肢長度(發現四),並讓真實身體上的零搜尋收益加倍,但仍然偏低。</p>
+      <div class="verdict y">✓ 四肢長度 · ⚠ 推廣能力</div></div>
+    </div>
+  </div>
+</section>
+
+<section class="prose">
+  <div class="sechead"><div class="eyebrow">下一步</div><h2>成為論文之前</h2></div>
+  <ol class="todo">
+    <li><b>更多動作與 seed。</b>目前的形體研究只用了 8 個動作,每次搜尋只有 1 個 seed。擴充到 40 個以上的動作、重複搜尋並報告信賴區間;把同預算對照做到每一條路徑。</li>
+    <li><b>必要的基線。</b>不使用身體資訊的 latent 適應(Sikchi et al., 2025 的 ReLA 與 LoLA)、BFMTrack 式的逐幀 latent 序列,以及沿形體同倫微調策略作為參考上限。</li>
+    <li><b>補上推廣能力的缺口。</b>在兩個四肢長度維度上做格點覆蓋、用四肢長度加權距離,並在保留身體上報告完整的「rollout 次數 vs 成本」適應曲線。</li>
+    <li><b>任務層級的證據。</b>在模型自己的追蹤成本之外,補上跌倒率與關節追蹤誤差,並為每個論點附上影片。</li>
+    <li><b>通用性與解釋。</b>第二個基礎模型或骨架,並解釋為什麼四肢長度與縮小方向最關鍵(接觸幾何、步幅、重心高度)。</li>
+  </ol>
+</section>
+
+<footer>圖與影片都是重播模擬時記錄下來的 rollout,頁面上沒有任何內容是為了展示而重新模擬的。</footer>
+
+</div>

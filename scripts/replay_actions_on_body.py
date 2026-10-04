@@ -98,7 +98,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from model.bilevel.config import BilevelConfig
+from model.bodies import BodyRoster
 
 _G: Dict = {}
 
@@ -108,7 +108,7 @@ def up_z(quat_wxyz: np.ndarray) -> np.ndarray:
 
     NOT the textbook 1 - 2*(qx^2+qy^2): this asset's pelvis carries
     euler="90 0 0", so its local +Y is world up. Verbatim from
-    model/bilevel/rewards.py:_up_z, and asserted against it in main().
+    model/bodies.py:up_z, and asserted against it in main().
     """
     q = np.asarray(quat_wxyz)
     return 2.0 * (q[..., 2] * q[..., 3] + q[..., 0] * q[..., 1])
@@ -250,7 +250,7 @@ def main():
     ap.add_argument("--no-verify-harness", dest="verify_harness", action="store_false",
                     help="skip the bit-exactness check against humenv's own model")
     ap.add_argument("--robots-dir", default=None,
-                    help="which asset tree to simulate. Default BilevelConfig.robots_dir "
+                    help="which asset tree to simulate. Default BodyRoster.robots_dir "
                          "(assets/robots_calib) -- actuators sized by "
                          "calibrate_actuators.py so every body has the adult's torque "
                          "margin, i.e. this isolates GEOMETRY. Pass assets/robots for "
@@ -260,14 +260,14 @@ def main():
     ap.add_argument("--out", default="outputs/replay_actions_on_body")
     args = ap.parse_args()
 
-    cfg = BilevelConfig()
+    cfg = BodyRoster()
     if args.robots_dir:
         cfg.robots_dir = args.robots_dir
 
     # The vectorized up_z here must agree with the scalar one the reward uses.
-    from model.bilevel.rewards import _up_z as _ref_up_z
+    from model.bodies import up_z as _ref_up_z
     probe = np.array([0.7071, 0.7071, 0.0, 0.0])
-    assert abs(float(up_z(probe)) - _ref_up_z(probe)) < 1e-15, "up_z drifted from rewards.py"
+    assert abs(float(up_z(probe)) - _ref_up_z(probe)) < 1e-15, "up_z drifted from model/bodies.py"
 
     bodies = args.bodies or ([cfg.source_body] + list(cfg.train_bodies)
                              + list(cfg.heldout_bodies))

@@ -8,14 +8,14 @@ contradicts the live configuration is exactly the kind of thing that gets
 believed years later, so it is made live here rather than left to rot.
 
 After this runs, `parameter.json["split"]` is one of:
-    "train"   in BilevelConfig.train_bodies
-    "test"    in BilevelConfig.heldout_bodies
-    "unused"  neither (currently only `heavy`, see config.py for why)
+    "train"   in BodyRoster.train_bodies
+    "test"    in BodyRoster.heldout_bodies
+    "unused"  neither
 
-model/bilevel/data.py:load_body asserts the file agrees with the config, so the
-two cannot drift apart again silently.
+model/bodies.py:split_of is the one definition of the split, so the files and the
+roster cannot drift apart silently.
 
-Run (after changing the split in model/bilevel/config.py):
+Run (after changing the split in model/bodies.py):
     uv run scripts/write_body_splits.py
     uv run scripts/write_body_splits.py --robots assets/robots      # originals too
 """
@@ -29,12 +29,11 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from model.bilevel.config import BilevelConfig  # noqa: E402
-from model.bilevel.data import split_of  # noqa: E402
+from model.bodies import BodyRoster, split_of  # noqa: E402
 
 
 def main():
-    cfg = BilevelConfig()
+    cfg = BodyRoster()
     ap = argparse.ArgumentParser()
     ap.add_argument("--robots", type=Path, default=REPO_ROOT / cfg.robots_dir)
     args = ap.parse_args()
@@ -56,7 +55,7 @@ def main():
         path = body / "parameter.json"
         par = json.loads(path.read_text())
         was = par.get("split", "-")
-        now = split_of(cfg, body.name)   # one definition, shared with data.load_body
+        now = split_of(cfg, body.name)   # the one definition, model/bodies.py
         par["split"] = now
         path.write_text(json.dumps(par, indent=2) + "\n")
         flag = "  <- changed" if was != now else ""

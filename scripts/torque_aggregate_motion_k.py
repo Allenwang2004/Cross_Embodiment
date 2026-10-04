@@ -2,7 +2,7 @@
 """aggregate_motion_k.py — one actuator scaling from all 54 motions, after the
 motions that disagree with the rest are thrown out.
 
-scripts/torque_scale_actuators.py builds robot_torque.xml from ONE clip's fit, so
+scripts/torque_scale_actuators.py builds robots_torque.xml from ONE clip's fit, so
 whatever that clip happens to load determines the whole body's actuator sizing.
 scripts/torque_ratio_across_motions.py showed that is not safe: the k vectors of
 the 54 motions correlate at median 0.93 but down to 0.53, and the disagreement
@@ -42,7 +42,7 @@ reading and the per-actuator spread the artefact.
 Usage:
   uv run scripts/aggregate_motion_k.py
   uv run scripts/aggregate_motion_k.py --z 2.5 --agg median
-  uv run scripts/aggregate_motion_k.py --out assets/robots/child/robot_torque.xml
+  uv run scripts/aggregate_motion_k.py --out assets/robots/child/robots_torque.xml
   uv run scripts/aggregate_motion_k.py --symmetry none
 """
 
@@ -68,7 +68,7 @@ from scripts.torque_ratio_per_joint import predicted_ratios  # noqa: E402
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_MATRIX = ROOT / "outputs/torque_ratio_across_motions/gravity"
 DEFAULT_SRC = ROOT / "assets/robots/child/robot.xml"
-DEFAULT_OUT = ROOT / "assets/robot_torque/robot_torque.xml"
+DEFAULT_OUT = ROOT / "assets/robots_torque/robots_torque.xml"
 
 
 def read_matrix(path):

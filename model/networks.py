@@ -1,3 +1,4 @@
+import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -53,12 +54,29 @@ class LatentAdapter(nn.Module):
     """
 
     def __init__(self, beta_dim, z_dim, hidden_dims=(256, 512, 512, 256),
-                 alpha=0.1, alpha_learnable=False, project=False, residual=True):
+                 alpha=0.1, alpha_learnable=False, project=False, residual=True,
+                 head="residual", theta_max_deg=60.0, n_heads=1):
         super().__init__()
         self.z_dim = z_dim
         self.project = project
         self.residual = residual
-        self.mlp = _mlp(beta_dim + z_dim, list(hidden_dims), z_dim)
+        self.head = head
+        # Bound on the geodesic step, in radians. theta = theta_max * tanh(||v|| /
+        # sqrt(z_dim)) where v is the MLP's output projected into z0's tangent
+        # plane -- see forward() for why the angle is the tangent vector's length
+        # rather than an output of its own.
+        self.theta_max = math.radians(float(theta_max_deg))
+        # n_heads > 1: the output layer emits H candidate corrections instead of
+        # one, and train_es gives the gradient only to whichever head produced
+        # the best rollout for that clip (winner-take-all). The point is not
+        # capacity -- a single head already fits 32 arbitrary targets to 0.01 deg
+        # -- it is that one shared aim has to serve every clip at once, and the
+        # measured low-cost window is 14 deg wide on headstand against 60 on
+        # move, so a compromise aim lands inside move's window and outside
+        # headstand's. H heads let clips that need similar corrections share one
+        # and leave the others alone.
+        self.n_heads = n_heads
+        self.mlp = _mlp(beta_dim + z_dim, list(hidden_dims), z_dim * n_heads)
         # Built even when residual=False, where nothing reads it: alpha is a
         # state_dict entry, and dropping it would make the two modes'
         # checkpoints structurally incompatible for no gain. Which mode a
@@ -71,12 +89,70 @@ class LatentAdapter(nn.Module):
             self.register_buffer("alpha", torch.tensor(float(alpha)))
 
     def forward(self, beta: torch.Tensor, z0: torch.Tensor) -> torch.Tensor:
+        """(B, z_dim), or (B, n_heads, z_dim) when n_heads > 1."""
         # beta: (B, beta_dim), z0: (B, z_dim)
         out = self.mlp(torch.cat([beta, z0], dim=-1))
+        if self.n_heads > 1:
+            if self.head == "geodesic" or not self.residual:
+                raise SystemExit("n_heads > 1 is implemented for the residual head only")
+            out = out.view(*out.shape[:-1], self.n_heads, self.z_dim)
+            z = z0.unsqueeze(-2) + self.alpha * out
+            return (self.z_dim ** 0.5) * F.normalize(z, dim=-1) if self.project else z
+        if self.head == "geodesic":
+            z0h = F.normalize(z0, dim=-1)
+            # Project into z0's tangent plane: a component along z0 only rescales
+            # the radius, which the geodesic fixes anyway, so leaving it in would
+            # let the MLP spend capacity on a direction that has no effect.
+            v = out - (out * z0h).sum(-1, keepdim=True) * z0h
+            n = v.norm(dim=-1, keepdim=True).clamp_min(1e-8)
+            # The angle is the tangent vector's LENGTH, not a separate output.
+            # Splitting them (a unit direction times an independent sigmoid
+            # angle) looks tidier and does not train: at theta ~ 0 the map's
+            # derivative w.r.t. the direction is proportional to sin(theta), so
+            # the direction gets ~2% of the gradient it needs, while the angle
+            # will not grow because the direction it would travel in is still
+            # random. Measured: theta moved 1.07 -> 1.13 deg in 33 updates and
+            # the run was going nowhere. Reading the angle off ||v|| removes the
+            # degeneracy -- near z0, sin(theta)*v/||v|| -> (theta_max/scale) * v,
+            # so the Jacobian is full rank on the tangent plane exactly as the
+            # residual form's is, and theta_max only caps how far it can get.
+            # scale = sqrt(z_dim) makes the init and the per-unit step match the
+            # residual form's: both start ~2.3 deg from z0 and move ~3.6-3.8 deg
+            # per unit of MLP output.
+            theta = self.theta_max * torch.tanh(n / (self.z_dim ** 0.5))
+            return (self.z_dim ** 0.5) * (torch.cos(theta) * z0h + torch.sin(theta) * (v / n))
         z = z0 + self.alpha * out if self.residual else out
         if self.project:
             z = (self.z_dim ** 0.5) * F.normalize(z, dim=-1)
         return z
+
+
+class SubspaceAdapter(nn.Module):
+    """z_beta = project(z0 + alpha * MLP([beta, z0]) @ U), U (k, z_dim) orthonormal rows.
+
+    The correction is confined to a fixed k-dim subspace. Measured on walking
+    (scripts/analyze_lowdim_search.py): searched in the full 256 dims, starts 0.14
+    apart get corrections as different as the corrections themselves, so there is
+    no function to learn; searched in k = 8 they differ by 12% and the difference
+    grows with the start distance, at ~30% higher final L_align. Same MLP as
+    LatentAdapter with a k-wide output; z0 stays an input, so the coefficients can
+    still depend on the clip. U is a buffer, so it travels with the state_dict.
+    """
+
+    def __init__(self, beta_dim, z_dim, basis, hidden_dims=(256, 512, 512, 256), alpha=1.0,
+                 project=True):
+        super().__init__()
+        self.z_dim = z_dim
+        self.project = project
+        self.n_heads = 1
+        self.register_buffer("U", torch.as_tensor(basis, dtype=torch.float32))
+        self.mlp = _mlp(beta_dim + z_dim, list(hidden_dims), self.U.shape[0])
+        self.register_buffer("alpha", torch.tensor(float(alpha)))
+
+    def forward(self, beta: torch.Tensor, z0: torch.Tensor) -> torch.Tensor:
+        c = self.mlp(torch.cat([beta, z0], dim=-1))
+        z = z0 + self.alpha * c @ self.U
+        return (self.z_dim ** 0.5) * F.normalize(z, dim=-1) if self.project else z
 
 
 class ActionHead(nn.Module):

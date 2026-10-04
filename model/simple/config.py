@@ -219,6 +219,35 @@ class ESConfig:
     # locomotion one. Selecting "move" therefore narrows "upright"; it does not
     # pick a disjoint group.
     task_group: str = "all"
+    # Restrict training to these bodies, overriding splits/train_bodies.txt.
+    # One body makes beta constant, so the adapter degenerates into a pure
+    # z0 -> z MLP and the train/test split has to be over CLIPS instead --
+    # see clip_list / heldout_clip_frac.
+    train_bodies: List[str] = dataclasses.field(default_factory=list)
+    # File of clips to train on, one "<task> <stem>" or "<task>_<trial>" per
+    # line (scripts/write_clip_list.py writes one from a z0-cost ranking).
+    # Cuts the 271 clips whose z0 is already good and which therefore carry no
+    # gradient, so the batch is spent where there is something to learn.
+    clip_list: str = ""
+    # Start every rollout from its own clip's retargeted frame 0 (qvel 0)
+    # instead of humenv's standing T-pose reset. scripts/single_z_search.py and
+    # everything derived from it (the z0 ranking, the plateau analysis) use the
+    # reference start, and the two are not comparable: from the T-pose the
+    # first slice of the episode is an offset no z can remove, worth ~0.17 of
+    # cost on child's move clips. Off by default so existing configs keep their
+    # numbers; turn it on to train in the same regime the searches ran in.
+    init_from_reference: bool = False
+    # With a single training body: this fraction of clip_list is held out of
+    # training and scored at every eval as the "test" row. Without it a falling
+    # train cost cannot be told apart from the MLP memorising each clip's z.
+    heldout_clip_frac: float = 0.0
+    # File of "<task> <category>" lines. With it, heldout_clip_frac's sample is
+    # drawn PER CATEGORY in equal counts instead of uniformly over the clip
+    # list: a uniform 10% of a list that is 40% walking gives a test set that is
+    # 40% walking, and the categories the data was rebalanced FOR then move the
+    # headline number by a few clips each. Also used to report a per-category
+    # breakdown at every eval.
+    clip_categories: str = ""
 
     adapter_hidden_dims: List[int] = dataclasses.field(default_factory=lambda: [256, 512, 512, 256])
     adapter_alpha: float = 0.1
@@ -237,6 +266,40 @@ class ESConfig:
     # from a latent the frozen actor has no reason to like.
     adapter_residual: bool = True
     adapter_project_z: bool = True
+    # Non-empty: model.networks.SubspaceAdapter -- the correction is confined to the first
+    # adapter_subspace_dim rows of this (k, 256) orthonormal basis (.npy), and the ES perturbations
+    # live in the same subspace. Overrides residual / head / heads.
+    adapter_subspace: str = ""
+    adapter_subspace_dim: int = 0
+
+    # How the adapter MOVES z0. "residual" is the form above. "geodesic" splits
+    # the MLP's output into a DIRECTION in z0's tangent plane and a scalar ANGLE
+    # theta = theta_max * sigmoid(.), and walks the great circle:
+    #     z = sqrt(z_dim) * (cos(theta) * z0_hat + sin(theta) * u_hat)
+    # Two things the residual form gets wrong that this fixes. (a) |MLP| is
+    # unbounded, so lr 1e-3 diverges by letting the MLP dwarf z0 until the
+    # projection returns a point with no relation to it; theta <= theta_max
+    # makes that unreachable by construction. (b) "how far" and "which way" are
+    # entangled -- the same MLP output travels a different angle from a
+    # different z0 -- so the optimizer cannot adjust one without disturbing the
+    # other. The last output unit's bias is initialised to -4 so theta starts
+    # near zero (z_beta on z0), matching the residual form's init.
+    # How many candidate corrections the adapter emits per clip. 1 is the single
+    # shared aim every run so far has used. The measured reason to want more: the
+    # low-cost window along the path to a clip's answer is ~14 deg wide on
+    # headstand against ~60 on move, so one compromise aim lands inside move's
+    # window and outside headstand's -- and headstand ends up WORSE than z0
+    # (1.24) while move improves (0.57). With H heads, each head's gradient is
+    # averaged over the clips that currently prefer it instead of over all of
+    # them. Each head gets es_pairs/adapter_heads pairs, so the rollout budget
+    # per update does not change.
+    adapter_heads: int = 1
+    adapter_head: str = "residual"          # residual | geodesic
+    # Ceiling on the geodesic step. The balanced run's adapter reached a mean of
+    # 21 deg and a max of 43 deg from z0 by update 575, so 60 leaves headroom
+    # without letting z_beta wander to the ~90 deg that is "unrelated to z0" in
+    # 256 dims. Saturation is visible: train_es prints angle_mean/angle_max.
+    adapter_theta_max_deg: float = 60.0
 
     obs_scale: str = "auto"
     obs_scale_parts: str = "length"
@@ -246,6 +309,23 @@ class ESConfig:
     # from the unchanged model/losses.py -- the same number evaluate.py reports.
     lambda_align: float = 1.0
     lambda_phys: float = 1.0
+    # What "L_align" IS. "joint": model/losses.py's five joint-space terms.
+    # "bfm": BFMTrack's 1 - mean_t cos(B(s_t), B(g_t)) in Metamotivo's latent
+    # space (model/bfm_align.py), which has no global-position term and is
+    # what let scripts/single_z_search.py find ground motions the joint-space
+    # loss could not. Under "bfm" the joint-space L_align and L_phys are still
+    # computed and logged, they just do not enter the fitness.
+    align_loss: str = "joint"
+    # 0 = train on every clip the training bodies share (the default). K > 0
+    # restricts training to a FIXED random subset of K clips (drawn once with
+    # eval_seed): a short probe run then revisits each clip often enough to
+    # show whether the adapter is converging, instead of touching 540 clips
+    # twice each and reporting noise.
+    n_train_clips: int = 0
+    # eval clips per body (the same clips for every body). Independent of
+    # batch_size so runs with different batch sizes are scored on the same set;
+    # rollouts are padded up to batch_size slots.
+    eval_clips: int = 16
     # NOT 0.1. Rank normalization strips g_z of the cost's units, so nothing the
     # PPO objective tuned carries over. MEASURED at lambda_z = 0.1:
     # |g_es| ~ 1.5 against |g_anchor| ~ 1.3e-5, a ratio of 8e-6 -- the anchor was
@@ -279,6 +359,15 @@ class ESConfig:
     # than naming an absolute answer -- but a target that stops improving while
     # z_beta moves on will go stale, which is what bc_deg is logged for.
     lambda_bc: float = 0.0
+    # Extra terms added to every CANDIDATE's cost before ranking (training only; the evaluation
+    # keeps reporting the plain bfm cost so runs stay comparable). The bfm cost is blind to root
+    # heading and x,y (humenv's proprio is heading-relative); anchor_weight pulls each candidate
+    # toward its row's z0 -- the latent is non-identifiable, and putting the pull in the cost
+    # (unlike lambda_z, a separate loss term that rank normalisation makes meaningless) lets
+    # it compete with tracking directly. Same terms as scripts/single_z_search.py.
+    heading_weight: float = 0.0   # w * mean_t (1 - cos(heading_s - heading_g)) / 2
+    pos_weight: float = 0.0       # w * mean_t |root_xy_s - root_xy_g|  (m)
+    anchor_weight: float = 0.0    # w * (|z - z0| / 16)^2
     # Per-frame weight decay inside every L_align sub-term: frame t counts
     # gamma ** t, normalised by the weights' sum (see losses._discounted_mean).
     # 1.0 is the plain mean and reproduces every number recorded before this
@@ -309,6 +398,23 @@ class ESConfig:
     # |F+ - F-| drowns in the noise of F (train_es.py logs delta_abs and
     # delta_std so that ratio is visible); too large and the difference stops
     # being a local measurement of the landscape.
+    # Which per-(clip, body) search proposes the direction the adapter is trained
+    # toward. "es": antithetic finite differences + rank weights, the ES gradient
+    # g_z backpropagated through the adapter (train_es.py:es_update). "cmaes":
+    # one pycma CMA-ES per cell, popsize 2*es_pairs, sigma0 = es_sigma; the
+    # adapter is pulled (cosine) toward the cell's recombined mean
+    # (train_es.py:cmaes_update). Measured on single-z search (scripts/
+    # compare_es_cmaes.py): CMA-ES reaches the plateau 3x slower than ES+Adam
+    # because its per-generation step is sigma-sized while Adam's is lr-sized.
+    es_algo: str = "es"
+    # cmaes only. False: every visit re-centres the cell's CMA on the adapter's
+    # current z_beta, so CMA is a sampler + recombinator around the iterate and
+    # its mean is a one-step target (like es_update's g_z). True: the cell's CMA
+    # keeps its own mean across visits and walks to the plateau on its own; the
+    # adapter is a supervised student of those means. A cell is visited every
+    # (cells / cells-per-update) updates, so the teacher needs many updates.
+    cma_teacher: bool = False
+    cma_diagonal: bool = False   # sep-CMA: diagonal covariance, O(n) learning
     es_sigma: float = 0.25
     es_pairs: int = 4            # antithetic pairs per clip; batch_size // (2*this)
                                  # clips fit in one update
@@ -318,7 +424,70 @@ class ESConfig:
                                      # ROW; ranking across clips would compare
                                      # clips instead of directions.
 
+    # Per-row weight applied AFTER the shaping above, the general (category-free)
+    # answer to "move dominates the batch". Both rules score a row in [floor, 1]
+    # and then row_weight_renorm restores the batch's mean weight to 1, so a run
+    # differs from its baseline in how the gradient is SHARED OUT and not in how
+    # big it is.
+    #
+    # "none"      every row weighs 1 (the baseline).
+    #
+    # "conf"      w = clip(spread_r / EMA(median spread), floor, 1).
+    #             spread_r = mean |F+ - F-| over the row's K pairs. rank_normalize
+    #             maps a row's deltas onto a FIXED [-0.5, 0.5] ladder no matter
+    #             how small they are, so a cell already sitting on its plateau,
+    #             whose 2K candidates differ by ~1e-4, still emits a
+    #             full-magnitude gradient pointing in a direction the simulator
+    #             did not actually endorse. Over 450 clips that is a steady
+    #             injection of noise into a SHARED MLP, and only the cells with
+    #             real signal (move) survive the averaging. This scales a row by
+    #             how much its own landscape actually moved. The reference is an
+    #             EMA across updates, not the median of the current batch: at
+    #             batch_size 128 / pairs 16 a batch holds 4 rows, and a median of
+    #             4 is too noisy to divide by.
+    #
+    # "headroom"  w = clip(cost_r / cost_z0_r, floor, 1), cost_z0 read from
+    #             row_weight_z0_csv. Starts at 1 for every cell and falls as that
+    #             cell improves ON ITS OWN SCALE, so the budget drifts toward
+    #             cells that have not moved yet. Note this is NOT "divide the
+    #             score by cost_z0": under per-row rank normalization a constant
+    #             per-row divisor leaves the ranks, and therefore the gradient,
+    #             bit-identical. The scale has to enter as a weight or not at all.
+    #
+    # "relative"  not a weight: divides every candidate's COST by that cell's
+    #             z0 cost before the delta, which is the literal form of "put
+    #             every cell on its own scale". Only does anything with
+    #             es_rank_normalize off, and train_es refuses the combination
+    #             rather than running as a silent copy of the baseline. Note it
+    #             changes TWO things against baseline (no rank + relative), so
+    #             read it against the "headroom" run, not on its own.
+    # How a batch's clips are drawn. "clip" is uniform over train_clips, which
+    # spends the budget in proportion to a family's clip COUNT -- the rebalanced
+    # 500 still gives move 200 of them, so move took 40% of every gradient and
+    # headstand 8%, and that survived all four row-weight experiments because
+    # they reweight rows inside a batch rather than choosing which clips are in
+    # it. "category" draws the family first, then a clip from it.
+    clip_balance: str = "clip"              # clip | category
+    row_weight: str = "none"                # none | conf | headroom | relative
+    row_weight_floor: float = 0.1           # never silence a row completely
+    row_weight_ema: float = 0.05            # EMA rate of the reference spread / mean weight
+    # Divide the weights by a running mean of themselves, so the batch's total
+    # gradient stays where the baseline puts it and the run differs from the
+    # baseline only in HOW that gradient is shared out. Off, a weighting that
+    # caps at 1 and cuts from there also quietly halves the step size, and the
+    # experiment can no longer separate the two.
+    row_weight_renorm: bool = True
+    row_weight_z0_csv: str = ""             # "headroom": z0_cost.csv from rank_initial_cost.py
+
     lr: float = 3e-4
+    # Decoupled weight decay (AdamW) on the adapter. 0 keeps plain Adam and is
+    # bit-identical to the loop without it. The residual z0 + alpha*MLP puts no
+    # bound on |MLP|, so nothing stops the MLP's output from growing until
+    # z_beta has left z0 entirely -- measured at lr 1e-3: 1-cos(z,z0) 8e-4 at
+    # update 0, 0.19 at 64, 0.50 at 80, with the cost rising from update ~50 on.
+    # Decay pulls the weights, and therefore |MLP|, back toward zero every step,
+    # which bounds the drift instead of merely slowing it as a smaller lr does.
+    weight_decay: float = 0.0
     grad_clip_norm: float = 1.0
     batch_size: int = 16         # env slots; must be a multiple of 2*es_pairs
     vectorization_mode: str = "sync"

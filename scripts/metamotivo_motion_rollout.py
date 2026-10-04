@@ -224,7 +224,11 @@ def run_batch(model, env, args):
     video_dir = Path(args.out_dir)
     npz_dir = data_dir / "origin_motion"
     act_dir = data_dir / "origin_action"
-    z_dir = data_dir / "z"
+    # origin_z, not "z": that is where data/ keeps the reward-inferred z0 that
+    # every downstream script reads (build_dataset.py, rank_initial_cost.py,
+    # single_z_search.py). Writing to "z" left the new z0 in a directory
+    # nothing loads, so a top-up run silently produced motions with no z0.
+    z_dir = data_dir / "origin_z"
     video_dir.mkdir(parents=True, exist_ok=True)
     npz_dir.mkdir(parents=True, exist_ok=True)
     act_dir.mkdir(parents=True, exist_ok=True)
@@ -240,7 +244,13 @@ def run_batch(model, env, args):
 
         steps = steps_for_task(reward_name, args.steps) if args.auto_steps else args.steps
 
-        for trial in range(args.rollouts_per_task):
+        for k in range(args.rollouts_per_task):
+            # The FILE NAME carries the trial index, and it used to be the loop
+            # counter -- so a second run to add more trials rewrote _0.._N-1 and
+            # destroyed the originals. --trial-offset numbers the new ones after
+            # the existing ones; the seed follows the trial index so a given
+            # (task, trial) is reproducible whatever batch produced it.
+            trial = args.trial_offset + k
             seed = args.seed + trial
             z = compute_reward_z(model, env, buffer, args, seed, reward_name=reward_name)
             z_path = task_z_dir / f"{reward_name}_{trial}.npy"
@@ -248,10 +258,10 @@ def run_batch(model, env, args):
 
             if args.z_only:
                 print(f"[{task_idx + 1}/{len(reward_names)} {reward_name}] "
-                      f"trial {trial + 1}/{args.rollouts_per_task} -> {z_path}")
+                      f"trial {trial} ({k + 1}/{args.rollouts_per_task}) -> {z_path}")
                 continue
 
-            record_video = trial == 0
+            record_video = k == 0 and args.trial_offset == 0
             result = rollout_once(model, env, args, seed, z, steps=steps, record_video=record_video)
 
             npz_path = task_npz_dir / f"{reward_name}_{trial}.npz"
@@ -276,7 +286,7 @@ def run_batch(model, env, args):
                 imageio.mimsave(video_path, result["frames"], fps=30)
 
             print(f"[{task_idx + 1}/{len(reward_names)} {reward_name}] "
-                  f"trial {trial + 1}/{args.rollouts_per_task} -> {npz_path}, "
+                  f"trial {trial} ({k + 1}/{args.rollouts_per_task}) -> {npz_path}, "
                   f"{act_path}, {z_path}"
                   + (f" (+ video)" if record_video else ""), flush=True)
             # A reset AT `steps` is gymnasium's TimeLimit firing on the final
@@ -327,6 +337,11 @@ def main():
     parser.add_argument("--num-rollouts", type=int, default=5,
                          help="number of independent rollouts to run "
                               "(each with a fresh random z when --z-mode random)")
+    parser.add_argument("--trial-offset", type=int, default=0,
+                        help="number the new trials from here instead of 0, so a top-up run "
+                             "adds <task>_<offset>.. beside the existing files instead of "
+                             "overwriting them. The seed is args.seed + trial, so the same "
+                             "(task, trial) is reproducible regardless of which batch made it")
     parser.add_argument("--seed", type=int, default=0,
                          help="base seed; rollout i uses seed + i")
     parser.add_argument("--out-dir", default="outputs/metamotivo_motion_rollout",

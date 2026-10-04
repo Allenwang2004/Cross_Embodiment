@@ -4,7 +4,7 @@
 
 ```
 assets/robots/<body>/robot.xml                     身形，actuator 與 joint 都是 adult 原值
-assets/robot_torque/<body>/robot_torque_full.xml   actuator + joint 都按實測力矩比調整
+assets/robots_torque/<body>/robots_torque_full.xml   actuator + joint 都按實測力矩比調整
 data/<body>/retargeting_motion/                    540 段重定向動作
 data/<body>/infer_retargeting_z/                   540 段逐幀 z（每段 (T, 256)）
 ```
@@ -16,7 +16,7 @@ data/<body>/infer_retargeting_z/                   540 段逐幀 z（每段 (T, 
 ## 兩層的分工
 
 ```
-adult/robot.xml ──scale_robot.py──> <body>/robot.xml ──torque_aggregate_motion_k.py──> robot_torque_full.xml
+adult/robot.xml ──scale_robot.py──> <body>/robot.xml ──torque_aggregate_motion_k.py──> robots_torque_full.xml
                      β：身形                                    k：力矩需求比
 ```
 
@@ -140,22 +140,14 @@ adult 就等於在問「adult 做這個動作時的 z」，那是 `data/infer_or
 是身形離 adult 最遠的兩具，也是最低的兩具。
 
 > ⚠️ **`--device` 預設是 `cpu`。** 這裡用 `cuda`（540 段約一分半）。CPU 也會跑出結果，但如同
-> `docs/scripts.md` 對執行緒數的警告，浮點歸約順序不同會有 ~1e-5 的漂移。要跨身體比較 z
-> （例如擬合 z map）時，**同一批身體請用同一個 device**。
+> 執行緒數不同時的情況，浮點歸約順序不同會有 ~1e-5 的漂移。要跨身體比較 z
+> 時，**同一批身體請用同一個 device**。
 
 ### 這份資料餵給誰
 
-`fit_cross_body_z_map.py` — 學一個線性映射 W，把 adult 的 z 轉成該身體能執行的 z：
-
-```bash
-uv run scripts/fit_cross_body_z_map.py --src infer_origin_z --dst tall_slim/infer_retargeting_z
-```
-
-`--src` / `--dst` 吃的是 `data/` 底下的相對路徑，身體名從子目錄名推出來
-（`tall_slim/infer_retargeting_z` → `tall_slim`）。
-
-> ⚠️ 它預設寫到 `outputs/fit_cross_body_z_map/`，**沒有身體維度**。要為第二具身體跑之前，
-> 先用 `--out-dir` 分開，否則會蓋掉 child 的結果——跟 `torque_ratio_across_motions.py` 同一個坑。
+`scripts/build_dataset.py` 把它寫進 manifest(`infer_origin_z`、`retarget_z` 欄位);
+`scripts/test_track_z.py` 拿它當「逐幀 backward z」的對照組。原本吃這份資料的 z map 路線
+(`fit_cross_body_z_map.py` 等)已在 2026-10-04 移除,見 git branch `snapshot/pre-cleanup-2026-10-04`。
 
 ---
 
@@ -248,13 +240,13 @@ Step 5 的檢查式用 `~np.isclose(km, kp)` 排除「回退到幾何預測」�
 
 ---
 
-## Step 6 — 產生 robot_torque_full.xml
+## Step 6 — 產生 robots_torque_full.xml
 
 ```bash
 uv run scripts/torque_aggregate_motion_k.py \
   --matrix outputs/torque_ratio_across_motions/gravity/tall_slim \
   --src    assets/robots/tall_slim/robot.xml \
-  --out    assets/robot_torque/tall_slim/robot_torque_full.xml \
+  --out    assets/robots_torque/tall_slim/robots_torque_full.xml \
   --joint-dynamics
 ```
 
@@ -303,7 +295,7 @@ left/right mirror holds for all 27 pairs
 | `data/<body>/infer_retargeting_z/<motion>/*.npy` | `batch_infer_z.py`（`--xml` 指目標身體） | ✔ |
 | `data/<body>/infer_retargeting_z/cosine_summary.csv` | 同上，需給 `--z0_dir data/origin_z` | ✔ |
 | `outputs/torque_ratio_across_motions/<mode>/<body>/` | `torque_ratio_across_motions.py`（**必給 `--outdir`**） | ✔ |
-| `assets/robot_torque/<body>/robot_torque_full.xml` | `torque_aggregate_motion_k.py --joint-dynamics` | ✔ |
+| `assets/robots_torque/<body>/robots_torque_full.xml` | `torque_aggregate_motion_k.py --joint-dynamics` | ✔ |
 
 ---
 
@@ -346,12 +338,12 @@ uv run scripts/write_body_splits.py --robots assets/robots    # split 會被覆�
 
 | 產物 | 受影響？ |
 |---|---|
-| `robot_torque_full.xml`（`--joint-dynamics`） | **否**。實測相對差 ≤ 1e-15 |
-| `assets/robot_torque/child/robot_torque.xml` | **是，已過時** |
-| `assets/robot_torque/child/robot_torque_move_only.xml` | **是，已過時** |
+| `robots_torque_full.xml`（`--joint-dynamics`） | **否**。實測相對差 ≤ 1e-15 |
+| `assets/robots_torque/child/robots_torque.xml` | **是，已過時** |
+| `assets/robots_torque/child/robots_torque_move_only.xml` | **是，已過時** |
 | 直接吃 `assets/robots/*/robot.xml` 的訓練 | **是** |
 
-`robot_torque_full.xml` 免疫的原因：第二層讀 src 只為了取 subtree 慣量，算的是
+`robots_torque_full.xml` 免疫的原因：第二層讀 src 只為了取 subtree 慣量，算的是
 `M[dof,dof] − armature`，寫進去的 armature 又被減掉，只剩浮點抵消的捨入誤差。
 
 那兩個 `child/` 底下的舊檔仍帶著 stiffness `0.1346×`（照抄舊 src），而現在的 src 是 `1.0000×`。
@@ -371,7 +363,7 @@ uv run scripts/write_body_splits.py --robots assets/robots    # split 會被覆�
 | `data/<body>/retargeting_motion/` | 11/11，每具 54 dirs / 540 npz |
 | `data/<body>/infer_retargeting_z/` | 11/11，每具 540 npy + `cosine_summary.csv` |
 | `outputs/torque_ratio_across_motions/gravity/<body>/` | 11/11 |
-| `assets/robot_torque/<body>/robot_torque_full.xml` | 11/11 |
+| `assets/robots_torque/<body>/robots_torque_full.xml` | 11/11 |
 
 Step 6 的驗收 9 具全綠：`armature`/`damping`/`stiffness` 對法則誤差 `0.00e+00`、
 ζ 中位 1.000、27 組鏡像全對、`dt·√(Kp/I)` 最大 0.234（需 < 2）。
@@ -399,10 +391,8 @@ Froude 時鐘照預期跟著 s_eff 走：
 它用 symlink 而不是複製，所以那 2.9 GB 只存在一份。`model/simple/train.py` 直接吃這個 manifest，
 每個 update 抽一具身體。
 
-### 沒做的兩件事
+### 沒做的事
 
-- **`data/<body>/ik_retargeting_action/` 與 `ik_retargeting_z/`**：只有 `child` 有。那是
-  `ik_action_from_qpos.py` / `ik_z_from_action.py` 那條路線的產物，不在這份 runbook 的四樣
-  交付物裡，所以沒有為其他 10 具產生。
-- **`fit_cross_body_z_map.py`**：它是 Step 3 資料的下游消費者，不是流程本身。要跑的話記得
-  每具身體給不同的 `--out-dir`，預設路徑沒有身體維度會互相覆蓋。
+- **`data/<body>/ik_retargeting_action/` 與 `ik_retargeting_z/`**:只有 `child` 有。那是
+  `ik_action_from_qpos.py` 與已移除的 `ik_z_from_action.py` 那條路線的產物,不在這份 runbook 的四樣
+  交付物裡,所以沒有為其他 10 具產生。

@@ -1,0 +1,15 @@
+{
+  "label": "s3_b3",
+  "scale_actuators": false,
+  "notes": "stature x build grid: 0.78x adult stature on the growth curve, build 1.00; 1.35 m, BMI 19.4",
+  "stature_ratio": 0.7804,
+  "leg_scale": 0.7385,
+  "arm_scale": 0.7609,
+  "torso_scale": 0.7937,
+  "head_scale": 0.9542,
+  "leg_girth": 0.7459,
+  "arm_girth": 0.7685,
+  "torso_girth": 0.8016,
+  "head_girth": 0.9637,
+  "split": "unused"
+}

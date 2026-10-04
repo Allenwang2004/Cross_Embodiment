@@ -66,7 +66,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from model.bilevel.config import BilevelConfig
+from model.bodies import BodyRoster
 
 _G: Dict = {}
 
@@ -185,7 +185,7 @@ def main():
     ap.add_argument("--out", default="outputs/pd_track_bodies")
     args = ap.parse_args()
 
-    cfg = BilevelConfig()
+    cfg = BodyRoster()
     bodies = args.bodies or ([cfg.source_body] + list(cfg.train_bodies)
                              + list(cfg.heldout_bodies))
     tasks = None

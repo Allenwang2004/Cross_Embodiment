@@ -110,21 +110,41 @@ def clip_index(origin_z: Path) -> list:
     return sorted((p.parent.name, p.stem) for p in origin_z.rglob("*.npy"))
 
 
-def check_adult_frames(data_dir: Path, clips) -> None:
-    """data/infer_origin_z is body-independent, so it is checked once."""
+def check_adult_frames(data_dir: Path, clips, required: bool = True) -> None:
+    """data/infer_origin_z is body-independent, so it is checked once.
+
+    NOT needed to train: model/dataset.py's `z0` is row["origin_z"], the single
+    reward-inferred vector, and nothing loads row["infer_origin_z"] -- that is
+    the PER-FRAME z on the adult skeleton, which scripts/fit_cross_body_z_map.py
+    consumes. A manifest built without it is fully usable for train_es.py and
+    only unusable for the z-map fit, so this is a warning under
+    --no-adult-z rather than a hard stop.
+    """
     d = data_dir / "infer_origin_z"
     have = {(p.parent.name, p.stem) for p in d.rglob("*.npy")}
     missing = set(clips) - have
-    if missing:
-        raise SystemExit(
-            f"{d} covers {len(have & set(clips))}/{len(clips)} clips; missing e.g. "
-            f"{sorted(missing)[:5]}. Regenerate with scripts/batch_infer_z.py "
-            f"--input_dir data/origin_motion --xml assets/robots/adult/robot.xml")
+    if not missing:
+        return
+    msg = (f"{d} covers {len(have & set(clips))}/{len(clips)} clips; missing e.g. "
+           f"{sorted(missing)[:5]}. Regenerate with scripts/batch_infer_z.py "
+           f"--input_dir data/origin_motion --xml assets/robots/adult/robot.xml")
+    if required:
+        raise SystemExit(msg)
+    print(f"WARNING: {msg}\n  --no-adult-z given: the manifest still trains (z0 comes from "
+          f"origin_z), but fit_cross_body_z_map.py cannot use it")
 
 
-def check_body(data_dir: Path, body: str, clips) -> None:
+def check_body(data_dir: Path, body: str, clips, require_infer_z: bool = True) -> None:
+    """model/dataset.py reads origin_z, retargeted_motion and morphology only --
+    infer_retargeting_z is the PER-FRAME z on that body, consumed by the z-map
+    fit alone. Bodies generated after that pipeline stopped being run (the
+    x_leg_* family) have no such directory, and requiring it would exclude
+    exactly the bodies that widen beta's coverage most."""
     want = set(clips)
-    for sub, ext in (("retargeting_motion", ".npz"), ("infer_retargeting_z", ".npy")):
+    subs = [("retargeting_motion", ".npz")]
+    if require_infer_z:
+        subs.append(("infer_retargeting_z", ".npy"))
+    for sub, ext in subs:
         d = data_dir / body / sub
         if not d.exists():
             raise SystemExit(f"{d} missing -- run docs/new_body.md Steps 2-3 for {body}")
@@ -147,6 +167,22 @@ def main():
     ap.add_argument("--n-test-tasks", type=int, default=5,
                     help="tasks held out for model/simple/train_zmap.py (of 54)")
     ap.add_argument("--task-split-seed", type=int, default=0)
+    ap.add_argument("--no-adult-z", action="store_true",
+                    help="do not require data/infer_origin_z for every clip. Training never reads "
+                         "it (z0 is origin_z); only the cross-body z-map fit does")
+    ap.add_argument("--torque-xml", action="store_true",
+                    help="point target_xml at assets/robots_torque/<body>/robot_torque_full.xml "
+                         "(actuators, armature, damping and stiffness rescaled to the body's own "
+                         "measured torque demand) instead of assets/robots/<body>/robot.xml, "
+                         "which keeps adult's actuators")
+    ap.add_argument("--no-infer-z", action="store_true",
+                   help="do not require data/<body>/infer_retargeting_z. train_es never reads it "
+                        "(see model/dataset.py); only fit_cross_body_z_map.py does")
+    ap.add_argument("--intersect-clips", action="store_true",
+                   help="keep only the clips every selected body has retargeted, instead of "
+                        "stopping on the first body that is missing one. data/origin_z is the "
+                        "union over bodies, so a body that never got the top-up trials is "
+                        "behind it by construction")
     ap.add_argument("--force", action="store_true",
                     help="overwrite an existing dataset directory")
     args = ap.parse_args()
@@ -164,9 +200,29 @@ def main():
         raise SystemExit(f"no z0 under {data / 'origin_z'}")
 
     splits = {b: body_split(robots, b) for b in bodies}
-    check_adult_frames(data, clips)
+    check_adult_frames(data, clips, required=not args.no_adult_z)
+    if args.intersect_clips:
+        # The manifest is a (clip x body) cross product, so a clip only belongs
+        # in it if EVERY selected body has it retargeted. data/origin_z grows
+        # whenever a body gets top-up rollouts (child has 720, the rest 540),
+        # and without this the build stops on the first body that is behind
+        # instead of building the rectangle that actually exists.
+        keep = set(clips)
+        for b in bodies:
+            subs = [("retargeting_motion", ".npz")]
+            if not args.no_infer_z:
+                subs.append(("infer_retargeting_z", ".npy"))
+            for sub, ext in subs:
+                d = data / b / sub
+                keep &= {(x.parent.name, x.stem) for x in d.rglob("*" + ext)}
+        dropped = len(clips) - len(keep)
+        if not keep:
+            raise SystemExit("no clip is present for every selected body")
+        print(f"--intersect-clips: {len(keep)} of {len(clips)} clips are present for all "
+              f"{len(bodies)} bodies ({dropped} dropped)")
+        clips = sorted(keep)
     for b in bodies:
-        check_body(data, b, clips)
+        check_body(data, b, clips, require_infer_z=not args.no_infer_z)
 
     if out.exists():
         if not args.force:
@@ -177,6 +233,12 @@ def main():
     # Symlinks, not copies: the manifest's paths resolve through these.
     (out / "data").symlink_to(Path("../..") / "data")
     (out / "robots").symlink_to(Path("../../assets") / "robots")
+    # The torque-matched bodies live in a separate tree; --torque-xml points
+    # target_xml at them. Without it the manifest hands training the geometry
+    # with ADULT actuators, which on child is 4.7x the torque its own mass and
+    # limb lengths call for -- a different body from the one every
+    # single_z_search / plateau number was measured on.
+    (out / "robots_torque").symlink_to(Path("../../assets") / "robots_torque")
 
     tasks = sorted({t for t, _ in clips})
     (out / "splits" / "tasks.txt").write_text("".join(f"{t}\n" for t in tasks))
@@ -204,7 +266,8 @@ def main():
                 "origin_z": f"data/origin_z/{task}/{stem}.npy",
                 "infer_origin_z": f"data/infer_origin_z/{task}/{stem}.npy",
                 "morphology": f"robots/{body}/parameter.json",
-                "target_xml": f"robots/{body}/robot.xml",
+                "target_xml": (f"robots_torque/{body}/robot_torque_full.xml"
+                               if args.torque_xml else f"robots/{body}/robot.xml"),
                 "retargeted_motion": f"data/{body}/retargeting_motion/{task}/{stem}.npz",
                 "retarget_z": f"data/{body}/infer_retargeting_z/{task}/{stem}.npy",
             })
