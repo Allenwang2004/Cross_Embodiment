@@ -4,6 +4,7 @@
   unconstrained, multiplier   outputs/latent_transfer_own/move-ego-0-2_4/align
   k = 8, multiplier           outputs/lowdim_search/move-ego-0-2_4/k8/align       (multiplier basis)
   k = 8, exact                outputs/lowdim_exact/move-ego-0-2_4/align          (exact basis)
+  + anchor lam 0.3 / 1.0      outputs/lowdim_exact/move-ego-0-2_4_lam<lam>/align (pulled toward each own start)
 Per setting: L_align of each result against its own target (joint space, comparable across settings), the
 correction d = z* - start (size, difference from the z0 start's, difference / size, cos), and the start-distance
 -> correction-difference relation over all 28 pairs.
@@ -17,7 +18,9 @@ N = ["z0", "rot0.5_0", "rot1_0", "rot2_0", "rot5_0", "rot10_0", "rot20_0", "rot3
 STEM = "move-ego-0-2_4"
 RUNS = {"unconstrained, multiplier": f"outputs/latent_transfer_own/{STEM}/align",
         "k = 8, multiplier": f"outputs/lowdim_search/{STEM}/k8/align",
-        "k = 8, exact": f"outputs/lowdim_exact/{STEM}/align"}
+        "k = 8, exact": f"outputs/lowdim_exact/{STEM}/align",
+        "k = 8, exact, lam 0.3": f"outputs/lowdim_exact/{STEM}_lam0.3/align",
+        "k = 8, exact, lam 1.0": f"outputs/lowdim_exact/{STEM}_lam1.0/align"}
 
 
 def ld(p):
