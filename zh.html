@@ -197,7 +197,7 @@ section { display: flex; flex-direction: column; gap: 1.3rem; }
 
 <figure>
   <div class="plate"><video src="static/videos/teaser.mp4" autoplay muted loop playsinline controls></video></div>
-  <figcaption><b>同一個凍結的策略,四個動作。</b>每列一個動作(倒立、走路舉手、跳、爬)。左:重定向到小孩身體的參考動作。中:什麼都不改,直接用大人的 latent <span class="m">z0</span>。右:我們的做法,先對齊致動器和觀測值,再從 <span class="m">z0</span> 出發在 8 維子空間搜尋 5 代(80 次 rollout)。數字是 L_align,越低越好。</figcaption>
+  <figcaption><b>同一個凍結的策略,四個動作。</b>每列一個動作(倒立、跳、跑步、邊走邊舉手)。左:重定向到小孩身體的參考動作。中:什麼都不改,直接用大人的 latent <span class="m">z0</span>。右:我們的做法,先對齊致動器和觀測值,再從 <span class="m">z0</span> 出發在 8 維子空間搜尋 5 代(80 次 rollout)。數字是 L_align,越低越好。</figcaption>
 </figure>
 
 <section>
@@ -246,7 +246,7 @@ section { display: flex; flex-direction: column; gap: 1.3rem; }
   </figure>
   <figure>
     <div class="plate"><video src="static/videos/ladder_walk.mp4" autoplay muted loop playsinline controls></video></div>
-    <figcaption><b>同一個動作(邊走邊舉手),每一步的 rollout。</b>什麼都不改時身體失去平衡(L_align 2.00);校準致動器後好一些(1.00);換成精確觀測值後已經能跟著走(0.35);搜尋 5 代後和參考很接近(0.12)。最右邊是大人用 <span class="m">z0</span> 在自己身上做同一個動作(0.01),也就是這個策略原本的水準。</figcaption>
+    <figcaption><b>同一個動作(邊走邊舉手),每一步的 rollout。</b>什麼都不改時身體失去平衡(L_align 2.10);只校準致動器還是走不好(1.82);換成精確觀測值後已經能跟著走(0.15);搜尋 5 代後降到 0.03,和最右邊大人用 <span class="m">z0</span> 在自己身上做同一個動作(0.03)一樣好。</figcaption>
   </figure>
 
   <div class="journey prose">
@@ -390,6 +390,7 @@ section { display: flex; flex-direction: column; gap: 1.3rem; }
     <li><b>樣本數小。</b>快速搜尋的數字來自 12 個動作、一個亂數種子;60 個動作的版本還沒跑完。</li>
     <li><b>只有小孩一種體型。</b>其他體型要用同一套流程重新產生致動器和觀測值換算。</li>
     <li><b>比較基準不是真正的最佳值。</b>「完整搜尋」只跑了 2,048 次,而且帶有拉回 <span class="m">z0</span> 的錨點懲罰,所以有些動作的快速搜尋會超過 100%。</li>
+    <li><b>部分解對數值很敏感。</b>同一個 z 換一個 GPU 批次大小重新 rollout,浮點運算的微小差異經過模擬放大,少數動作的成績會明顯改變(例如某個倒立從 0.34 變成 1.07)。本頁的階梯圖和影片都是換過批次大小重新 rollout 的結果;收斂曲線用的是搜尋當下的成績,可能偏樂觀。</li>
     <li><b>時間包含平行負載。</b>每代時間是在多個搜尋同時跑時量的;另外每次搜尋開始前要約 1 分鐘載入模型和建立環境,讓同一個行程連續處理多個動作就能省掉。</li>
   </ol>
 </section>
