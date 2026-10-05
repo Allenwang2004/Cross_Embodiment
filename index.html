@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <style>:root{color-scheme:light}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
-<title>An Adult Policy in a Child's Body</title>
+<title>Cross-Embodiment</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=JetBrains+Mono:wght@400;500&display=swap">
@@ -18,7 +18,7 @@
   --plate: #fcfcfb;
   --ink: #171a20;
   --ink-2: #4a505c;
-  --ink-3: #7a8190;
+  --ink-3: #596071;
   --rule: #dde1e8;
   --sky: #2167a1;          /* accent: MuJoCo sky, deepened */
   --tan: #b27a43;          /* the mannequin */
@@ -153,21 +153,25 @@ section { display: flex; flex-direction: column; gap: 1.3rem; }
 .chart .axis { stroke: var(--ink-3); stroke-width: 1; }
 .chart .grid { stroke: var(--rule); stroke-width: 1; stroke-dasharray: 3 4; }
 .chart .half { stroke: var(--ink-3); stroke-width: 1; stroke-dasharray: 6 5; }
-.bar-raw { fill: var(--motion); } .bar-main { fill: var(--sky); } .bar-aside { fill: var(--sky); opacity: .38; }
-.bar-ours { fill: var(--tan); } .bar-ref { fill: var(--ink-3); opacity: .45; }
+.bar-raw { fill: var(--motion); } .bar-main { fill: var(--sky); } .bar-aside { fill: var(--sky); opacity: .6; }
+.bar-ours { fill: var(--tan); } .bar-ref { fill: var(--ink-3); }
 .line-k8 { fill: none; stroke: var(--tan); stroke-width: 3; } .dot-k8 { fill: var(--tan); }
 .line-full { fill: none; stroke: var(--sky); stroke-width: 2.4; stroke-dasharray: 7 5; } .dot-full { fill: var(--sky); }
 .chart .v-k8 { fill: var(--tan); font-weight: 500; } .chart .v-full { fill: var(--sky); }
-.arch .box { fill: var(--surface); stroke: var(--ink-3); stroke-width: 1.2; }
-.arch .frozen { fill: var(--surface); stroke: var(--sky); stroke-width: 2.2; }
-.arch .search { fill: var(--surface); stroke: var(--tan); stroke-width: 2.2; }
-.arch .t { font-family: var(--display); font-size: 15px; fill: var(--ink); }
-.arch .s { font-size: 12px; fill: var(--ink-2); }
-.arch .ar { fill: none; stroke: var(--ink-2); stroke-width: 1.6; }
+.arch .band { fill: var(--bg); stroke: var(--rule); stroke-width: 1; }
+.arch .bl { font-family: var(--display); font-size: 14px; font-weight: 500; fill: var(--ink-2); }
+.arch .box { fill: var(--surface); stroke: var(--ink-3); stroke-width: 1.5; }
+.arch .frozen { fill: var(--surface); stroke: var(--sky); stroke-width: 2.6; }
+.arch .search { fill: var(--surface); stroke: var(--tan); stroke-width: 2.6; }
+.arch .t { font-family: var(--display); font-size: 15.5px; font-weight: 500; fill: var(--ink); }
+.arch .s { font-size: 12.5px; fill: var(--ink-2); }
+.arch .ar { fill: none; stroke: var(--ink-2); stroke-width: 1.8; }
 .arch .ar.hot { stroke: var(--tan); }
 .arch .head { fill: var(--ink-2); } .arch .head.hot { fill: var(--tan); }
-.arch .el { font-size: 12px; fill: var(--ink-2); }
-.arch .el.hot { fill: var(--tan); }
+.arch .el { font-size: 13px; fill: var(--ink); }
+.arch .el.hot { fill: var(--tan); font-weight: 500; }
+.arch .lg { font-family: var(--display); font-size: 13.5px; fill: var(--ink); }
+.chartbox { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: .9rem; }
 .scroll { overflow-x: auto; }
 .scroll > svg { min-width: 40rem; }
 .concept { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 1.1rem 1.25rem; display: flex; flex-direction: column; gap: .6rem; }
@@ -181,12 +185,12 @@ section { display: flex; flex-direction: column; gap: 1.3rem; }
 <header>
   <div class="lang">English · <a href="zh.html">中文</a></div>
   <div class="eyebrow">Frozen Meta Motivo · latent z only · child body</div>
-  <h1>An Adult Policy in a Child's Body</h1>
-  <p class="sub">Once the interface between body and policy is aligned, a few generations of latent search close most of the remaining gap</p>
+  <h1>Cross-Embodiment</h1>
+  <p class="sub">An adult policy in a child's body: once the interface between body and policy is aligned, a few generations of latent search close most of the remaining gap</p>
   <div class="authors">Author names</div>
   <div class="affil">Affiliation · 2026</div>
   <div class="links">
-    <a class="btn" href="https://github.com/Allenwang2004/Cross_Enbodiment">Code</a>
+    <span class="btn ghost">Code · coming soon</span>
     <span class="btn ghost">Paper · in preparation</span>
   </div>
 </header>
@@ -214,7 +218,7 @@ section { display: flex; flex-direction: column; gap: 1.3rem; }
 <section>
   <div class="sechead prose"><div class="eyebrow">From the start</div><h2>What each step changes, and by how much</h2></div>
   <figure>
-    <div class="plate scroll">
+    <div class="chartbox scroll">
       <svg class="chart" viewBox="0 0 860 310" role="img" aria-label="Median L_align over 12 motions: nothing changed 1.82, actuators 1.53, fixed-multiplier observation 1.08, exact observation 0.62, plus 5 generations of search 0.43, full search 0.27, adult on its own body 0.17">
         <line class="grid" x1="380" y1="10" x2="380" y2="282"/><line class="grid" x1="510" y1="10" x2="510" y2="282"/>
         <line class="grid" x1="640" y1="10" x2="640" y2="282"/><line class="grid" x1="770" y1="10" x2="770" y2="282"/>
@@ -290,7 +294,7 @@ section { display: flex; flex-direction: column; gap: 1.3rem; }
     <p><span class="m">U</span> holds 8 correction directions: the top 8 principal components of the corrections <span class="m">z* − z0</span> found by full searches on 429 other motions. None of the 12 test motions is used to compute <span class="m">U</span>. The search starts directly from <span class="m">z0</span>, with no pre-search.</p>
   </div>
   <figure>
-    <div class="plate scroll">
+    <div class="chartbox scroll">
       <svg class="chart" viewBox="0 0 860 300" role="img" aria-label="Share of the gain against generations: 8 dims 44% at generation 2 and 70% at generation 5; all 256 dims 46% and 59%">
         <line class="grid" x1="70" y1="30" x2="770" y2="30"/><line class="grid" x1="70" y1="85" x2="770" y2="85"/>
         <line class="grid" x1="70" y1="195" x2="770" y2="195"/>
@@ -334,51 +338,43 @@ section { display: flex; flex-direction: column; gap: 1.3rem; }
 </section>
 
 <section>
-  <div class="sechead prose"><div class="eyebrow">System</div><h2>Only c is updated</h2></div>
+  <div class="sechead prose"><div class="eyebrow">System</div><h2>Two loops, and only c changes</h2></div>
   <figure>
-    <div class="plate scroll">
-      <svg class="arch" viewBox="0 0 880 390" role="img" aria-label="System: the child body's state is converted by exact reverse retargeting into an adult observation and fed to the frozen Meta Motivo actor; the actor's PD target angles drive the child body; the rollout is compared with the child reference to give L_align, ES updates the 8 coefficients c, and z is z0 plus U c">
+    <div class="chartbox scroll">
+      <svg class="arch" viewBox="0 0 960 480" role="img" aria-label="System. Top, the control loop: the child body's state is converted by exact reverse retargeting into an adult observation and fed to the frozen Meta Motivo policy, whose PD target joint angles drive the child body. Bottom, the search loop: the whole rollout is compared with the child reference to give L_align, ES updates the 8 coefficients c, and z, the normalized z0 plus U c, goes back to the policy.">
         <defs>
           <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0,0 L10,5 L0,10 z"/></marker>
           <marker id="ahh" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head hot" d="M0,0 L10,5 L0,10 z"/></marker>
         </defs>
-        <rect class="box" x="20" y="20" width="230" height="64" rx="8"/>
-        <text class="t" x="135" y="47" text-anchor="middle">child reference g₁…g_T</text>
-        <text class="s" x="135" y="68" text-anchor="middle">adult motion retargeted, ×0.611</text>
-        <rect class="search" x="320" y="20" width="200" height="64" rx="8"/>
-        <text class="t" x="420" y="47" text-anchor="middle">L_align</text>
-        <text class="s" x="420" y="68" text-anchor="middle">rollout vs reference, per frame</text>
-        <rect class="search" x="600" y="20" width="260" height="64" rx="8"/>
-        <text class="t" x="730" y="47" text-anchor="middle">ES updates c</text>
-        <text class="s" x="730" y="68" text-anchor="middle">16 rollouts per generation</text>
-        <rect class="search" x="600" y="128" width="260" height="64" rx="8"/>
-        <text class="t" x="730" y="155" text-anchor="middle">z = normalize(z0 + U c)</text>
-        <text class="s" x="730" y="176" text-anchor="middle">U: 8 shared correction directions</text>
-        <rect class="box" x="20" y="240" width="230" height="72" rx="8"/>
-        <text class="t" x="135" y="268" text-anchor="middle">child body (MuJoCo)</text>
-        <text class="s" x="135" y="290" text-anchor="middle">calibrated: kp 35.4 · ±70.7 N·m</text>
-        <rect class="box" x="320" y="240" width="200" height="72" rx="8"/>
-        <text class="t" x="420" y="268" text-anchor="middle">exact reverse retarget</text>
-        <text class="s" x="420" y="290" text-anchor="middle">joints copied · root ÷0.611</text>
-        <rect class="frozen" x="600" y="240" width="260" height="72" rx="8"/>
-        <text class="t" x="730" y="268" text-anchor="middle">Meta Motivo actor π(o, z)</text>
-        <text class="s" x="730" y="290" text-anchor="middle">frozen, weights never updated</text>
-        <path class="ar" d="M250,52 H312" marker-end="url(#ah)"/>
-        <path class="ar hot" d="M520,52 H592" marker-end="url(#ahh)"/>
-        <path class="ar hot" d="M730,84 V120" marker-end="url(#ahh)"/>
-        <path class="ar hot" d="M730,192 V232" marker-end="url(#ahh)"/>
-        <path class="ar" d="M250,276 H312" marker-end="url(#ah)"/>
-        <text class="el" x="285" y="266" text-anchor="middle">q, q̇</text>
-        <path class="ar" d="M520,276 H592" marker-end="url(#ah)"/>
-        <text class="el" x="556" y="266" text-anchor="middle">o</text>
-        <text class="el" x="556" y="300" text-anchor="middle">358-d</text>
-        <path class="ar" d="M730,312 V352 H135 V320" marker-end="url(#ah)"/>
-        <text class="el" x="432" y="372" text-anchor="middle">action a = PD target joint angles (size-free, no conversion)</text>
-        <path class="ar" d="M135,240 V110 H420 V92" marker-end="url(#ah)"/>
-        <text class="el" x="280" y="104" text-anchor="middle">rollout</text>
+        <rect class="band" x="10" y="10" width="940" height="172" rx="12"/>
+        <rect class="band" x="10" y="198" width="940" height="236" rx="12"/>
+        <text class="bl" x="934" y="34" text-anchor="end">control loop · every step (30 Hz)</text>
+        <text class="bl" x="934" y="422" text-anchor="end">search loop · every generation (16 rollouts)</text>
+        <rect class="box" x="30" y="70" width="230" height="80" rx="9"/><text class="t" x="145" y="105" text-anchor="middle">① child body (MuJoCo)</text><text class="s" x="145" y="127" text-anchor="middle">calibrated: kp 35.4, ±70.7</text>
+        <rect class="box" x="360" y="70" width="240" height="80" rx="9"/><text class="t" x="480" y="105" text-anchor="middle">② exact reverse retarget</text><text class="s" x="480" y="127" text-anchor="middle">joints copied · root ÷ 0.611</text>
+        <rect class="frozen" x="700" y="70" width="230" height="80" rx="9"/><text class="t" x="815" y="105" text-anchor="middle">③ Meta Motivo π(o, z)</text><text class="s" x="815" y="127" text-anchor="middle">frozen, never updated</text>
+        <rect class="box" x="30" y="250" width="230" height="70" rx="9"/><text class="t" x="145" y="280" text-anchor="middle">child reference g₁…g_T</text><text class="s" x="145" y="302" text-anchor="middle">adult motion retargeted, × 0.611</text>
+        <rect class="search" x="360" y="250" width="240" height="70" rx="9"/><text class="t" x="480" y="280" text-anchor="middle">L_align</text><text class="s" x="480" y="302" text-anchor="middle">rollout vs reference, per frame</text>
+        <rect class="search" x="700" y="250" width="230" height="70" rx="9"/><text class="t" x="815" y="280" text-anchor="middle">z = normalize(z0 + U c)</text><text class="s" x="815" y="302" text-anchor="middle">U: 8 shared correction directions</text>
+        <rect class="search" x="360" y="350" width="240" height="64" rx="9"/><text class="t" x="480" y="377" text-anchor="middle">ES updates c (8 numbers)</text><text class="s" x="480" y="399" text-anchor="middle">16 rollouts per generation</text>
+        <path class="ar" d="M260,110 H352" marker-end="url(#ah)"/>
+        <text class="el" x="306" y="101" text-anchor="middle">state</text><text class="el" x="306" y="131" text-anchor="middle">q, q̇</text>
+        <path class="ar" d="M600,110 H692" marker-end="url(#ah)"/>
+        <text class="el" x="646" y="101" text-anchor="middle">obs o</text><text class="el" x="646" y="131" text-anchor="middle">358-d</text>
+        <path class="ar" d="M815,70 V48 H145 V62" marker-end="url(#ah)"/>
+        <text class="el" x="480" y="40" text-anchor="middle">action a = PD target joint angles (size-free, no conversion)</text>
+        <path class="ar hot" d="M225,150 V232 H480 V242" marker-end="url(#ahh)"/>
+        <text class="el hot" x="352" y="225" text-anchor="middle">whole rollout</text>
+        <path class="ar" d="M260,285 H352" marker-end="url(#ah)"/>
+        <path class="ar hot" d="M480,320 V342" marker-end="url(#ahh)"/>
+        <path class="ar hot" d="M600,382 H815 V328" marker-end="url(#ahh)"/>
+        <path class="ar hot" d="M815,250 V158" marker-end="url(#ahh)"/>
+        <rect class="box" x="30" y="452" width="22" height="14" rx="3"/><text class="lg" x="60" y="464">fixed body and conversion</text>
+        <rect class="frozen" x="330" y="452" width="22" height="14" rx="3"/><text class="lg" x="360" y="464">frozen Meta Motivo</text>
+        <rect class="search" x="630" y="452" width="22" height="14" rx="3"/><text class="lg" x="660" y="464">updated by the search</text>
       </svg>
     </div>
-    <figcaption><b>Only 8 numbers are optimized.</b> The policy, the B network and the body are fixed. The child's state is converted into an adult observation o for the policy, and the policy's target joint angles go straight to the child's PD controllers. Each ES generation runs 16 rollouts, scores them with L_align, and updates the 8 coefficients c.</figcaption>
+    <figcaption><b>Top: the control loop, once per step.</b> ① The child body is simulated in MuJoCo; ② its state is converted into an adult observation o; ③ the frozen policy reads o and z and outputs PD target joint angles, which go straight to the child's actuators. <b>Bottom: the search loop, once per generation.</b> The whole rollout is compared with the child reference frame by frame to give L_align; ES ranks 16 rollouts and updates the 8 coefficients c; the new z goes back to the policy. Grey boxes are fixed, the blue box is the frozen model, and the orange boxes are the only part that changes during search.</figcaption>
   </figure>
 </section>
 

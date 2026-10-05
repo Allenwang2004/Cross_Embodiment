@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <style>:root{color-scheme:light}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
-<title>大人的策略,小孩的身體</title>
+<title>Cross-Embodiment(中文)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=Noto+Sans+TC:wght@500;700&family=Noto+Serif+TC:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap">
@@ -18,7 +18,7 @@
   --plate: #fcfcfb;
   --ink: #171a20;
   --ink-2: #4a505c;
-  --ink-3: #7a8190;
+  --ink-3: #596071;
   --rule: #dde1e8;
   --sky: #2167a1;          /* accent: MuJoCo sky, deepened */
   --tan: #b27a43;          /* the mannequin */
@@ -153,21 +153,25 @@ section { display: flex; flex-direction: column; gap: 1.3rem; }
 .chart .axis { stroke: var(--ink-3); stroke-width: 1; }
 .chart .grid { stroke: var(--rule); stroke-width: 1; stroke-dasharray: 3 4; }
 .chart .half { stroke: var(--ink-3); stroke-width: 1; stroke-dasharray: 6 5; }
-.bar-raw { fill: var(--motion); } .bar-main { fill: var(--sky); } .bar-aside { fill: var(--sky); opacity: .38; }
-.bar-ours { fill: var(--tan); } .bar-ref { fill: var(--ink-3); opacity: .45; }
+.bar-raw { fill: var(--motion); } .bar-main { fill: var(--sky); } .bar-aside { fill: var(--sky); opacity: .6; }
+.bar-ours { fill: var(--tan); } .bar-ref { fill: var(--ink-3); }
 .line-k8 { fill: none; stroke: var(--tan); stroke-width: 3; } .dot-k8 { fill: var(--tan); }
 .line-full { fill: none; stroke: var(--sky); stroke-width: 2.4; stroke-dasharray: 7 5; } .dot-full { fill: var(--sky); }
 .chart .v-k8 { fill: var(--tan); font-weight: 500; } .chart .v-full { fill: var(--sky); }
-.arch .box { fill: var(--surface); stroke: var(--ink-3); stroke-width: 1.2; }
-.arch .frozen { fill: var(--surface); stroke: var(--sky); stroke-width: 2.2; }
-.arch .search { fill: var(--surface); stroke: var(--tan); stroke-width: 2.2; }
-.arch .t { font-family: var(--display); font-size: 15px; fill: var(--ink); }
-.arch .s { font-size: 12px; fill: var(--ink-2); }
-.arch .ar { fill: none; stroke: var(--ink-2); stroke-width: 1.6; }
+.arch .band { fill: var(--bg); stroke: var(--rule); stroke-width: 1; }
+.arch .bl { font-family: var(--display); font-size: 14px; font-weight: 500; fill: var(--ink-2); }
+.arch .box { fill: var(--surface); stroke: var(--ink-3); stroke-width: 1.5; }
+.arch .frozen { fill: var(--surface); stroke: var(--sky); stroke-width: 2.6; }
+.arch .search { fill: var(--surface); stroke: var(--tan); stroke-width: 2.6; }
+.arch .t { font-family: var(--display); font-size: 15.5px; font-weight: 500; fill: var(--ink); }
+.arch .s { font-size: 12.5px; fill: var(--ink-2); }
+.arch .ar { fill: none; stroke: var(--ink-2); stroke-width: 1.8; }
 .arch .ar.hot { stroke: var(--tan); }
 .arch .head { fill: var(--ink-2); } .arch .head.hot { fill: var(--tan); }
-.arch .el { font-size: 12px; fill: var(--ink-2); }
-.arch .el.hot { fill: var(--tan); }
+.arch .el { font-size: 13px; fill: var(--ink); }
+.arch .el.hot { fill: var(--tan); font-weight: 500; }
+.arch .lg { font-family: var(--display); font-size: 13.5px; fill: var(--ink); }
+.chartbox { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: .9rem; }
 .scroll { overflow-x: auto; }
 .scroll > svg { min-width: 40rem; }
 .concept { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 1.1rem 1.25rem; display: flex; flex-direction: column; gap: .6rem; }
@@ -181,12 +185,12 @@ section { display: flex; flex-direction: column; gap: 1.3rem; }
 <header>
   <div class="lang"><a href="index.html">English</a> · 中文</div>
   <div class="eyebrow">凍結的 Meta Motivo · 只改 latent z · 小孩體型</div>
-  <h1>大人的策略,小孩的身體</h1>
-  <p class="sub">把身體和策略之間的介面對齊之後,剩下的落差只要搜尋 latent 幾代就能補上</p>
+  <h1>Cross-Embodiment</h1>
+  <p class="sub">大人的策略,小孩的身體:把身體和策略之間的介面對齊之後,剩下的落差只要搜尋 latent 幾代就能補上</p>
   <div class="authors">作者姓名</div>
   <div class="affil">單位 · 2026</div>
   <div class="links">
-    <a class="btn" href="https://github.com/Allenwang2004/Cross_Enbodiment">程式碼</a>
+    <span class="btn ghost">程式碼 · 即將公開</span>
     <span class="btn ghost">論文 · 準備中</span>
   </div>
 </header>
@@ -214,7 +218,7 @@ section { display: flex; flex-direction: column; gap: 1.3rem; }
 <section>
   <div class="sechead prose"><div class="eyebrow">從頭開始</div><h2>每一步改了什麼,好了多少</h2></div>
   <figure>
-    <div class="plate scroll">
+    <div class="chartbox scroll">
       <svg class="chart" viewBox="0 0 860 310" role="img" aria-label="12 個動作的 L_align 中位數:什麼都不改 1.82,加致動器 1.53,固定倍率觀測 1.08,精確觀測 0.62,加 5 代搜尋 0.43,完整搜尋 0.27,大人自己 0.17">
         <line class="grid" x1="380" y1="10" x2="380" y2="282"/><line class="grid" x1="510" y1="10" x2="510" y2="282"/>
         <line class="grid" x1="640" y1="10" x2="640" y2="282"/><line class="grid" x1="770" y1="10" x2="770" y2="282"/>
@@ -290,7 +294,7 @@ section { display: flex; flex-direction: column; gap: 1.3rem; }
     <p><span class="m">U</span> 是 8 個修正方向:把其他 429 個動作完整搜尋出的修正量 <span class="m">z* − z0</span> 做主成分分析,取前 8 個。測試的 12 個動作都不參與計算 <span class="m">U</span>。搜尋直接從 <span class="m">z0</span> 出發,不需要任何預搜尋。</p>
   </div>
   <figure>
-    <div class="plate scroll">
+    <div class="chartbox scroll">
       <svg class="chart" viewBox="0 0 860 300" role="img" aria-label="改善比例對代數:8 維第 2 代 44%、第 5 代 70%;全 256 維第 2 代 46%、第 5 代 59%">
         <line class="grid" x1="70" y1="30" x2="770" y2="30"/><line class="grid" x1="70" y1="85" x2="770" y2="85"/>
         <line class="grid" x1="70" y1="195" x2="770" y2="195"/>
@@ -334,51 +338,43 @@ section { display: flex; flex-direction: column; gap: 1.3rem; }
 </section>
 
 <section>
-  <div class="sechead prose"><div class="eyebrow">系統架構</div><h2>只有 c 會被更新</h2></div>
+  <div class="sechead prose"><div class="eyebrow">系統架構</div><h2>兩個迴路,只有 c 會被更新</h2></div>
   <figure>
-    <div class="plate scroll">
-      <svg class="arch" viewBox="0 0 880 390" role="img" aria-label="系統架構:小孩身體的狀態經精確反向重定向成為大人觀測值,送入凍結的 Meta Motivo actor;actor 輸出 PD 目標角度驅動小孩身體;rollout 與小孩參考動作比較得到 L_align,ES 依此更新 8 維係數 c,z 由 z0 加上 U c 得到">
+    <div class="chartbox scroll">
+      <svg class="arch" viewBox="0 0 960 480" role="img" aria-label="系統架構。上半部是控制迴路:小孩身體的狀態經精確反向重定向換成大人觀測值,送進凍結的 Meta Motivo 策略,策略輸出的 PD 目標關節角直接驅動小孩身體。下半部是搜尋迴路:整段 rollout 和小孩參考動作比較得到 L_align,ES 依此更新 8 維係數 c,z 等於 z0 加上 U c 再正規化,送回策略。">
         <defs>
           <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0,0 L10,5 L0,10 z"/></marker>
           <marker id="ahh" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head hot" d="M0,0 L10,5 L0,10 z"/></marker>
         </defs>
-        <rect class="box" x="20" y="20" width="230" height="64" rx="8"/>
-        <text class="t" x="135" y="47" text-anchor="middle">小孩參考動作 g₁…g_T</text>
-        <text class="s" x="135" y="68" text-anchor="middle">大人動作重定向,長度 ×0.611</text>
-        <rect class="search" x="320" y="20" width="200" height="64" rx="8"/>
-        <text class="t" x="420" y="47" text-anchor="middle">L_align</text>
-        <text class="s" x="420" y="68" text-anchor="middle">逐幀比對 rollout 與參考</text>
-        <rect class="search" x="600" y="20" width="260" height="64" rx="8"/>
-        <text class="t" x="730" y="47" text-anchor="middle">ES 更新 c</text>
-        <text class="s" x="730" y="68" text-anchor="middle">每代 16 次 rollout</text>
-        <rect class="search" x="600" y="128" width="260" height="64" rx="8"/>
-        <text class="t" x="730" y="155" text-anchor="middle">z = normalize(z0 + U c)</text>
-        <text class="s" x="730" y="176" text-anchor="middle">U:8 個共用的修正方向</text>
-        <rect class="box" x="20" y="240" width="230" height="72" rx="8"/>
-        <text class="t" x="135" y="268" text-anchor="middle">小孩身體(MuJoCo)</text>
-        <text class="s" x="135" y="290" text-anchor="middle">校準後致動器 kp 35.4 · ±70.7</text>
-        <rect class="box" x="320" y="240" width="200" height="72" rx="8"/>
-        <text class="t" x="420" y="268" text-anchor="middle">精確反向重定向</text>
-        <text class="s" x="420" y="290" text-anchor="middle">關節角照抄 · 根部 ÷0.611</text>
-        <rect class="frozen" x="600" y="240" width="260" height="72" rx="8"/>
-        <text class="t" x="730" y="268" text-anchor="middle">Meta Motivo actor π(o, z)</text>
-        <text class="s" x="730" y="290" text-anchor="middle">凍結,權重不更新</text>
-        <path class="ar" d="M250,52 H312" marker-end="url(#ah)"/>
-        <path class="ar hot" d="M520,52 H592" marker-end="url(#ahh)"/>
-        <path class="ar hot" d="M730,84 V120" marker-end="url(#ahh)"/>
-        <path class="ar hot" d="M730,192 V232" marker-end="url(#ahh)"/>
-        <path class="ar" d="M250,276 H312" marker-end="url(#ah)"/>
-        <text class="el" x="285" y="266" text-anchor="middle">q, q̇</text>
-        <path class="ar" d="M520,276 H592" marker-end="url(#ah)"/>
-        <text class="el" x="556" y="266" text-anchor="middle">o</text>
-        <text class="el" x="556" y="300" text-anchor="middle">358 維</text>
-        <path class="ar" d="M730,312 V352 H135 V320" marker-end="url(#ah)"/>
-        <text class="el" x="432" y="372" text-anchor="middle">動作 a = PD 目標關節角(和身體尺寸無關,不需換算)</text>
-        <path class="ar" d="M135,240 V110 H420 V92" marker-end="url(#ah)"/>
-        <text class="el" x="280" y="104" text-anchor="middle">rollout 軌跡</text>
+        <rect class="band" x="10" y="10" width="940" height="172" rx="12"/>
+        <rect class="band" x="10" y="198" width="940" height="236" rx="12"/>
+        <text class="bl" x="934" y="34" text-anchor="end">控制迴路 · 每一步(30 Hz)</text>
+        <text class="bl" x="934" y="422" text-anchor="end">搜尋迴路 · 每一代(16 次 rollout)</text>
+        <rect class="box" x="30" y="70" width="230" height="80" rx="9"/><text class="t" x="145" y="105" text-anchor="middle">① 小孩身體(MuJoCo)</text><text class="s" x="145" y="127" text-anchor="middle">校準致動器 kp 35.4, ±70.7</text>
+        <rect class="box" x="360" y="70" width="240" height="80" rx="9"/><text class="t" x="480" y="105" text-anchor="middle">② 精確反向重定向</text><text class="s" x="480" y="127" text-anchor="middle">關節角照抄 · 根部 ÷ 0.611</text>
+        <rect class="frozen" x="700" y="70" width="230" height="80" rx="9"/><text class="t" x="815" y="105" text-anchor="middle">③ Meta Motivo 策略 π(o, z)</text><text class="s" x="815" y="127" text-anchor="middle">凍結,權重不更新</text>
+        <rect class="box" x="30" y="250" width="230" height="70" rx="9"/><text class="t" x="145" y="280" text-anchor="middle">小孩參考動作 g₁…g_T</text><text class="s" x="145" y="302" text-anchor="middle">大人動作重定向(長度 × 0.611)</text>
+        <rect class="search" x="360" y="250" width="240" height="70" rx="9"/><text class="t" x="480" y="280" text-anchor="middle">L_align</text><text class="s" x="480" y="302" text-anchor="middle">逐幀比對 rollout 與參考</text>
+        <rect class="search" x="700" y="250" width="230" height="70" rx="9"/><text class="t" x="815" y="280" text-anchor="middle">z = normalize(z0 + U c)</text><text class="s" x="815" y="302" text-anchor="middle">U:8 個共用的修正方向</text>
+        <rect class="search" x="360" y="350" width="240" height="64" rx="9"/><text class="t" x="480" y="377" text-anchor="middle">ES 更新 c(8 個數字)</text><text class="s" x="480" y="399" text-anchor="middle">每代 16 次 rollout,依排名估梯度</text>
+        <path class="ar" d="M260,110 H352" marker-end="url(#ah)"/>
+        <text class="el" x="306" y="101" text-anchor="middle">狀態</text><text class="el" x="306" y="131" text-anchor="middle">q, q̇</text>
+        <path class="ar" d="M600,110 H692" marker-end="url(#ah)"/>
+        <text class="el" x="646" y="101" text-anchor="middle">觀測 o</text><text class="el" x="646" y="131" text-anchor="middle">358 維</text>
+        <path class="ar" d="M815,70 V48 H145 V62" marker-end="url(#ah)"/>
+        <text class="el" x="480" y="40" text-anchor="middle">動作 a = PD 目標關節角(與身體尺寸無關,不需換算)</text>
+        <path class="ar hot" d="M225,150 V232 H480 V242" marker-end="url(#ahh)"/>
+        <text class="el hot" x="352" y="225" text-anchor="middle">整段 rollout 軌跡</text>
+        <path class="ar" d="M260,285 H352" marker-end="url(#ah)"/>
+        <path class="ar hot" d="M480,320 V342" marker-end="url(#ahh)"/>
+        <path class="ar hot" d="M600,382 H815 V328" marker-end="url(#ahh)"/>
+        <path class="ar hot" d="M815,250 V158" marker-end="url(#ahh)"/>
+        <rect class="box" x="30" y="452" width="22" height="14" rx="3"/><text class="lg" x="60" y="464">固定的身體與換算</text>
+        <rect class="frozen" x="330" y="452" width="22" height="14" rx="3"/><text class="lg" x="360" y="464">凍結的 Meta Motivo</text>
+        <rect class="search" x="630" y="452" width="22" height="14" rx="3"/><text class="lg" x="660" y="464">搜尋時會更新的部分</text>
       </svg>
     </div>
-    <figcaption><b>只有 8 個數字被最佳化。</b>策略、B 網路、身體都固定。小孩的狀態先換算成大人的觀測值 o 送進策略;策略輸出的目標關節角直接交給小孩的 PD 控制器。每一代 ES 跑 16 次 rollout,用 L_align 評分後更新 8 維係數 c。</figcaption>
+    <figcaption><b>上:控制迴路,每一步執行一次。</b>① 小孩身體在 MuJoCo 裡模擬;② 它的狀態換算成大人的觀測值 o;③ 凍結的策略讀 o 和 z,輸出 PD 目標關節角,直接交給小孩的致動器。<b>下:搜尋迴路,每一代執行一次。</b>整段 rollout 和小孩參考動作逐幀比較得到 L_align;ES 依 16 次 rollout 的排名更新 8 個係數 c;新的 z 送回策略。灰框固定不動,藍框是凍結的模型,橘框是搜尋時唯一會變的部分。</figcaption>
   </figure>
 </section>
 
