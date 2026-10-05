@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>大人的策略,小孩的身體</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=Noto+Sans+TC:wght@500;700&family=Noto+Serif+TC:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a single reading column (text 42rem, figures 60rem) in the manner of a
+   paper project page; the simulator's own palette -- sky blue, checker grey,
+   wooden-mannequin tan -- supplies the accents. */
+:root {
+  --bg: #f7f8fa;
+  --surface: #ffffff;
+  --plate: #fcfcfb;
+  --ink: #171a20;
+  --ink-2: #4a505c;
+  --ink-3: #7a8190;
+  --rule: #dde1e8;
+  --sky: #2167a1;          /* accent: MuJoCo sky, deepened */
+  --tan: #b27a43;          /* the mannequin */
+  --body: #2a78d6;         /* "transfers across bodies" */
+  --motion: #d23b3a;       /* "fails across motions" */
+  --ok: #1a8a5a;
+  --warn: #b7791f;
+  --display: "Bricolage Grotesque", "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+  --text: "Newsreader", "Noto Serif TC", "PingFang TC", "Songti TC", serif;
+  --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, "Noto Sans TC", "PingFang TC", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111418; --surface: #181c22; --plate: #f4f5f7; --ink: #e8eaee; --ink-2: #b3b9c5;
+    --ink-3: #858d9c; --rule: #2b313b; --sky: #6aa9dd; --tan: #d5a26d; --body: #5b9ff0;
+    --motion: #f07170; --ok: #45c08a; --warn: #e0a84a; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111418; --surface: #181c22; --plate: #f4f5f7; --ink: #e8eaee; --ink-2: #b3b9c5;
+  --ink-3: #858d9c; --rule: #2b313b; --sky: #6aa9dd; --tan: #d5a26d; --body: #5b9ff0;
+  --motion: #f07170; --ok: #45c08a; --warn: #e0a84a; color-scheme: dark;
+}
+body { background: var(--bg); color: var(--ink); font-family: var(--text); font-size: 1.08rem; line-height: 1.85; }
+.wrap { max-width: 60rem; margin: 0 auto; padding-inline: 1.25rem; padding-block: 3rem 5rem; display: flex; flex-direction: column; gap: 3.25rem; }
+.prose { max-width: 42rem; margin-inline: auto; width: 100%; }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; color: var(--ink); }
+h1 { font-size: clamp(2.1rem, 5.2vw, 3.4rem); font-weight: 700; line-height: 1.2; letter-spacing: 0.02em; }
+h2 { font-size: 1.7rem; font-weight: 700; letter-spacing: -0.01em; }
+h3 { font-size: 1.18rem; font-weight: 500; }
+p { margin: 0; }
+a { color: var(--sky); text-underline-offset: 3px; }
+a:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid var(--sky); outline-offset: 3px; border-radius: 4px; }
+.eyebrow { font-family: var(--mono); font-size: .74rem; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+code, .m { font-family: var(--mono); font-size: .88em; }
+
+/* header */
+header { text-align: center; display: flex; flex-direction: column; gap: 1.1rem; align-items: center; }
+.sub { font-family: var(--text); font-style: normal; font-size: 1.25rem; color: var(--ink-2); max-width: 40rem; }
+.authors { font-family: var(--display); font-size: 1.05rem; color: var(--ink); }
+.affil { font-size: .98rem; color: var(--ink-3); }
+.links { display: flex; flex-wrap: wrap; gap: .6rem; justify-content: center; }
+.btn { font-family: var(--display); font-size: .95rem; font-weight: 500; text-decoration: none; color: var(--bg); background: var(--ink); padding: .5rem 1.05rem; border-radius: 999px; }
+.btn.ghost { background: transparent; color: var(--ink-3); border: 1px solid var(--rule); cursor: default; }
+
+/* media */
+figure { margin: 0; display: flex; flex-direction: column; gap: .7rem; }
+.plate { background: var(--plate); border: 1px solid var(--rule); border-radius: 10px; padding: .6rem; overflow: hidden; }
+.plate img, .plate video { display: block; width: 100%; height: auto; max-width: 100%; border-radius: 4px; }
+figcaption { font-size: .98rem; color: var(--ink-2); padding-inline: calc(.6rem + 1px); }
+figcaption b { color: var(--ink); font-weight: 500; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; }
+.pair > * { min-width: 0; }
+
+/* at-a-glance */
+.glance { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px; background: var(--rule); border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; }
+.glance > div { background: var(--surface); padding: 1.1rem 1rem 1.2rem; display: flex; flex-direction: column; gap: .35rem; min-width: 0; }
+.glance .v { font-family: var(--mono); font-size: 1.9rem; font-weight: 500; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.glance .l { font-size: .92rem; color: var(--ink-2); line-height: 1.4; }
+.v.bad { color: var(--motion); } .v.good { color: var(--body); } .v.tan { color: var(--tan); }
+
+/* beta strip: the eight body parameters */
+.beta { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; }
+.beta > div { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: .5rem .4rem; text-align: center; min-width: 0; }
+.beta .k { font-family: var(--mono); font-size: .72rem; color: var(--ink-3); }
+.beta .n { font-family: var(--display); font-size: .86rem; line-height: 1.2; }
+.beta .hot { border-color: var(--tan); box-shadow: inset 0 -3px 0 var(--tan); }
+
+/* claims */
+.claims { display: flex; flex-direction: column; gap: 0; border-top: 1px solid var(--rule); }
+.claim { display: grid; grid-template-columns: 3.2rem 1fr 6.5rem; gap: 1rem; padding: .9rem 0; border-bottom: 1px solid var(--rule); align-items: baseline; }
+.claim > * { min-width: 0; }
+.claim .id { font-family: var(--mono); color: var(--ink-3); font-size: .9rem; }
+.claim .t { font-size: 1.02rem; }
+.claim .t small { display: block; font-family: var(--mono); font-size: .8rem; color: var(--ink-3); margin-top: .2rem; }
+.pill { font-family: var(--mono); font-size: .72rem; letter-spacing: .06em; text-transform: uppercase; padding: .18rem .5rem; border-radius: 999px; justify-self: end; white-space: nowrap; border: 1px solid currentColor; }
+.pill.ok { color: var(--ok); } .pill.weak { color: var(--warn); }
+
+/* tables */
+.tbl { overflow-x: auto; border: 1px solid var(--rule); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: .95rem; }
+th, td { padding: .55rem .8rem; text-align: right; border-bottom: 1px solid var(--rule); font-variant-numeric: tabular-nums; }
+th:first-child, td:first-child { text-align: left; }
+thead th { font-family: var(--display); font-weight: 500; color: var(--ink-2); font-size: .88rem; }
+tbody tr:last-child td { border-bottom: 0; }
+td.hi { color: var(--body); font-weight: 500; }
+td.lo { color: var(--motion); }
+
+/* equations / setup */
+.eq { font-family: var(--mono); font-size: .95rem; background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; padding: .8rem 1rem; overflow-x: auto; white-space: nowrap; color: var(--ink); }
+
+/* journey timeline */
+.journey { display: flex; flex-direction: column; border-left: 2px solid var(--rule); margin-left: .4rem; }
+.step { position: relative; padding: 0 0 1.6rem 1.5rem; display: grid; grid-template-columns: 1fr 13rem; gap: 1.1rem; }
+.step > * { min-width: 0; }
+.step::before { content: ""; position: absolute; left: -.45rem; top: .45rem; width: .8rem; height: .8rem; border-radius: 50%; background: var(--bg); border: 2px solid var(--ink-3); }
+.step.turn::before { border-color: var(--body); background: var(--body); }
+.step .when { font-family: var(--mono); font-size: .78rem; color: var(--ink-3); letter-spacing: .04em; }
+.step h3 { margin-block: .15rem .35rem; }
+.step p { font-size: 1rem; color: var(--ink-2); }
+.step .why { color: var(--ink); }
+.step .thumb { background: var(--plate); border: 1px solid var(--rule); border-radius: 6px; padding: 4px; align-self: start; }
+.step .thumb img { display: block; width: 100%; border-radius: 3px; }
+.verdict { font-family: var(--mono); font-size: .8rem; margin-top: .45rem; }
+.verdict.x { color: var(--motion); } .verdict.y { color: var(--ok); }
+
+.note { font-size: 1rem; color: var(--ink-2); border-left: 3px solid var(--tan); padding: .2rem 0 .2rem 1rem; }
+ol.todo { margin: 0; padding-left: 1.3rem; display: flex; flex-direction: column; gap: .7rem; }
+ol.todo li::marker { font-family: var(--mono); color: var(--ink-3); }
+ol.todo b { font-family: var(--display); font-weight: 500; }
+footer { text-align: center; font-size: .9rem; color: var(--ink-3); }
+section { display: flex; flex-direction: column; gap: 1.3rem; }
+.sechead { display: flex; flex-direction: column; gap: .35rem; }
+
+@media (max-width: 720px) {
+  .glance { grid-template-columns: 1fr 1fr; }
+  .pair { grid-template-columns: 1fr; }
+  .beta { grid-template-columns: repeat(4, 1fr); }
+  .step { grid-template-columns: 1fr; }
+  .claim { grid-template-columns: 2.4rem 1fr; }
+  .claim .pill { grid-column: 2; justify-self: start; }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+.lang { font-family: var(--display); font-size: .9rem; }
+.lang a { color: var(--ink-3); }
+/* additions for the fast-adaptation page: inline SVG charts and the system diagram */
+.glance.three { grid-template-columns: repeat(3, 1fr); }
+.chart, .arch { display: block; width: 100%; height: auto; }
+.chart text, .arch text { font-family: var(--mono); font-size: 13px; fill: var(--ink-2); }
+.chart .lab { font-family: var(--display); font-size: 14px; fill: var(--ink); }
+.chart .axis { stroke: var(--ink-3); stroke-width: 1; }
+.chart .grid { stroke: var(--rule); stroke-width: 1; stroke-dasharray: 3 4; }
+.chart .half { stroke: var(--ink-3); stroke-width: 1; stroke-dasharray: 6 5; }
+.bar-raw { fill: var(--motion); } .bar-main { fill: var(--sky); } .bar-aside { fill: var(--sky); opacity: .38; }
+.bar-ours { fill: var(--tan); } .bar-ref { fill: var(--ink-3); opacity: .45; }
+.line-k8 { fill: none; stroke: var(--tan); stroke-width: 3; } .dot-k8 { fill: var(--tan); }
+.line-full { fill: none; stroke: var(--sky); stroke-width: 2.4; stroke-dasharray: 7 5; } .dot-full { fill: var(--sky); }
+.chart .v-k8 { fill: var(--tan); font-weight: 500; } .chart .v-full { fill: var(--sky); }
+.arch .box { fill: var(--surface); stroke: var(--ink-3); stroke-width: 1.2; }
+.arch .frozen { fill: var(--surface); stroke: var(--sky); stroke-width: 2.2; }
+.arch .search { fill: var(--surface); stroke: var(--tan); stroke-width: 2.2; }
+.arch .t { font-family: var(--display); font-size: 15px; fill: var(--ink); }
+.arch .s { font-size: 12px; fill: var(--ink-2); }
+.arch .ar { fill: none; stroke: var(--ink-2); stroke-width: 1.6; }
+.arch .ar.hot { stroke: var(--tan); }
+.arch .head { fill: var(--ink-2); } .arch .head.hot { fill: var(--tan); }
+.arch .el { font-size: 12px; fill: var(--ink-2); }
+.arch .el.hot { fill: var(--tan); }
+.scroll { overflow-x: auto; }
+.scroll > svg { min-width: 40rem; }
+.concept { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 1.1rem 1.25rem; display: flex; flex-direction: column; gap: .6rem; }
+.concept h3 { color: var(--tan); }
+@media (max-width: 720px) { .glance.three { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="lang"><a href="index.html">English</a> · 中文</div>
+  <div class="eyebrow">凍結的 Meta Motivo · 只改 latent z · 小孩體型</div>
+  <h1>大人的策略,小孩的身體</h1>
+  <p class="sub">把身體和策略之間的介面對齊之後,剩下的落差只要搜尋 latent 幾代就能補上</p>
+  <div class="authors">作者姓名</div>
+  <div class="affil">單位 · 2026</div>
+  <div class="links">
+    <a class="btn" href="https://github.com/Allenwang2004/Cross_Enbodiment">程式碼</a>
+    <span class="btn ghost">論文 · 準備中</span>
+  </div>
+</header>
+
+<figure>
+  <div class="plate"><video src="static/videos/teaser.mp4" autoplay muted loop playsinline controls></video></div>
+  <figcaption><b>同一個凍結的策略,四個動作。</b>每列一個動作(倒立、走路舉手、跳、爬)。左:重定向到小孩身體的參考動作。中:什麼都不改,直接用大人的 latent <span class="m">z0</span>。右:我們的做法,先對齊致動器和觀測值,再從 <span class="m">z0</span> 出發在 8 維子空間搜尋 5 代(80 次 rollout)。數字是 L_align,越低越好。</figcaption>
+</figure>
+
+<section>
+  <div class="glance three">
+    <div><span class="v tan">1.82 → 0.43</span><span class="l">12 個動作的 L_align 中位數:什麼都不改 → 介面對齊加 5 代搜尋</span></div>
+    <div><span class="v good">80 次</span><span class="l">rollout 就能拿到完整搜尋約 70% 的改善;完整搜尋要 2,048 次</span></div>
+    <div><span class="v">≈ 1 分鐘</span><span class="l">300 幀的動作搜尋 5 代所需的時間;120 幀的動作約 35 秒</span></div>
+  </div>
+</section>
+
+<section class="prose">
+  <div class="sechead"><div class="eyebrow">摘要</div><h2>在做什麼</h2></div>
+  <p>Meta Motivo 是一個只在大人身體上訓練的行為基礎模型。它用一個 256 維的 latent <span class="m">z</span> 決定要做什麼動作。我們把策略整個凍結,只改 <span class="m">z</span>,看能不能讓它驅動小孩的身體(長度 × 0.611,體重 38 kg,大人是 72 kg)。</p>
+  <p>我們先把身體和策略之間的介面對齊。致動器依體型縮放 PD 增益和力矩上限。觀測值用精確的反向重定向換算成「等效的大人觀測值」。策略的動作是關節目標角度,和身體尺寸無關,所以不需要換算。對策略來說,它看到的仍然是一個大人,只是肌肉比較弱。</p>
+  <p>介面對齊之後,大人原本的 <span class="m">z0</span> 在小孩身上已經接近可用。剩下的落差用 latent 搜尋補上,而且很便宜:修正量集中在一個跨動作共用的 8 維子空間,從 <span class="m">z0</span> 直接出發,5 代(80 次 rollout)就能拿到完整搜尋約 70% 的改善。另一方面,不同動作需要的修正彼此近乎正交,學一個通用的 adapter 在沒看過的動作上幾乎沒有效果,所以我們選擇每個動作各自快速搜尋。</p>
+</section>
+
+<section>
+  <div class="sechead prose"><div class="eyebrow">從頭開始</div><h2>每一步改了什麼,好了多少</h2></div>
+  <figure>
+    <div class="plate scroll">
+      <svg class="chart" viewBox="0 0 860 310" role="img" aria-label="12 個動作的 L_align 中位數:什麼都不改 1.82,加致動器 1.53,固定倍率觀測 1.08,精確觀測 0.62,加 5 代搜尋 0.43,完整搜尋 0.27,大人自己 0.17">
+        <line class="grid" x1="380" y1="10" x2="380" y2="282"/><line class="grid" x1="510" y1="10" x2="510" y2="282"/>
+        <line class="grid" x1="640" y1="10" x2="640" y2="282"/><line class="grid" x1="770" y1="10" x2="770" y2="282"/>
+        <line class="axis" x1="250" y1="10" x2="250" y2="282"/>
+        <text class="lab" x="240" y="31" text-anchor="end">0. 什麼都不改</text>
+        <rect class="bar-raw" x="250" y="16" width="474" height="22"/><text x="732" y="32">1.82</text>
+        <text class="lab" x="240" y="71" text-anchor="end">1. 致動器校準</text>
+        <rect class="bar-main" x="250" y="56" width="396.8" height="22"/><text x="654.8" y="72">1.53</text>
+        <text class="lab" x="240" y="111" text-anchor="end">(近似:固定倍率觀測)</text>
+        <rect class="bar-aside" x="250" y="96" width="279.5" height="22"/><text x="537.5" y="112">1.08</text>
+        <text class="lab" x="240" y="151" text-anchor="end">2. 精確觀測值</text>
+        <rect class="bar-main" x="250" y="136" width="160.2" height="22"/><text x="418.2" y="152">0.62</text>
+        <text class="lab" x="240" y="191" text-anchor="end">3. 8 維搜尋 5 代</text>
+        <rect class="bar-ours" x="250" y="176" width="111.8" height="22"/><text x="369.8" y="192">0.43</text>
+        <text class="lab" x="240" y="231" text-anchor="end">參考:完整搜尋</text>
+        <rect class="bar-ref" x="250" y="216" width="70.7" height="22"/><text x="328.7" y="232">0.27</text>
+        <text class="lab" x="240" y="271" text-anchor="end">參考:大人在自己身上</text>
+        <rect class="bar-ref" x="250" y="256" width="45.2" height="22"/><text x="303.2" y="272">0.17</text>
+        <text x="250" y="302" text-anchor="middle">0</text><text x="380" y="302" text-anchor="middle">0.5</text>
+        <text x="510" y="302" text-anchor="middle">1.0</text><text x="640" y="302" text-anchor="middle">1.5</text>
+        <text x="770" y="302" text-anchor="middle">2.0</text>
+      </svg>
+    </div>
+    <figcaption><b>L_align 中位數,12 個動作(每類 2 個),越低越好。</b>L_align 逐幀比較關節角度、手腳位置、接觸和根部位置。前四列都用大人的 <span class="m">z0</span>,只差在介面。另外在 60 個動作上用 <span class="m">z0</span> 重跑同樣的前四步,趨勢一樣:1.89 → 1.77 → 1.33 → 0.85。</figcaption>
+  </figure>
+  <figure>
+    <div class="plate"><video src="static/videos/ladder_walk.mp4" autoplay muted loop playsinline controls></video></div>
+    <figcaption><b>同一個動作(邊走邊舉手),每一步的 rollout。</b>什麼都不改時身體失去平衡(L_align 2.00);校準致動器後好一些(1.00);換成精確觀測值後已經能跟著走(0.35);搜尋 5 代後和參考很接近(0.12)。最右邊是大人用 <span class="m">z0</span> 在自己身上做同一個動作(0.01),也就是這個策略原本的水準。</figcaption>
+  </figure>
+
+  <div class="journey prose">
+    <div class="step turn">
+      <div>
+        <div class="when">第 0 步 · 基準</div>
+        <h3>什麼都不改</h3>
+        <p>只把身體縮小成小孩比例,致動器維持大人的設定(PD 增益 kp 180、kd 2,力矩上限 ±360 N·m),策略直接看小孩自己的觀測值。L_align 中位數 1.82,關節角平均差 15.6°,到結尾時位置偏了 2.0 m。</p>
+      </div>
+    </div>
+    <div class="step turn">
+      <div>
+        <div class="when">第 1 步 · 致動器</div>
+        <h3>依體型縮放致動器</h3>
+        <p>大人的力矩對 38 kg 的身體太強。我們依體型把 PD 增益和力矩上限縮小:kp 180 → 35.4、kd 2 → 0.31、±360 → ±70.7 N·m。L_align 降到 1.53,位置漂移從 2.0 m 降到 0.96 m;但關節角誤差沒有改善(17.5°),因為策略看到的觀測值還是錯的。</p>
+      </div>
+    </div>
+    <div class="step turn">
+      <div>
+        <div class="when">第 2 步 · 觀測值</div>
+        <h3>把小孩的狀態換算成大人的觀測值</h3>
+        <p>策略只看過大人的觀測值。小孩的骨盆高度、身體各點的位置和速度都只有大人的六成左右,策略看到的是一個不合理的大人狀態。用固定倍率粗略放大(誤差 2–15%),L_align 降到 1.08。改成精確的反向重定向:關節角照抄,根部位置和線速度除以 0.611,離地間隙保持不變,再用 humenv 自己的公式算出大人的觀測值。L_align 降到 0.62,關節角誤差減半(8.2°)。</p>
+      </div>
+    </div>
+    <div class="step turn">
+      <div>
+        <div class="when">第 3 步 · latent</div>
+        <h3>在 8 維子空間搜尋 5 代</h3>
+        <p>剩下的落差來自真正的動力學差異:質量分布、力矩上限、慣量。這部分交給 <span class="m">z</span>。從 <span class="m">z0</span> 出發搜尋 5 代(80 次 rollout),L_align 中位數降到 0.43。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="concept prose">
+    <h3>對策略來說,它在控制一個肌肉比較弱的大人</h3>
+    <p>觀測值換算成大人的單位,策略看到的就是一個姿勢、速度都合理的大人。它輸出的動作是 PD 控制器的目標關節角,同一個角度放在大人或小孩身上意思一樣,所以動作不需要換算。兩個身體真正不同的地方只剩下動力學:同樣的目標角度,小孩的關節到達的速度和力道不一樣。這部分沒有辦法靠換算消掉,所以由 <span class="m">z</span> 來補。</p>
+  </div>
+</section>
+
+<section>
+  <div class="sechead prose"><div class="eyebrow">快速搜尋</div><h2>幾代就夠</h2></div>
+  <div class="prose" style="display:flex;flex-direction:column;gap:1rem">
+    <p>搜尋用的是對偶取樣的演化策略(ES)加 Adam:每一代抽 8 個隨機方向,正負各試一次(16 次 rollout),依結果的排名估計下坡方向,再更新 <span class="m">z</span>。成本是 L_align。</p>
+    <div class="eq">z = 16 · normalize( z0 + U c ),&nbsp;&nbsp; c ∈ ℝ⁸</div>
+    <p><span class="m">U</span> 是 8 個修正方向:把其他 429 個動作完整搜尋出的修正量 <span class="m">z* − z0</span> 做主成分分析,取前 8 個。測試的 12 個動作都不參與計算 <span class="m">U</span>。搜尋直接從 <span class="m">z0</span> 出發,不需要任何預搜尋。</p>
+  </div>
+  <figure>
+    <div class="plate scroll">
+      <svg class="chart" viewBox="0 0 860 300" role="img" aria-label="改善比例對代數:8 維第 2 代 44%、第 5 代 70%;全 256 維第 2 代 46%、第 5 代 59%">
+        <line class="grid" x1="70" y1="30" x2="770" y2="30"/><line class="grid" x1="70" y1="85" x2="770" y2="85"/>
+        <line class="grid" x1="70" y1="195" x2="770" y2="195"/>
+        <line class="half" x1="70" y1="140" x2="770" y2="140"/>
+        <line class="axis" x1="70" y1="250" x2="770" y2="250"/><line class="axis" x1="70" y1="30" x2="70" y2="250"/>
+        <text x="60" y="254" text-anchor="end">0%</text><text x="60" y="199" text-anchor="end">25%</text>
+        <text x="60" y="144" text-anchor="end">50%</text><text x="60" y="89" text-anchor="end">75%</text>
+        <text x="60" y="34" text-anchor="end">100%</text>
+        <polyline class="line-full" points="70.0,175.9 147.8,148.6 225.6,133.8 303.3,133.4 381.1,119.3 458.9,109.2 536.7,102.4 614.4,99.7 692.2,99.7 770.0,97.5"/>
+        <polyline class="line-k8" points="70.0,187.1 147.8,152.8 225.6,152.8 303.3,99.1 381.1,96.9 458.9,96.9 536.7,96.9 614.4,96.9 692.2,88.7 770.0,88.7"/>
+        <circle class="dot-k8" cx="147.8" cy="152.8" r="5"/><circle class="dot-k8" cx="381.1" cy="96.9" r="5"/>
+        <circle class="dot-full" cx="147.8" cy="148.6" r="4"/><circle class="dot-full" cx="381.1" cy="119.3" r="4"/>
+        <text class="v-k8" x="381.1" y="84" text-anchor="middle">70%</text>
+        <text class="v-full" x="381.1" y="140" text-anchor="middle">59%</text>
+        <text class="v-k8" x="147.8" y="174" text-anchor="middle">44%</text>
+        <text class="v-k8" x="778" y="86">8 維</text><text class="v-full" x="778" y="102">全 256 維</text>
+        <text x="70" y="272" text-anchor="middle">1</text><text x="147.8" y="272" text-anchor="middle">2</text>
+        <text x="225.6" y="272" text-anchor="middle">3</text><text x="303.3" y="272" text-anchor="middle">4</text>
+        <text x="381.1" y="272" text-anchor="middle">5</text><text x="458.9" y="272" text-anchor="middle">6</text>
+        <text x="536.7" y="272" text-anchor="middle">7</text><text x="614.4" y="272" text-anchor="middle">8</text>
+        <text x="692.2" y="272" text-anchor="middle">9</text><text x="770" y="272" text-anchor="middle">10</text>
+        <text x="420" y="294" text-anchor="middle">代數(每代 16 次 rollout)</text>
+      </svg>
+    </div>
+    <figcaption><b>拿到完整搜尋改善的比例,12 個動作的中位數。</b>100% 是同一個動作用 2,048 次 rollout 完整搜尋(先 bfm 再 L_align)得到的改善。8 維在第 5 代達到 70%,全 256 維是 59%;第 2 代兩者都約 45%,這時 12 個動作中有 6 個(8 維)已經超過 50%。有兩個動作超過 100%,因為這裡的搜尋沒有加錨點懲罰。</figcaption>
+  </figure>
+  <div class="tbl">
+    <table>
+      <thead><tr><th>類別</th><th>幀數</th><th>到 50% 改善</th><th>到 90% 改善</th><th>每代時間</th><th>到 90% 的時間</th></tr></thead>
+      <tbody>
+        <tr><td>走路</td><td>300</td><td>2 代</td><td>7 代</td><td>12.7 秒</td><td>1.5 分</td></tr>
+        <tr><td>倒立</td><td>120</td><td>1 代</td><td>7 代</td><td>4.6 秒</td><td>0.5 分</td></tr>
+        <tr><td>旋轉</td><td>300</td><td>1 代</td><td>14 代</td><td>11.8 秒</td><td>2.8 分</td></tr>
+        <tr><td>跳</td><td>150</td><td>2 代</td><td>18 代</td><td>5.3 秒</td><td>1.6 分</td></tr>
+        <tr><td>爬</td><td>300</td><td>1 代</td><td>19 代</td><td>11.5 秒</td><td>3.6 分</td></tr>
+        <tr><td>舉手</td><td>120</td><td>4 代</td><td>20 代</td><td>5.0 秒</td><td>1.7 分</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="prose" style="font-size:.95rem;color:var(--ink-2)">表格來自 441 個動作的完整搜尋(全 256 維,起點是先搜尋 bfm 得到的解),代數取中位數。每代時間是 30 個搜尋同時跑、CPU 滿載時量的,大致和動作的幀數成正比。</p>
+</section>
+
+<section>
+  <div class="sechead prose"><div class="eyebrow">系統架構</div><h2>只有 c 會被更新</h2></div>
+  <figure>
+    <div class="plate scroll">
+      <svg class="arch" viewBox="0 0 880 390" role="img" aria-label="系統架構:小孩身體的狀態經精確反向重定向成為大人觀測值,送入凍結的 Meta Motivo actor;actor 輸出 PD 目標角度驅動小孩身體;rollout 與小孩參考動作比較得到 L_align,ES 依此更新 8 維係數 c,z 由 z0 加上 U c 得到">
+        <defs>
+          <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0,0 L10,5 L0,10 z"/></marker>
+          <marker id="ahh" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head hot" d="M0,0 L10,5 L0,10 z"/></marker>
+        </defs>
+        <rect class="box" x="20" y="20" width="230" height="64" rx="8"/>
+        <text class="t" x="135" y="47" text-anchor="middle">小孩參考動作 g₁…g_T</text>
+        <text class="s" x="135" y="68" text-anchor="middle">大人動作重定向,長度 ×0.611</text>
+        <rect class="search" x="320" y="20" width="200" height="64" rx="8"/>
+        <text class="t" x="420" y="47" text-anchor="middle">L_align</text>
+        <text class="s" x="420" y="68" text-anchor="middle">逐幀比對 rollout 與參考</text>
+        <rect class="search" x="600" y="20" width="260" height="64" rx="8"/>
+        <text class="t" x="730" y="47" text-anchor="middle">ES 更新 c</text>
+        <text class="s" x="730" y="68" text-anchor="middle">每代 16 次 rollout</text>
+        <rect class="search" x="600" y="128" width="260" height="64" rx="8"/>
+        <text class="t" x="730" y="155" text-anchor="middle">z = normalize(z0 + U c)</text>
+        <text class="s" x="730" y="176" text-anchor="middle">U:8 個共用的修正方向</text>
+        <rect class="box" x="20" y="240" width="230" height="72" rx="8"/>
+        <text class="t" x="135" y="268" text-anchor="middle">小孩身體(MuJoCo)</text>
+        <text class="s" x="135" y="290" text-anchor="middle">校準後致動器 kp 35.4 · ±70.7</text>
+        <rect class="box" x="320" y="240" width="200" height="72" rx="8"/>
+        <text class="t" x="420" y="268" text-anchor="middle">精確反向重定向</text>
+        <text class="s" x="420" y="290" text-anchor="middle">關節角照抄 · 根部 ÷0.611</text>
+        <rect class="frozen" x="600" y="240" width="260" height="72" rx="8"/>
+        <text class="t" x="730" y="268" text-anchor="middle">Meta Motivo actor π(o, z)</text>
+        <text class="s" x="730" y="290" text-anchor="middle">凍結,權重不更新</text>
+        <path class="ar" d="M250,52 H312" marker-end="url(#ah)"/>
+        <path class="ar hot" d="M520,52 H592" marker-end="url(#ahh)"/>
+        <path class="ar hot" d="M730,84 V120" marker-end="url(#ahh)"/>
+        <path class="ar hot" d="M730,192 V232" marker-end="url(#ahh)"/>
+        <path class="ar" d="M250,276 H312" marker-end="url(#ah)"/>
+        <text class="el" x="285" y="266" text-anchor="middle">q, q̇</text>
+        <path class="ar" d="M520,276 H592" marker-end="url(#ah)"/>
+        <text class="el" x="556" y="266" text-anchor="middle">o</text>
+        <text class="el" x="556" y="300" text-anchor="middle">358 維</text>
+        <path class="ar" d="M730,312 V352 H135 V320" marker-end="url(#ah)"/>
+        <text class="el" x="432" y="372" text-anchor="middle">動作 a = PD 目標關節角(和身體尺寸無關,不需換算)</text>
+        <path class="ar" d="M135,240 V110 H420 V92" marker-end="url(#ah)"/>
+        <text class="el" x="280" y="104" text-anchor="middle">rollout 軌跡</text>
+      </svg>
+    </div>
+    <figcaption><b>只有 8 個數字被最佳化。</b>策略、B 網路、身體都固定。小孩的狀態先換算成大人的觀測值 o 送進策略;策略輸出的目標關節角直接交給小孩的 PD 控制器。每一代 ES 跑 16 次 rollout,用 L_align 評分後更新 8 維係數 c。</figcaption>
+  </figure>
+</section>
+
+<section class="prose">
+  <div class="sechead"><div class="eyebrow">為什麼不學一個通用的 adapter</div><h2>修正量無法跨動作共用</h2></div>
+  <p>最直覺的做法是學一個網路,輸入動作的 <span class="m">z0</span>,直接輸出小孩用的 <span class="m">z</span>。我們試過監督式學習、ES 訓練的 adapter,以及每秒重新決定 <span class="m">z</span> 的閉迴路 adapter。在沒看過的動作上,cost 只降到 <span class="m">z0</span> 的 0.85–0.99 倍。相比之下,同一個動作直接搜尋 5 代,L_align 中位數就降到 <span class="m">z0</span> 的 0.76 倍,完整搜尋可以到 0.40 倍。</p>
+  <p>原因是不同動作的最佳修正方向彼此近乎正交(餘弦相似度約 0.03–0.06),而且同一個動作的好解也不只一個,沒有一致的規則可以學。所以我們把力氣放在讓每個動作的搜尋變快,而不是預測答案。</p>
+</section>
+
+<section class="prose">
+  <div class="sechead"><div class="eyebrow">限制</div><h2>還沒驗證的部分</h2></div>
+  <ol class="todo">
+    <li><b>樣本數小。</b>快速搜尋的數字來自 12 個動作、一個亂數種子;60 個動作的版本還沒跑完。</li>
+    <li><b>只有小孩一種體型。</b>其他體型要用同一套流程重新產生致動器和觀測值換算。</li>
+    <li><b>比較基準不是真正的最佳值。</b>「完整搜尋」只跑了 2,048 次,而且帶有拉回 <span class="m">z0</span> 的錨點懲罰,所以有些動作的快速搜尋會超過 100%。</li>
+    <li><b>時間包含平行負載。</b>每代時間是在多個搜尋同時跑時量的;另外每次搜尋開始前要約 1 分鐘載入模型和建立環境,讓同一個行程連續處理多個動作就能省掉。</li>
+  </ol>
+</section>
+
+<footer>Meta Motivo M-1(FB-CPR)· humenv · MuJoCo</footer>
+</div>
+</body>
+</html>

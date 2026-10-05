@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>An Adult Policy in a Child's Body</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a single reading column (text 42rem, figures 60rem) in the manner of a
+   paper project page; the simulator's own palette -- sky blue, checker grey,
+   wooden-mannequin tan -- supplies the accents. */
+:root {
+  --bg: #f7f8fa;
+  --surface: #ffffff;
+  --plate: #fcfcfb;
+  --ink: #171a20;
+  --ink-2: #4a505c;
+  --ink-3: #7a8190;
+  --rule: #dde1e8;
+  --sky: #2167a1;          /* accent: MuJoCo sky, deepened */
+  --tan: #b27a43;          /* the mannequin */
+  --body: #2a78d6;         /* "transfers across bodies" */
+  --motion: #d23b3a;       /* "fails across motions" */
+  --ok: #1a8a5a;
+  --warn: #b7791f;
+  --display: "Bricolage Grotesque", "Helvetica Neue", Arial, sans-serif;
+  --text: "Newsreader", "Iowan Old Style", Georgia, serif;
+  --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111418; --surface: #181c22; --plate: #f4f5f7; --ink: #e8eaee; --ink-2: #b3b9c5;
+    --ink-3: #858d9c; --rule: #2b313b; --sky: #6aa9dd; --tan: #d5a26d; --body: #5b9ff0;
+    --motion: #f07170; --ok: #45c08a; --warn: #e0a84a; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111418; --surface: #181c22; --plate: #f4f5f7; --ink: #e8eaee; --ink-2: #b3b9c5;
+  --ink-3: #858d9c; --rule: #2b313b; --sky: #6aa9dd; --tan: #d5a26d; --body: #5b9ff0;
+  --motion: #f07170; --ok: #45c08a; --warn: #e0a84a; color-scheme: dark;
+}
+body { background: var(--bg); color: var(--ink); font-family: var(--text); font-size: 1.12rem; line-height: 1.62; }
+.wrap { max-width: 60rem; margin: 0 auto; padding-inline: 1.25rem; padding-block: 3rem 5rem; display: flex; flex-direction: column; gap: 3.25rem; }
+.prose { max-width: 42rem; margin-inline: auto; width: 100%; }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; color: var(--ink); }
+h1 { font-size: clamp(2.1rem, 5.2vw, 3.4rem); font-weight: 700; line-height: 1.05; letter-spacing: -0.02em; }
+h2 { font-size: 1.7rem; font-weight: 700; letter-spacing: -0.01em; }
+h3 { font-size: 1.18rem; font-weight: 500; }
+p { margin: 0; }
+a { color: var(--sky); text-underline-offset: 3px; }
+a:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid var(--sky); outline-offset: 3px; border-radius: 4px; }
+.eyebrow { font-family: var(--mono); font-size: .74rem; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+code, .m { font-family: var(--mono); font-size: .88em; }
+
+/* header */
+header { text-align: center; display: flex; flex-direction: column; gap: 1.1rem; align-items: center; }
+.sub { font-family: var(--text); font-style: italic; font-size: 1.25rem; color: var(--ink-2); max-width: 40rem; }
+.authors { font-family: var(--display); font-size: 1.05rem; color: var(--ink); }
+.affil { font-size: .98rem; color: var(--ink-3); }
+.links { display: flex; flex-wrap: wrap; gap: .6rem; justify-content: center; }
+.btn { font-family: var(--display); font-size: .95rem; font-weight: 500; text-decoration: none; color: var(--bg); background: var(--ink); padding: .5rem 1.05rem; border-radius: 999px; }
+.btn.ghost { background: transparent; color: var(--ink-3); border: 1px solid var(--rule); cursor: default; }
+
+/* media */
+figure { margin: 0; display: flex; flex-direction: column; gap: .7rem; }
+.plate { background: var(--plate); border: 1px solid var(--rule); border-radius: 10px; padding: .6rem; overflow: hidden; }
+.plate img, .plate video { display: block; width: 100%; height: auto; max-width: 100%; border-radius: 4px; }
+figcaption { font-size: .98rem; color: var(--ink-2); padding-inline: calc(.6rem + 1px); }
+figcaption b { color: var(--ink); font-weight: 500; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; }
+.pair > * { min-width: 0; }
+
+/* at-a-glance */
+.glance { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px; background: var(--rule); border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; }
+.glance > div { background: var(--surface); padding: 1.1rem 1rem 1.2rem; display: flex; flex-direction: column; gap: .35rem; min-width: 0; }
+.glance .v { font-family: var(--mono); font-size: 1.9rem; font-weight: 500; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.glance .l { font-size: .92rem; color: var(--ink-2); line-height: 1.4; }
+.v.bad { color: var(--motion); } .v.good { color: var(--body); } .v.tan { color: var(--tan); }
+
+/* beta strip: the eight body parameters */
+.beta { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; }
+.beta > div { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: .5rem .4rem; text-align: center; min-width: 0; }
+.beta .k { font-family: var(--mono); font-size: .72rem; color: var(--ink-3); }
+.beta .n { font-family: var(--display); font-size: .86rem; line-height: 1.2; }
+.beta .hot { border-color: var(--tan); box-shadow: inset 0 -3px 0 var(--tan); }
+
+/* claims */
+.claims { display: flex; flex-direction: column; gap: 0; border-top: 1px solid var(--rule); }
+.claim { display: grid; grid-template-columns: 3.2rem 1fr 6.5rem; gap: 1rem; padding: .9rem 0; border-bottom: 1px solid var(--rule); align-items: baseline; }
+.claim > * { min-width: 0; }
+.claim .id { font-family: var(--mono); color: var(--ink-3); font-size: .9rem; }
+.claim .t { font-size: 1.02rem; }
+.claim .t small { display: block; font-family: var(--mono); font-size: .8rem; color: var(--ink-3); margin-top: .2rem; }
+.pill { font-family: var(--mono); font-size: .72rem; letter-spacing: .06em; text-transform: uppercase; padding: .18rem .5rem; border-radius: 999px; justify-self: end; white-space: nowrap; border: 1px solid currentColor; }
+.pill.ok { color: var(--ok); } .pill.weak { color: var(--warn); }
+
+/* tables */
+.tbl { overflow-x: auto; border: 1px solid var(--rule); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: .95rem; }
+th, td { padding: .55rem .8rem; text-align: right; border-bottom: 1px solid var(--rule); font-variant-numeric: tabular-nums; }
+th:first-child, td:first-child { text-align: left; }
+thead th { font-family: var(--display); font-weight: 500; color: var(--ink-2); font-size: .88rem; }
+tbody tr:last-child td { border-bottom: 0; }
+td.hi { color: var(--body); font-weight: 500; }
+td.lo { color: var(--motion); }
+
+/* equations / setup */
+.eq { font-family: var(--mono); font-size: .95rem; background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; padding: .8rem 1rem; overflow-x: auto; white-space: nowrap; color: var(--ink); }
+
+/* journey timeline */
+.journey { display: flex; flex-direction: column; border-left: 2px solid var(--rule); margin-left: .4rem; }
+.step { position: relative; padding: 0 0 1.6rem 1.5rem; display: grid; grid-template-columns: 1fr 13rem; gap: 1.1rem; }
+.step > * { min-width: 0; }
+.step::before { content: ""; position: absolute; left: -.45rem; top: .45rem; width: .8rem; height: .8rem; border-radius: 50%; background: var(--bg); border: 2px solid var(--ink-3); }
+.step.turn::before { border-color: var(--body); background: var(--body); }
+.step .when { font-family: var(--mono); font-size: .78rem; color: var(--ink-3); letter-spacing: .04em; }
+.step h3 { margin-block: .15rem .35rem; }
+.step p { font-size: 1rem; color: var(--ink-2); }
+.step .why { color: var(--ink); }
+.step .thumb { background: var(--plate); border: 1px solid var(--rule); border-radius: 6px; padding: 4px; align-self: start; }
+.step .thumb img { display: block; width: 100%; border-radius: 3px; }
+.verdict { font-family: var(--mono); font-size: .8rem; margin-top: .45rem; }
+.verdict.x { color: var(--motion); } .verdict.y { color: var(--ok); }
+
+.note { font-size: 1rem; color: var(--ink-2); border-left: 3px solid var(--tan); padding: .2rem 0 .2rem 1rem; }
+ol.todo { margin: 0; padding-left: 1.3rem; display: flex; flex-direction: column; gap: .7rem; }
+ol.todo li::marker { font-family: var(--mono); color: var(--ink-3); }
+ol.todo b { font-family: var(--display); font-weight: 500; }
+footer { text-align: center; font-size: .9rem; color: var(--ink-3); }
+section { display: flex; flex-direction: column; gap: 1.3rem; }
+.sechead { display: flex; flex-direction: column; gap: .35rem; }
+
+@media (max-width: 720px) {
+  .glance { grid-template-columns: 1fr 1fr; }
+  .pair { grid-template-columns: 1fr; }
+  .beta { grid-template-columns: repeat(4, 1fr); }
+  .step { grid-template-columns: 1fr; }
+  .claim { grid-template-columns: 2.4rem 1fr; }
+  .claim .pill { grid-column: 2; justify-self: start; }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+.lang { font-family: var(--display); font-size: .9rem; }
+.lang a { color: var(--ink-3); }
+/* additions for the fast-adaptation page: inline SVG charts and the system diagram */
+.glance.three { grid-template-columns: repeat(3, 1fr); }
+.chart, .arch { display: block; width: 100%; height: auto; }
+.chart text, .arch text { font-family: var(--mono); font-size: 13px; fill: var(--ink-2); }
+.chart .lab { font-family: var(--display); font-size: 14px; fill: var(--ink); }
+.chart .axis { stroke: var(--ink-3); stroke-width: 1; }
+.chart .grid { stroke: var(--rule); stroke-width: 1; stroke-dasharray: 3 4; }
+.chart .half { stroke: var(--ink-3); stroke-width: 1; stroke-dasharray: 6 5; }
+.bar-raw { fill: var(--motion); } .bar-main { fill: var(--sky); } .bar-aside { fill: var(--sky); opacity: .38; }
+.bar-ours { fill: var(--tan); } .bar-ref { fill: var(--ink-3); opacity: .45; }
+.line-k8 { fill: none; stroke: var(--tan); stroke-width: 3; } .dot-k8 { fill: var(--tan); }
+.line-full { fill: none; stroke: var(--sky); stroke-width: 2.4; stroke-dasharray: 7 5; } .dot-full { fill: var(--sky); }
+.chart .v-k8 { fill: var(--tan); font-weight: 500; } .chart .v-full { fill: var(--sky); }
+.arch .box { fill: var(--surface); stroke: var(--ink-3); stroke-width: 1.2; }
+.arch .frozen { fill: var(--surface); stroke: var(--sky); stroke-width: 2.2; }
+.arch .search { fill: var(--surface); stroke: var(--tan); stroke-width: 2.2; }
+.arch .t { font-family: var(--display); font-size: 15px; fill: var(--ink); }
+.arch .s { font-size: 12px; fill: var(--ink-2); }
+.arch .ar { fill: none; stroke: var(--ink-2); stroke-width: 1.6; }
+.arch .ar.hot { stroke: var(--tan); }
+.arch .head { fill: var(--ink-2); } .arch .head.hot { fill: var(--tan); }
+.arch .el { font-size: 12px; fill: var(--ink-2); }
+.arch .el.hot { fill: var(--tan); }
+.scroll { overflow-x: auto; }
+.scroll > svg { min-width: 40rem; }
+.concept { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 1.1rem 1.25rem; display: flex; flex-direction: column; gap: .6rem; }
+.concept h3 { color: var(--tan); }
+@media (max-width: 720px) { .glance.three { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="lang">English · <a href="zh.html">中文</a></div>
+  <div class="eyebrow">Frozen Meta Motivo · latent z only · child body</div>
+  <h1>An Adult Policy in a Child's Body</h1>
+  <p class="sub">Once the interface between body and policy is aligned, a few generations of latent search close most of the remaining gap</p>
+  <div class="authors">Author names</div>
+  <div class="affil">Affiliation · 2026</div>
+  <div class="links">
+    <a class="btn" href="https://github.com/Allenwang2004/Cross_Enbodiment">Code</a>
+    <span class="btn ghost">Paper · in preparation</span>
+  </div>
+</header>
+
+<figure>
+  <div class="plate"><video src="static/videos/teaser.mp4" autoplay muted loop playsinline controls></video></div>
+  <figcaption><b>One frozen policy, four motions.</b> Each row is one motion (headstand, walking with raised arms, jump, crawl). Left: the reference motion retargeted to the child. Middle: nothing changed, the adult latent <span class="m">z0</span> as is. Right: ours, with actuators and observations aligned and then 5 generations (80 rollouts) of search in an 8-dimensional subspace, starting from <span class="m">z0</span>. Numbers are L_align; lower is better.</figcaption>
+</figure>
+
+<section>
+  <div class="glance three">
+    <div><span class="v tan">1.82 → 0.43</span><span class="l">median L_align over 12 motions: nothing changed → aligned interface plus 5 generations of search</span></div>
+    <div><span class="v good">80</span><span class="l">rollouts recover about 70% of the gain of a full search, which takes 2,048</span></div>
+    <div><span class="v">≈ 1 min</span><span class="l">to run 5 generations on a 300-frame motion; about 35 s for a 120-frame motion</span></div>
+  </div>
+</section>
+
+<section class="prose">
+  <div class="sechead"><div class="eyebrow">Summary</div><h2>What this is</h2></div>
+  <p>Meta Motivo is a behavior foundation model trained only on an adult body. A 256-dimensional latent <span class="m">z</span> selects what it does. We freeze the whole policy and change only <span class="m">z</span>, and ask whether it can drive a child's body (lengths × 0.611, 38 kg against the adult's 72 kg).</p>
+  <p>We first align the interface between body and policy. The actuators get PD gains and torque limits scaled to the body. The observation is converted by exact reverse retargeting into the equivalent adult observation. The policy's actions are joint target angles, which do not depend on body size, so they need no conversion. To the policy, it is still looking at an adult, one with weaker muscles.</p>
+  <p>With the interface aligned, the adult's own <span class="m">z0</span> is already close to usable on the child. Latent search closes the rest, and it is cheap: the corrections concentrate in an 8-dimensional subspace shared across motions, and starting straight from <span class="m">z0</span>, 5 generations (80 rollouts) recover about 70% of the gain of a full search. Corrections for different motions are nearly orthogonal, and a learned, general adapter does almost nothing on unseen motions, so we search each motion quickly instead.</p>
+</section>
+
+<section>
+  <div class="sechead prose"><div class="eyebrow">From the start</div><h2>What each step changes, and by how much</h2></div>
+  <figure>
+    <div class="plate scroll">
+      <svg class="chart" viewBox="0 0 860 310" role="img" aria-label="Median L_align over 12 motions: nothing changed 1.82, actuators 1.53, fixed-multiplier observation 1.08, exact observation 0.62, plus 5 generations of search 0.43, full search 0.27, adult on its own body 0.17">
+        <line class="grid" x1="380" y1="10" x2="380" y2="282"/><line class="grid" x1="510" y1="10" x2="510" y2="282"/>
+        <line class="grid" x1="640" y1="10" x2="640" y2="282"/><line class="grid" x1="770" y1="10" x2="770" y2="282"/>
+        <line class="axis" x1="250" y1="10" x2="250" y2="282"/>
+        <text class="lab" x="240" y="31" text-anchor="end">0. nothing changed</text>
+        <rect class="bar-raw" x="250" y="16" width="474" height="22"/><text x="732" y="32">1.82</text>
+        <text class="lab" x="240" y="71" text-anchor="end">1. calibrated actuators</text>
+        <rect class="bar-main" x="250" y="56" width="396.8" height="22"/><text x="654.8" y="72">1.53</text>
+        <text class="lab" x="240" y="111" text-anchor="end">(approx.: fixed multiplier)</text>
+        <rect class="bar-aside" x="250" y="96" width="279.5" height="22"/><text x="537.5" y="112">1.08</text>
+        <text class="lab" x="240" y="151" text-anchor="end">2. exact observation</text>
+        <rect class="bar-main" x="250" y="136" width="160.2" height="22"/><text x="418.2" y="152">0.62</text>
+        <text class="lab" x="240" y="191" text-anchor="end">3. 8-dim search, 5 gens</text>
+        <rect class="bar-ours" x="250" y="176" width="111.8" height="22"/><text x="369.8" y="192">0.43</text>
+        <text class="lab" x="240" y="231" text-anchor="end">ref.: full search</text>
+        <rect class="bar-ref" x="250" y="216" width="70.7" height="22"/><text x="328.7" y="232">0.27</text>
+        <text class="lab" x="240" y="271" text-anchor="end">ref.: adult on its own body</text>
+        <rect class="bar-ref" x="250" y="256" width="45.2" height="22"/><text x="303.2" y="272">0.17</text>
+        <text x="250" y="302" text-anchor="middle">0</text><text x="380" y="302" text-anchor="middle">0.5</text>
+        <text x="510" y="302" text-anchor="middle">1.0</text><text x="640" y="302" text-anchor="middle">1.5</text>
+        <text x="770" y="302" text-anchor="middle">2.0</text>
+      </svg>
+    </div>
+    <figcaption><b>Median L_align over 12 motions (2 per category); lower is better.</b> L_align compares joint angles, hand and foot positions, contacts and root position frame by frame. The first four rows all use the adult <span class="m">z0</span> and differ only in the interface. Repeating the first four steps with <span class="m">z0</span> on 60 motions gives the same trend: 1.89 → 1.77 → 1.33 → 0.85.</figcaption>
+  </figure>
+  <figure>
+    <div class="plate"><video src="static/videos/ladder_walk.mp4" autoplay muted loop playsinline controls></video></div>
+    <figcaption><b>One motion (walking with raised arms), each step's rollout.</b> With nothing changed the body loses its balance (L_align 2.00). Calibrated actuators help (1.00). With the exact observation it follows the walk (0.35), and after 5 generations of search it is close to the reference (0.12). Far right: the adult doing the same motion with <span class="m">z0</span> on its own body (0.01), the policy's native level.</figcaption>
+  </figure>
+
+  <div class="journey prose">
+    <div class="step turn">
+      <div>
+        <div class="when">Step 0 · baseline</div>
+        <h3>Change nothing</h3>
+        <p>Only the body is shrunk to child proportions. The actuators keep the adult settings (PD gains kp 180, kd 2, torque limit ±360 N·m), and the policy reads the child's own observation. Median L_align 1.82, mean joint-angle error 15.6°, and the body ends 2.0 m away from where the reference does.</p>
+      </div>
+    </div>
+    <div class="step turn">
+      <div>
+        <div class="when">Step 1 · actuators</div>
+        <h3>Scale the actuators to the body</h3>
+        <p>Adult torques are too strong for a 38 kg body. We scale the PD gains and torque limits to the body: kp 180 → 35.4, kd 2 → 0.31, ±360 → ±70.7 N·m. L_align drops to 1.53 and the drift from 2.0 m to 0.96 m, but the joint-angle error does not improve (17.5°), because the observation the policy sees is still wrong.</p>
+      </div>
+    </div>
+    <div class="step turn">
+      <div>
+        <div class="when">Step 2 · observation</div>
+        <h3>Convert the child's state into an adult observation</h3>
+        <p>The policy has only seen adult observations. The child's pelvis height, body positions and velocities are about 60% of the adult's, so the policy sees an adult state that makes no sense. A fixed per-feature multiplier (2–15% error) brings L_align to 1.08. Exact reverse retargeting copies the joint angles, divides root position and linear velocity by 0.611, keeps the ground clearance, and computes the adult observation with humenv's own formula. L_align drops to 0.62 and the joint-angle error halves (8.2°).</p>
+      </div>
+    </div>
+    <div class="step turn">
+      <div>
+        <div class="when">Step 3 · latent</div>
+        <h3>Search 5 generations in an 8-dimensional subspace</h3>
+        <p>What remains is the real dynamics difference: mass distribution, torque limits, inertia. That part goes to <span class="m">z</span>. Starting from <span class="m">z0</span>, 5 generations (80 rollouts) bring the median L_align to 0.43.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="concept prose">
+    <h3>To the policy, it is controlling an adult with weaker muscles</h3>
+    <p>With the observation in adult units, the policy sees an adult whose posture and velocities make sense. Its actions are PD target joint angles, and a given angle means the same thing on an adult or a child, so actions need no conversion. The only real difference left is dynamics: for the same target angle, the child's joints get there with different speed and force. No conversion can remove that, so <span class="m">z</span> makes up for it.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sechead prose"><div class="eyebrow">Fast search</div><h2>A few generations are enough</h2></div>
+  <div class="prose" style="display:flex;flex-direction:column;gap:1rem">
+    <p>The search is an antithetic evolution strategy (ES) with Adam. Each generation draws 8 random directions and tries each with both signs (16 rollouts), estimates a downhill direction from the ranking of the results, and updates <span class="m">z</span>. The cost is L_align.</p>
+    <div class="eq">z = 16 · normalize( z0 + U c ),&nbsp;&nbsp; c ∈ ℝ⁸</div>
+    <p><span class="m">U</span> holds 8 correction directions: the top 8 principal components of the corrections <span class="m">z* − z0</span> found by full searches on 429 other motions. None of the 12 test motions is used to compute <span class="m">U</span>. The search starts directly from <span class="m">z0</span>, with no pre-search.</p>
+  </div>
+  <figure>
+    <div class="plate scroll">
+      <svg class="chart" viewBox="0 0 860 300" role="img" aria-label="Share of the gain against generations: 8 dims 44% at generation 2 and 70% at generation 5; all 256 dims 46% and 59%">
+        <line class="grid" x1="70" y1="30" x2="770" y2="30"/><line class="grid" x1="70" y1="85" x2="770" y2="85"/>
+        <line class="grid" x1="70" y1="195" x2="770" y2="195"/>
+        <line class="half" x1="70" y1="140" x2="770" y2="140"/>
+        <line class="axis" x1="70" y1="250" x2="770" y2="250"/><line class="axis" x1="70" y1="30" x2="70" y2="250"/>
+        <text x="60" y="254" text-anchor="end">0%</text><text x="60" y="199" text-anchor="end">25%</text>
+        <text x="60" y="144" text-anchor="end">50%</text><text x="60" y="89" text-anchor="end">75%</text>
+        <text x="60" y="34" text-anchor="end">100%</text>
+        <polyline class="line-full" points="70.0,175.9 147.8,148.6 225.6,133.8 303.3,133.4 381.1,119.3 458.9,109.2 536.7,102.4 614.4,99.7 692.2,99.7 770.0,97.5"/>
+        <polyline class="line-k8" points="70.0,187.1 147.8,152.8 225.6,152.8 303.3,99.1 381.1,96.9 458.9,96.9 536.7,96.9 614.4,96.9 692.2,88.7 770.0,88.7"/>
+        <circle class="dot-k8" cx="147.8" cy="152.8" r="5"/><circle class="dot-k8" cx="381.1" cy="96.9" r="5"/>
+        <circle class="dot-full" cx="147.8" cy="148.6" r="4"/><circle class="dot-full" cx="381.1" cy="119.3" r="4"/>
+        <text class="v-k8" x="381.1" y="84" text-anchor="middle">70%</text>
+        <text class="v-full" x="381.1" y="140" text-anchor="middle">59%</text>
+        <text class="v-k8" x="147.8" y="174" text-anchor="middle">44%</text>
+        <text class="v-k8" x="778" y="86">8 dims</text><text class="v-full" x="778" y="102">all 256</text>
+        <text x="70" y="272" text-anchor="middle">1</text><text x="147.8" y="272" text-anchor="middle">2</text>
+        <text x="225.6" y="272" text-anchor="middle">3</text><text x="303.3" y="272" text-anchor="middle">4</text>
+        <text x="381.1" y="272" text-anchor="middle">5</text><text x="458.9" y="272" text-anchor="middle">6</text>
+        <text x="536.7" y="272" text-anchor="middle">7</text><text x="614.4" y="272" text-anchor="middle">8</text>
+        <text x="692.2" y="272" text-anchor="middle">9</text><text x="770" y="272" text-anchor="middle">10</text>
+        <text x="420" y="294" text-anchor="middle">generation (16 rollouts each)</text>
+      </svg>
+    </div>
+    <figcaption><b>Share of the full search's gain, median over 12 motions.</b> 100% is the gain of a full search on the same motion with 2,048 rollouts (bfm first, then L_align). The 8-dimensional search reaches 70% at generation 5, all 256 dimensions 59%. At generation 2 both are near 45%, and 6 of the 12 motions (8 dims) are already past 50%. Two motions exceed 100% because this search has no anchor penalty.</figcaption>
+  </figure>
+  <div class="tbl">
+    <table>
+      <thead><tr><th>Category</th><th>Frames</th><th>To 50% of gain</th><th>To 90% of gain</th><th>Time per gen.</th><th>Time to 90%</th></tr></thead>
+      <tbody>
+        <tr><td>Walk</td><td>300</td><td>2 gens</td><td>7 gens</td><td>12.7 s</td><td>1.5 min</td></tr>
+        <tr><td>Headstand</td><td>120</td><td>1 gen</td><td>7 gens</td><td>4.6 s</td><td>0.5 min</td></tr>
+        <tr><td>Rotate</td><td>300</td><td>1 gen</td><td>14 gens</td><td>11.8 s</td><td>2.8 min</td></tr>
+        <tr><td>Jump</td><td>150</td><td>2 gens</td><td>18 gens</td><td>5.3 s</td><td>1.6 min</td></tr>
+        <tr><td>Crawl</td><td>300</td><td>1 gen</td><td>19 gens</td><td>11.5 s</td><td>3.6 min</td></tr>
+        <tr><td>Raise arms</td><td>120</td><td>4 gens</td><td>20 gens</td><td>5.0 s</td><td>1.7 min</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="prose" style="font-size:.95rem;color:var(--ink-2)">The table comes from full searches on 441 motions (all 256 dimensions, starting from the result of a bfm search); generation counts are medians. Time per generation was measured with 30 searches sharing a fully loaded CPU and scales roughly with the motion's length.</p>
+</section>
+
+<section>
+  <div class="sechead prose"><div class="eyebrow">System</div><h2>Only c is updated</h2></div>
+  <figure>
+    <div class="plate scroll">
+      <svg class="arch" viewBox="0 0 880 390" role="img" aria-label="System: the child body's state is converted by exact reverse retargeting into an adult observation and fed to the frozen Meta Motivo actor; the actor's PD target angles drive the child body; the rollout is compared with the child reference to give L_align, ES updates the 8 coefficients c, and z is z0 plus U c">
+        <defs>
+          <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0,0 L10,5 L0,10 z"/></marker>
+          <marker id="ahh" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head hot" d="M0,0 L10,5 L0,10 z"/></marker>
+        </defs>
+        <rect class="box" x="20" y="20" width="230" height="64" rx="8"/>
+        <text class="t" x="135" y="47" text-anchor="middle">child reference g₁…g_T</text>
+        <text class="s" x="135" y="68" text-anchor="middle">adult motion retargeted, ×0.611</text>
+        <rect class="search" x="320" y="20" width="200" height="64" rx="8"/>
+        <text class="t" x="420" y="47" text-anchor="middle">L_align</text>
+        <text class="s" x="420" y="68" text-anchor="middle">rollout vs reference, per frame</text>
+        <rect class="search" x="600" y="20" width="260" height="64" rx="8"/>
+        <text class="t" x="730" y="47" text-anchor="middle">ES updates c</text>
+        <text class="s" x="730" y="68" text-anchor="middle">16 rollouts per generation</text>
+        <rect class="search" x="600" y="128" width="260" height="64" rx="8"/>
+        <text class="t" x="730" y="155" text-anchor="middle">z = normalize(z0 + U c)</text>
+        <text class="s" x="730" y="176" text-anchor="middle">U: 8 shared correction directions</text>
+        <rect class="box" x="20" y="240" width="230" height="72" rx="8"/>
+        <text class="t" x="135" y="268" text-anchor="middle">child body (MuJoCo)</text>
+        <text class="s" x="135" y="290" text-anchor="middle">calibrated: kp 35.4 · ±70.7 N·m</text>
+        <rect class="box" x="320" y="240" width="200" height="72" rx="8"/>
+        <text class="t" x="420" y="268" text-anchor="middle">exact reverse retarget</text>
+        <text class="s" x="420" y="290" text-anchor="middle">joints copied · root ÷0.611</text>
+        <rect class="frozen" x="600" y="240" width="260" height="72" rx="8"/>
+        <text class="t" x="730" y="268" text-anchor="middle">Meta Motivo actor π(o, z)</text>
+        <text class="s" x="730" y="290" text-anchor="middle">frozen, weights never updated</text>
+        <path class="ar" d="M250,52 H312" marker-end="url(#ah)"/>
+        <path class="ar hot" d="M520,52 H592" marker-end="url(#ahh)"/>
+        <path class="ar hot" d="M730,84 V120" marker-end="url(#ahh)"/>
+        <path class="ar hot" d="M730,192 V232" marker-end="url(#ahh)"/>
+        <path class="ar" d="M250,276 H312" marker-end="url(#ah)"/>
+        <text class="el" x="285" y="266" text-anchor="middle">q, q̇</text>
+        <path class="ar" d="M520,276 H592" marker-end="url(#ah)"/>
+        <text class="el" x="556" y="266" text-anchor="middle">o</text>
+        <text class="el" x="556" y="300" text-anchor="middle">358-d</text>
+        <path class="ar" d="M730,312 V352 H135 V320" marker-end="url(#ah)"/>
+        <text class="el" x="432" y="372" text-anchor="middle">action a = PD target joint angles (size-free, no conversion)</text>
+        <path class="ar" d="M135,240 V110 H420 V92" marker-end="url(#ah)"/>
+        <text class="el" x="280" y="104" text-anchor="middle">rollout</text>
+      </svg>
+    </div>
+    <figcaption><b>Only 8 numbers are optimized.</b> The policy, the B network and the body are fixed. The child's state is converted into an adult observation o for the policy, and the policy's target joint angles go straight to the child's PD controllers. Each ES generation runs 16 rollouts, scores them with L_align, and updates the 8 coefficients c.</figcaption>
+  </figure>
+</section>
+
+<section class="prose">
+  <div class="sechead"><div class="eyebrow">Why not one general adapter</div><h2>Corrections do not carry across motions</h2></div>
+  <p>The obvious approach is a network that takes a motion's <span class="m">z0</span> and outputs the child's <span class="m">z</span>. We tried supervised learning, an ES-trained adapter, and a closed-loop adapter that re-chooses <span class="m">z</span> every second. On unseen motions the cost only drops to 0.85–0.99 of <span class="m">z0</span>'s. Searching the motion itself for 5 generations brings median L_align to 0.76 of <span class="m">z0</span>'s, and a full search to 0.40.</p>
+  <p>The best corrections for different motions are nearly orthogonal (cosine similarity about 0.03–0.06), and a single motion has many equally good solutions, so there is no consistent rule to learn. We spend the effort on making each motion's search fast instead of predicting its answer.</p>
+</section>
+
+<section class="prose">
+  <div class="sechead"><div class="eyebrow">Limitations</div><h2>What is not verified yet</h2></div>
+  <ol class="todo">
+    <li><b>Small sample.</b> The fast-search numbers come from 12 motions and one random seed; the 60-motion version has not finished.</li>
+    <li><b>One body.</b> Only the child. Other bodies need their actuators and observation conversion regenerated by the same pipeline.</li>
+    <li><b>The reference is not the true optimum.</b> The full search ran 2,048 rollouts with an anchor penalty toward <span class="m">z0</span>, which is why some fast searches exceed 100%.</li>
+    <li><b>Timings include parallel load.</b> Time per generation was measured with many searches running at once. Each search also spends about a minute loading the model and building environments; one process handling motions back to back avoids that.</li>
+  </ol>
+</section>
+
+<footer>Meta Motivo M-1 (FB-CPR) · humenv · MuJoCo</footer>
+</div>
+</body>
+</html>
