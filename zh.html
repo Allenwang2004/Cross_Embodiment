@@ -292,6 +292,11 @@ section { display: flex; flex-direction: column; gap: 1.3rem; }
     <div class="eq">z = 16 · normalize( z0 + U c ),&nbsp;&nbsp; c ∈ ℝ⁸</div>
     <p><span class="m">U</span> 是 8 個修正方向:把其他 429 個動作完整搜尋出的修正量 <span class="m">z* − z0</span> 做主成分分析,取前 8 個。測試的 12 個動作都不參與計算 <span class="m">U</span>。搜尋直接從 <span class="m">z0</span> 出發,不需要任何預搜尋。</p>
   </div>
+  <div class="concept prose">
+    <h3>為什麼不直接用 cosine similarity 當成本</h3>
+    <p>另一種常見的成本是 Meta Motivo 自己的 B 空間:1 − mean cos(B(s), B(g)),逐幀比較 rollout 狀態和參考狀態的 embedding。問題是 B 吃的 358 維觀測值以骨盆的面向為座標,而且不含骨盆的 x、y。把同一個姿勢平移 5.8 m、再轉 90°,觀測值只差 4e-15。所以 cosine 看得到局部姿勢、骨盆高度和身體座標下的速度,看不到身體朝哪裡、在哪裡。</p>
+    <p>結果是「朝對的方向走」和「慢慢轉歪、走偏好幾公尺」的成本幾乎一樣。20 個 cosine 成本差不多的走路解,結尾的面向從 −112° 到 +22°,離參考 0.2 到 13.4 m。所以只用 cosine 時,要另外加上面向 1 − cos(Δheading) 和骨盆位置兩項全域誤差,才管得住這兩件事。</p>
+  </div>
   <figure>
     <div class="chartbox scroll">
       <svg class="chart" viewBox="0 0 860 300" role="img" aria-label="改善比例對代數:8 維第 2 代 44%、第 5 代 70%;全 256 維第 2 代 46%、第 5 代 59%">

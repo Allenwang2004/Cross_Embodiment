@@ -292,6 +292,11 @@ section { display: flex; flex-direction: column; gap: 1.3rem; }
     <div class="eq">z = 16 · normalize( z0 + U c ),&nbsp;&nbsp; c ∈ ℝ⁸</div>
     <p><span class="m">U</span> holds 8 correction directions: the top 8 principal components of the corrections <span class="m">z* − z0</span> found by full searches on 429 other motions. None of the 12 test motions is used to compute <span class="m">U</span>. The search starts directly from <span class="m">z0</span>, with no pre-search.</p>
   </div>
+  <div class="concept prose">
+    <h3>Why not cosine similarity as the cost</h3>
+    <p>Another common cost uses Meta Motivo's own B space: 1 − mean cos(B(s), B(g)), comparing the embeddings of the rollout and reference states frame by frame. But B reads humenv's 358-dim observation, which is expressed in the pelvis's heading frame and leaves out the pelvis's x and y. Moving a pose 5.8 m and turning it 90° changes the observation by 4e-15. So cosine sees the local posture, the pelvis height and the body-frame velocities, but not which way the body faces or where it is.</p>
+    <p>As a result, walking in the right direction and slowly turning off course or drifting several metres cost about the same. 20 walking solutions with similar cosine cost ended facing −112° to +22° and 0.2 to 13.4 m from the reference. So with cosine alone, two global error terms have to be added, heading 1 − cos(Δheading) and pelvis position, to keep these in check.</p>
+  </div>
   <figure>
     <div class="chartbox scroll">
       <svg class="chart" viewBox="0 0 860 300" role="img" aria-label="Share of the gain against generations: 8 dims 44% at generation 2 and 70% at generation 5; all 256 dims 46% and 59%">
