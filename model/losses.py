@@ -304,6 +304,63 @@ def functional_equivalence(model, qpos_beta: np.ndarray, qpos_ref, weights: dict
     return total, terms
 
 
+# tracking_mse's weights, fixed at 1: every term is a plain squared error in its own units
+MSE_WEIGHTS = {"pose": 1.0, "ee": 1.0, "root": 1.0, "heading": 1.0}
+# conj of the SMPL pelvis base rotation (humenv.utils.remove_base_rot), so the heading is humenv's own
+_SMPL_BASE_CONJ = np.array([0.5, -0.5, -0.5, -0.5])
+
+
+def _quat_mul(a, b):
+    aw, ax, ay, az = np.moveaxis(a, -1, 0)
+    bw, bx, by, bz = np.moveaxis(b, -1, 0)
+    return np.stack([aw * bw - ax * bx - ay * by - az * bz, aw * bx + ax * bw + ay * bz - az * by,
+                     aw * by - ax * bz + ay * bw + az * bx, aw * bz + ax * by - ay * bx + az * bw], -1)
+
+
+def root_heading(quat_wxyz):
+    """(T, 4) pelvis world quaternions -> (T,) facing direction (rad), humenv's calc_heading."""
+    return kin.quat_to_yaw(_quat_mul(quat_wxyz, _SMPL_BASE_CONJ))
+
+
+def tracking_mse(model, qpos_a: np.ndarray, qpos_b: np.ndarray, weights: dict = None):
+    """L_align's replacement: plain squared errors, local pose and global placement kept apart.
+
+      pose     mean (joint angle_a - joint angle_b)^2, wrapped to [-pi, pi)            rad^2
+      ee       mean |p_a - p_b|^2 of hands, toes and head relative to the pelvis, each
+               expressed in its own body's heading frame (so it is the local shape only)  m^2
+      root     mean |pelvis_a - pelvis_b|^2, world x, y, z                               m^2
+      heading  mean 1 - cos(heading_a - heading_b)  (~ d^2 / 2)                           -
+
+    Means over the frames both have (truncated to the shorter). No d_root curvature / yaw-rate / Froude
+    terms: measured on 60 clips they were 77-87% of L_align, half of it the root path's curvature,
+    which is noise wherever the root barely moves. qpos_b None -> (0.0, {}).
+    """
+    if qpos_b is None:
+        return 0.0, {}
+    weights = MSE_WEIGHTS if weights is None else weights
+    T = min(len(qpos_a), len(qpos_b))
+    a, b = qpos_a[:T], qpos_b[:T]
+    bodies = kin.EE_BODIES + [kin.ROOT_BODY]
+    pa, qa = kin.batch_forward_pose(model, a, bodies)
+    pb, qb = kin.batch_forward_pose(model, b, bodies)
+    dq = (a[:, 7:] - b[:, 7:] + np.pi) % (2 * np.pi) - np.pi
+    ha, hb = root_heading(qa[kin.ROOT_BODY]), root_heading(qb[kin.ROOT_BODY])
+
+    def local(p, h):                     # (T, 3) world offset -> the body's heading frame
+        c, s = np.cos(h), np.sin(h)
+        return np.stack([c * p[:, 0] + s * p[:, 1], -s * p[:, 0] + c * p[:, 1], p[:, 2]], -1)
+
+    ee = np.mean([np.sum((local(pa[n] - pa[kin.ROOT_BODY], ha) - local(pb[n] - pb[kin.ROOT_BODY], hb)) ** 2, -1)
+                  for n in kin.EE_BODIES], 0)
+    terms = {
+        "pose": float(np.mean(dq ** 2)),
+        "ee": float(np.mean(ee)),
+        "root": float(np.mean(np.sum((pa[kin.ROOT_BODY] - pb[kin.ROOT_BODY]) ** 2, -1))),
+        "heading": float(np.mean(1.0 - np.cos(ha - hb))),
+    }
+    return sum(weights[k] * v for k, v in terms.items()), terms
+
+
 # MIGRATION NOTE. These are the weights that reproduce the OLD (dt = 1.0)
 # objective exactly, now that dt is real. A term built from the k-th time
 # derivative and squared scales by 30^(2k) when dt goes from 1.0 to 1/30, so the

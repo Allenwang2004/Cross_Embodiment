@@ -109,6 +109,7 @@ OBJECTIVES = {
     "phys": (0.0, 1.0),
     "both": (1.0, 1.0),
     "bfm": (1.0, 0.0),      # the "align" slot is the BFM latent loss, see score()
+    "mse": (1.0, 0.0),      # cost = losses.tracking_mse (pose + ee + root + heading MSE); L_align logged only
 }
 
 
@@ -292,6 +293,7 @@ def main():
     from model.obs_scale import build_obs_multiplier
     from model.simple.config import ESConfig
     from model.simple.train import compute_batch_cost
+    from model import losses
 
     task, stem = args.clip.split("/")
     z0_path = REPO_ROOT / "data" / "origin_z" / task / f"{stem}.npy"
@@ -321,7 +323,10 @@ def main():
     n_envs = 2 * args.pairs
     n_gens = max(args.evals // n_envs, 1)
     print(f"clip {args.clip} on {args.body} ({xml.name})")
-    if args.objective == "bfm":
+    if args.objective == "mse":
+        print("objective mse: cost = losses.tracking_mse (pose + ee + root + heading, weights 1)"
+              + (f" + {args.anchor_weight} * (|z - anchor| / 16)^2" if args.anchor_weight else ""))
+    elif args.objective == "bfm":
         print("objective bfm: cost = 1 - mean_t cos(B(s_t), B(g_t))  (BFMTrack Eq. 3, "
               "B fed the same rescaled obs as the actor); L_align / L_phys logged only")
     else:
@@ -341,7 +346,15 @@ def main():
     exact = None
     if args.obs_scale == "exact":
         from model.exact_obs import ExactObs
-        exact, obs_mul = ExactObs(xml, REPO_ROOT / args.obs_scale_ref), None
+        kw = {}
+        if args.body != "child":
+            # every body's retarget copies the joints and scales root x, y by its own s (constant to 1e-16),
+            # so read s off this clip against the adult's; the child keeps ExactObs's measured default
+            a = np.load(REPO_ROOT / "data" / "origin_motion" / task / f"{stem}.npz")["qpos"][:, :2]
+            n = min(len(a), len(ref)); m = np.abs(a[:n]) > 1e-3
+            kw["scale"] = float(np.median(ref[:n, :2][m] / a[:n][m]))
+            print(f"exact obs: root scale {kw['scale']:.6f} (from the reference vs the adult motion)")
+        exact, obs_mul = ExactObs(xml, REPO_ROOT / args.obs_scale_ref, **kw), None
     else:
         obs_mul = build_obs_multiplier(xml, REPO_ROOT / args.obs_scale_ref,
                                        mode=args.obs_scale, parts=cfg.obs_scale_parts,
@@ -402,6 +415,9 @@ def main():
         if Bg is not None:
             bfm = bfm_align.batch_bfm_align(model, o, Bg, args.device)
             cost = bfm
+        extra["mse"] = np.array([losses.tracking_mse(fk, qi, ref)[0] for qi in q])
+        if args.objective == "mse":
+            cost = extra["mse"].astype(np.float32)
         extra["head"], extra["pos"] = global_terms(q)
         if any(glob_w):
             cost = cost + glob_w[0] * extra["head"] + glob_w[1] * extra["pos"]
@@ -414,7 +430,7 @@ def main():
     # --- where we start, and the floor we are aiming at ----------------------
     c0, a0, p0, f0, q0 = score(np.repeat(z0[None], n_envs, axis=0))
     base = dict(cost=float(c0[0]), align=float(a0[0]), phys=float(p0[0]), bfm=float(f0[0]),
-                head=float(extra["head"][0]), pos=float(extra["pos"][0]))
+                head=float(extra["head"][0]), pos=float(extra["pos"][0]), mse=float(extra["mse"][0]))
     _, ra, rp = compute_batch_cost(fk, cfg, ref[None, :args.steps], [ref])
     floor = dict(cost=float(lam_a * ra[0] + lam_p * rp[0]),
                  align=float(ra[0]), phys=float(rp[0]), bfm=0.0 if Bg is not None else float("nan"))
@@ -434,7 +450,7 @@ def main():
         z_start = project_z(np.load(args.z_start).reshape(-1).astype(np.float64))
         cs, ca, cp, cf, cq = score(np.repeat(z_start[None], n_envs, axis=0))
         start_best = dict(cost=float(cs[0]), align=float(ca[0]), phys=float(cp[0]), bfm=float(cf[0]),
-                          head=float(extra["head"][0]), pos=float(extra["pos"][0]),
+                          head=float(extra["head"][0]), pos=float(extra["pos"][0]), mse=float(extra["mse"][0]),
                           z=z_start.copy(), qpos=cq[0].copy(), gen=-1, source="z_start")
         print(f"  warm start: cost {float(cs[0]):.4f} "
               f"({float(cs[0]) / max(base['cost'], 1e-9):.3f} x origin_z), "
@@ -465,7 +481,7 @@ def main():
         return float(np.degrees(np.arccos(np.clip(a @ b / (np.linalg.norm(a) * np.linalg.norm(b)), -1, 1))))
 
     best = dict(cost=base["cost"], align=base["align"], phys=base["phys"], bfm=base["bfm"],
-                head=base["head"], pos=base["pos"],
+                head=base["head"], pos=base["pos"], mse=base["mse"],
                 z=z0.copy(), qpos=q0[0].copy(), gen=-1, source="origin_z")
     if args.z_start and args.best_from_start:
         best = start_best
@@ -493,7 +509,7 @@ def main():
             best = dict(cost=float(cost[i]), align=float(align[i]),
                         phys=float(phys[i]), bfm=float(bfm[i]), z=cand[i].copy(),
                         qpos=qpos[i].copy(), gen=gen, source="sample",
-                        head=float(extra["head"][i]), pos=float(extra["pos"][i]))
+                        head=float(extra["head"][i]), pos=float(extra["pos"][i]), mse=float(extra["mse"][i]))
 
         z_prev = z
         if cma_es is not None:
@@ -530,7 +546,7 @@ def main():
             if mc[0] < best["cost"]:
                 best = dict(cost=float(mc[0]), align=float(ma[0]), phys=float(mp[0]),
                             bfm=float(mf[0]), z=z.copy(), qpos=mq[0].copy(), gen=gen,
-                            source="mean_z", head=float(extra["head"][0]), pos=float(extra["pos"][0]))
+                            source="mean_z", head=float(extra["head"][0]), pos=float(extra["pos"][0]), mse=float(extra["mse"][0]))
             el = time.time() - t0
             print(f"  gen {gen:5d}/{n_gens}  best {best['cost']:9.4f}  "
                   f"gen_best {cost.min():9.4f}  mean_z {mc[0]:9.4f}  "
@@ -581,7 +597,7 @@ def main():
         "anchor": args.anchor, "anchor_weight": args.anchor_weight,
         "subspace": args.subspace, "subspace_dim": None if U is None else len(U),
         "origin_z": base, "reference_floor": floor,
-        "best": {k: best[k] for k in ("cost", "align", "phys", "bfm", "gen", "source", "head", "pos") if k in best},
+        "best": {k: best[k] for k in ("cost", "align", "phys", "bfm", "gen", "source", "head", "pos", "mse") if k in best},
         "improvement_vs_origin_z": (base["cost"] - best["cost"]) / max(abs(base["cost"]), 1e-12),
         "cos_best_z0": float(np.dot(best["z"], z0)
                              / (np.linalg.norm(best["z"]) * np.linalg.norm(z0))),

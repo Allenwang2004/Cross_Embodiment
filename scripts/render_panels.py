@@ -14,6 +14,9 @@ Spec (JSON):
                "xml": "assets/robots_torque/m2c_t1000/robot_torque_full.xml",
                "qpos": "data/m2c_t1000/retargeting_motion/<task>/<stem>.npz"}, ...]}
 
+"track": {"distance", "elevation", "azimuth", "lookat_z"[, "follow": "first"]}: a free camera on each body's
+centre of mass, or with "follow": "first" on the first panel's for every panel (drift stays visible).
+
 Writes <out> (mp4) and <out>.png (contact sheet: three moments, panels across).
 """
 from __future__ import annotations
@@ -45,6 +48,16 @@ def main():
     size, cam, cols = spec.get("size", 320), spec.get("camera", "front_side"), spec.get("cols", 4)
     trajs = [np.load(REPO / p["qpos"])["qpos"] for p in spec["panels"]]
     T = max(len(q) for q in trajs)
+    tr = spec.get("track")
+    lead = None
+    if tr and tr.get("follow") == "first":
+        # every panel's camera follows the FIRST panel's centre of mass (the reference), so a rollout
+        # that drifts or turns away shows up as a body leaving the centre instead of being re-centred
+        m0 = mujoco.MjModel.from_xml_path(str(REPO / spec["panels"][0]["xml"])); d0 = mujoco.MjData(m0)
+        lead = []
+        for t in range(T):
+            d0.qpos[:] = trajs[0][min(t, len(trajs[0]) - 1)]; mujoco.mj_forward(m0, d0)
+            lead.append(d0.subtree_com[1][:2].copy())
     panels = []
     for p, q in zip(spec["panels"], trajs):
         m = mujoco.MjModel.from_xml_path(str(REPO / p["xml"]))
@@ -55,7 +68,6 @@ def main():
         # bodies of different heights stay whole in frame and keep their true
         # relative size. The XML's named cameras sit at a fixed 0.8 m and cut
         # the head off anything adult-sized.
-        tr = spec.get("track")
         fc = None
         if tr:
             fc = mujoco.MjvCamera()
@@ -66,7 +78,8 @@ def main():
             d.qpos[:] = q[min(t, len(q) - 1)]
             mujoco.mj_forward(m, d)
             if fc is not None:
-                fc.lookat[:] = [d.subtree_com[1][0], d.subtree_com[1][1], tr["lookat_z"]]
+                c = lead[t] if lead is not None else d.subtree_com[1]
+                fc.lookat[:] = [c[0], c[1], tr["lookat_z"]]
                 r.update_scene(d, camera=fc)
             else:
                 r.update_scene(d, camera=cam)

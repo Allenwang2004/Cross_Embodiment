@@ -189,7 +189,7 @@ def main():
     # the objective this run minimised, named the way the run was launched
     objective = summary.get("objective", "both")
     lam_a, lam_p = summary.get("lambda_align", 1.0), summary.get("lambda_phys", 1.0)
-    obj_name = {"align": "L_align", "phys": "L_phys", "bfm": "1-cos(B)"}.get(objective, "sum")
+    obj_name = {"align": "L_align", "phys": "L_phys", "bfm": "1-cos(B)", "mse": "MSE"}.get(objective, "sum")
 
     cfg = ESConfig(device=args.device)
     cfg.phys_weights = summary["phys_weights"]
@@ -199,17 +199,43 @@ def main():
     model = FBcprModel.from_pretrained(args.metamotivo).to(args.device)
     model.eval()
     n = len(idx)
-    env, _ = make_humenv(num_envs=n, vectorization_mode="async", task=None,
+    # roll out in the search's own batch size (2 x pairs, padded with the last z): the actor's GPU rounding
+    # depends on the batch size, and on a chaotic clip that alone moves the rollout (headstand_9's z0: MSE
+    # 0.905 in the search's 16-env batch, 1.350 in a 3-env one)
+    n_env = max(n, 2 * summary["pairs"])
+    env, _ = make_humenv(num_envs=n_env, vectorization_mode="async", task=None,
                          xml=str(xml), state_init="Default")
     fk = mujoco.MjModel.from_xml_path(str(xml))
-    obs_mul = build_obs_multiplier(xml, REPO_ROOT / args.obs_scale_ref,
-                                   mode=obs_scale, parts=cfg.obs_scale_parts,
-                                   verbose=False)
+    exact = None
+    if obs_scale == "exact":
+        # the same adult-equivalent observation the search used (single_z_search.py)
+        from model.exact_obs import ExactObs
+        kw = {}
+        if args.body != "child":
+            a = np.load(REPO_ROOT / "data" / "origin_motion" / task / f"{stem}.npz")["qpos"][:, :2]
+            m_ = min(len(a), len(ref)); msk = np.abs(a[:m_]) > 1e-3
+            kw["scale"] = float(np.median(ref[:m_, :2][msk] / a[:m_][msk]))
+        exact, obs_mul = ExactObs(xml, REPO_ROOT / args.obs_scale_ref, **kw), None
+    else:
+        obs_mul = build_obs_multiplier(xml, REPO_ROOT / args.obs_scale_ref,
+                                       mode=obs_scale, parts=cfg.obs_scale_parts,
+                                       verbose=False)
 
-    zt = torch.as_tensor(sel_z, dtype=torch.float32, device=args.device)
+    zpad = np.concatenate([sel_z, np.repeat(sel_z[-1:], n_env - n, 0)])
+    zt = torch.as_tensor(zpad, dtype=torch.float32, device=args.device)
     qpos = rollout(model, env, zt, steps, args.device, obs_mul,
-                   init_qpos=ref[0] if init_mode == "reference" else None, nv=fk.nv)
+                   init_qpos=ref[0] if init_mode == "reference" else None, nv=fk.nv, exact=exact)[:n]
     env.close()
+
+    # the new cost and the similarity measures neither cost optimises directly (mse_vs_align_test.py)
+    from model import losses, kinematics as kin
+    from mse_vs_align_test import metrics as sim_metrics
+    mses = [losses.tracking_mse(fk, qpos[i].astype(np.float64), ref)[0] for i in range(n)]
+    sims = [sim_metrics(fk, qpos[i].astype(np.float64), ref.astype(np.float64), losses, kin) for i in range(n)]
+    aw = summary.get("anchor_weight") or 0.0
+    anc = np.load(REPO_ROOT / summary["anchor"]).reshape(-1) if aw else None
+    if anc is not None:
+        anc = 16 * anc / np.linalg.norm(anc)
 
     _, aligns, physes = compute_batch_cost(fk, cfg, qpos, [ref] * n)
     bfm_cost = None
@@ -237,18 +263,23 @@ def main():
                          L_align=float(aligns[i]), L_phys=float(physes[i]),
                          objective=obj_name,
                          cost=float(bfm_cost[i]) if bfm_cost is not None
+                              else float(mses[i]) if objective == "mse"
                               else float(lam_a * aligns[i] + lam_p * physes[i]),
+                         mse=float(mses[i]), **sims[i],
+                         anchor_term=float(aw * (np.linalg.norm(16 * sel_z[i] / np.linalg.norm(sel_z[i]) - anc) / 16) ** 2)
+                         if anc is not None else 0.0,
                          cos_z0=float(cos_z0[i]),
                          travel=float(np.linalg.norm(q[-1, :2] - q[0, :2])),
                          upright_frac=float((up > 0.8).mean())))
     with open(out_dir / "trace.csv", "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0])); w.writeheader(); w.writerows(rows)
-    print(f"objective {objective}: cost = {lam_a:g} * L_align + {lam_p:g} * L_phys  ({obj_name})")
-    print(f"{'gen':>6s}{'evals':>8s}{'L_align':>9s}{'L_phys':>9s}{'cost':>9s}"
-          f"{'cos_z0':>8s}{'travel':>9s}{'upright':>9s}")
+    print(f"objective {objective}: cost = " + ("losses.tracking_mse" if objective == "mse" else
+          f"{lam_a:g} * L_align + {lam_p:g} * L_phys") + f"  ({obj_name})")
+    print(f"{'gen':>6s}{'evals':>8s}{'L_align':>9s}{'MSE':>8s}{'cost':>9s}{'MPJPE':>8s}{'local':>7s}{'head':>7s}"
+          f"{'joint':>7s}{'cos_z0':>8s}{'upright':>9s}   (MPJPE / local in cm, head / joint in deg)")
     for r in rows:
-        print(f"{r['gen']:6d}{r['evals']:8d}{r['L_align']:9.4f}{r['L_phys']:9.4f}"
-              f"{r['cost']:9.4f}{r['cos_z0']:8.3f}{r['travel']:9.2f}{100 * r['upright_frac']:8.0f}%")
+        print(f"{r['gen']:6d}{r['evals']:8d}{r['L_align']:9.4f}{r['mse']:8.4f}{r['cost']:9.4f}{r['mpjpe_glob']:8.1f}"
+              f"{r['mpjpe_loc']:7.1f}{r['head_deg']:7.1f}{r['joint_deg']:7.1f}{r['cos_z0']:8.3f}{100 * r['upright_frac']:8.0f}%")
 
     # --- kinematic playback of what was just simulated -----------------------
     renderer = mujoco.Renderer(fk, height=args.size, width=args.size)
@@ -272,7 +303,8 @@ def main():
     for i, g in enumerate(sel_gen):
         head = "origin z  (gen -1)" if g < 0 else f"gen {int(g)}  ({rows[i]['evals']} evals)"
         panels.append(play(qpos[i], head,
-                           f"{obj_name} {rows[i]['cost']:.3f}   cos(z, z0) {rows[i]['cos_z0']:.3f}"))
+                           f"{obj_name} {rows[i]['cost']:.3f}  MPJPE {rows[i]['mpjpe_glob']:.0f} cm  "
+                           f"head {rows[i]['head_deg']:.0f} deg"))
     renderer.close()
 
     cols = min(args.cols, len(panels))
