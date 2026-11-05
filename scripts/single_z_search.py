@@ -28,15 +28,20 @@ worth knowing before tuning lambda_align / lambda_phys any further.
 
 Method
 ------
-Antithetic ES on z directly -- the same estimator as model/simple/train_es.py
-(rank-normalised, common random numbers, deterministic actions), minus the
-adapter and its autograd chain, because here there is no theta to route the
-gradient into:
+ES on z directly (rank-normalised, common random numbers, deterministic actions)
+with independent perturbations and LSO's leave-one-out baseline, the default
+since 11/04:
 
-    eps_k  ~ N(0, I_256)
-    F+-_k  = cost( rollout( project(z +- sigma*eps_k) ) )
-    g      = sum_k shape(F+_k - F-_k) * eps_k / (2 * pairs * sigma)
+    eps_k  ~ N(0, I_256),  k = 1 .. 2*pairs
+    F_k    = cost( rollout( project(z + sigma*eps_k) ) )
+    s_k    = shape(F_k)
+    g      = sum_k (s_k - mean_{i != k} s_i) * eps_k / (2 * pairs * sigma)
     z     <- project( adam(z, g) )
+
+(Centred ranks sum to zero, so with the default --fitness rank the baseline only
+rescales them by 2*pairs / (2*pairs - 1).) --sampling antithetic is the version
+every search before 11/04 ran, model/simple/train_es.py's estimator: mirrored
+pairs project(z +- sigma*eps_k), g = sum_k shape(F+_k - F-_k) * eps_k / (2 * pairs * sigma).
 
 project() is metamotivo's own projection onto the sphere of radius sqrt(256)
 that FB latents live on -- the same constraint cfg.adapter_project_z applies.
@@ -83,6 +88,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import functools
 import json
 import os
 import sys
@@ -110,6 +116,7 @@ OBJECTIVES = {
     "both": (1.0, 1.0),
     "bfm": (1.0, 0.0),      # the "align" slot is the BFM latent loss, see score()
     "mse": (1.0, 0.0),      # cost = losses.tracking_mse (pose + ee + root + heading MSE); L_align logged only
+    "dtw": (1.0, 0.0),      # cost = 1 - time-aligned B similarity (model/dtw.py: slower allowed) + aligned heading
 }
 
 
@@ -138,7 +145,7 @@ def rank_normalize(f: np.ndarray) -> np.ndarray:
 
 @torch.no_grad()
 def rollout(model, env, z_env, steps, device, obs_mul, init_qpos=None, nv=None,
-            return_obs=False, exact=None):
+            return_obs=False, exact=None, act_out=None, exact_in_env=False, init_qvel=None):
     """Deterministic rollout, one z per slot. Returns qpos (n_envs, T, nq),
     and with return_obs also the RESCALED proprio of the state after each
     step, (n_envs, T, 358), index-aligned with qpos -- what B() scores.
@@ -155,16 +162,23 @@ def rollout(model, env, z_env, steps, device, obs_mul, init_qpos=None, nv=None,
 
     exact (model.exact_obs.ExactObs): the actor and B see the ADULT-EQUIVALENT
     observation of each slot's state (reverse retargeting) instead of raw x obs_mul.
+    exact_in_env: the env's workers already compute it (model.exact_obs.ExactObsWrapper) and return it as
+    info["exact_proprio"] -- every slot in parallel instead of one after another here, same numbers;
+    exact is then only used for the start pose.
+
+    init_qvel: the start velocity instead of 0 (--init-vel-scale).
+
+    act_out (list): if given, each step's actions (n_envs, n_act) are appended to it.
     """
     obs, _ = env.reset()
     if init_qpos is not None:
-        env.call("set_physics", qpos=init_qpos, qvel=np.zeros(nv))
+        env.call("set_physics", qpos=init_qpos, qvel=np.zeros(nv) if init_qvel is None else init_qvel)
         obs = {"proprio": np.stack([o["proprio"] for o in env.call("get_obs")])}
     hist, obs_hist = [], []
     if exact is not None:
         if init_qpos is None:
             raise SystemExit("--obs-scale exact needs --init reference")
-        ex_obs = np.repeat(exact(init_qpos, np.zeros(nv))[None], z_env.shape[0], 0)
+        ex_obs = np.repeat(exact(init_qpos, np.zeros(nv) if init_qvel is None else init_qvel)[None], z_env.shape[0], 0)
     for _ in range(steps):
         if exact is not None:
             proprio = ex_obs
@@ -172,10 +186,13 @@ def rollout(model, env, z_env, steps, device, obs_mul, init_qpos=None, nv=None,
             proprio = obs["proprio"] if obs_mul is None else obs["proprio"] * obs_mul
         obs_t = torch.as_tensor(proprio, dtype=torch.float32, device=device)
         mu = model._actor(model._normalize(obs_t), z_env, model.cfg.actor_std).mean
+        if act_out is not None:
+            act_out.append(mu.cpu().numpy())
         obs, _, _, _, info = env.step(mu.cpu().numpy())
         hist.append(info["qpos"].copy())
         if exact is not None:
-            ex_obs = np.stack([exact(q, v) for q, v in zip(info["qpos"], info["qvel"])])
+            ex_obs = (info["exact_proprio"].copy() if exact_in_env else
+                      np.stack([exact(q, v) for q, v in zip(info["qpos"], info["qvel"])]))
         if return_obs:
             obs_hist.append(ex_obs if exact is not None else
                             (obs["proprio"] if obs_mul is None else obs["proprio"] * obs_mul))
@@ -204,9 +221,28 @@ def main():
                    help="total rollouts of the search. NOT steps: the "
                         "budget is what costs wall-clock, and steps = "
                         "evals // (2*pairs)")
+    p.add_argument("--fitness", default="rank", choices=["rank", "raw"],
+                   help="what the ES gradient weights the noise by: rank = centred ranks of the 2*pairs costs "
+                        "(the default everywhere), raw = the costs themselves (the baseline or the antithetic difference "
+                        "removes their common level; Adam removes the overall scale)")
     p.add_argument("--pairs", type=int, default=8,
-                   help="antithetic pairs per step (one step = one Adam update "
-                        "on z); 2*pairs env slots")
+                   help="half the rollouts per step (one step = one Adam update "
+                        "on z): 2*pairs env slots, 2*pairs perturbations (--sampling)")
+    p.add_argument("--bfm-zero-vel", action="store_true",
+                   help="objective bfm: B sees the observations with their velocity part (obs[214:], local body "
+                        "velocities and angular velocities) set to 0, rollout and reference alike")
+    p.add_argument("--fall-weight", type=float, default=0.0,
+                   help="objective dtw: + this x the share of the aligned rollout frames with the head below --fall-head "
+                        "(a fall the alignment would otherwise absorb by passing slowly over a few reference frames)")
+    p.add_argument("--fall-head", type=float, default=0.8, help="head height (m) below which a frame counts as fallen")
+    p.add_argument("--mse-no-xy", action="store_true",
+                   help="objective mse: tracking_mse's root term compares the pelvis height only, not where it is")
+    p.add_argument("--floor-friction", type=float, default=None,
+                   help="sliding friction of the floor, which then wins every contact (model/friction.py); default: the model's own (feet 1.0, the rest 0.7)")
+    p.add_argument("--sampling", default="independent", choices=["antithetic", "independent"],
+                   help="independent = 2*pairs independent eps, each weighted by its score minus the mean of the other "
+                        "2*pairs - 1 (LSO's leave-one-out baseline), the default since 11/04; antithetic = eps and -eps, "
+                        "weighted by each pair's difference (every search before 11/04). Same rollouts per step either way")
     p.add_argument("--sigma", type=float, default=0.25,
                    help="|sigma*eps| / |z| = sigma, i.e. the FRACTIONAL "
                         "perturbation of z -- see ESConfig.es_sigma")
@@ -243,10 +279,27 @@ def main():
                         "leaves the last frame at 22%% of the first's weight, "
                         "0.99 at 5%%")
     p.add_argument("--no-fall-ref", action="store_true", default=True)
-    p.add_argument("--algo", default="es", choices=["es", "cmaes"],
-                   help="es: antithetic ES + Adam on z (the default everywhere else). "
+    p.add_argument("--cem-elites", type=int, default=4, help="--algo cem: how many of the 2*pairs candidates form the next distribution")
+    p.add_argument("--cem-sigma-min", type=float, default=None, help="--algo cem: floor of the per-dimension std (default --sigma / 5): 4 elites in 256 dimensions shrink it about 13%% a step otherwise")
+    p.add_argument("--algo", default="es", choices=["es", "cmaes", "cem", "random"],
+                   help="es: ES (--sampling) + Adam on z (the default everywhere else). "
                         "cmaes: pycma CMA-ES with popsize 2*pairs and sigma0 = --sigma, "
-                        "candidates projected onto the sphere; --lr is unused")
+                        "candidates projected onto the sphere; --lr is unused. "
+                        "cem: cross-entropy method, candidates N(mean, std^2) on the sphere, then mean and per-dimension std "
+                        "of the --cem-elites best; starts at z with std --sigma. "
+                        "random: candidates = the best z so far + sigma * noise on the sphere, it moves only when one beats it. "
+                        "--lr, --sampling and --fitness are unused for cem and random")
+    p.add_argument("--data-root", default="data",
+                   help="where origin_z/, origin_motion/ and <body>/retargeting_motion/ live (default data/; "
+                        "e.g. outputs/diffusion_adapter/data for synthetic tasks)")
+    p.add_argument("--eval-z", default=None,
+                   help="no search: score every latent in this (N, 256) .npy with the run's exact cost (padded to "
+                        "batches of 2 * pairs rollouts) and write <out>/eval.csv (index, cost, bfm, head, pos, "
+                        "anchor_dist) plus <out>/eval_base.json (the z0 terms), then exit")
+    p.add_argument("--eval-save-qpos", action="store_true",
+                   help="with --eval-z: also write <out>/eval_qpos.npz (qpos (N, T, nq)) of every scored latent")
+    p.add_argument("--eval-save-act", action="store_true",
+                   help="with --eval-z: also write <out>/eval_act.npz (the actor's mean actions (N, T, n_act))")
     p.add_argument("--z-start", default=None,
                    help="start the search from this z instead of from the clip's z0 (a .npy). "
                         "The reported origin_z baseline still uses the real z0, so the two "
@@ -262,6 +315,12 @@ def main():
     p.add_argument("--ref", default=None,
                    help="reference motion .npz (qpos) to track instead of data/<body>/retargeting_motion/<task>/<stem>.npz; "
                         "z0 still comes from --clip")
+    p.add_argument("--init-vel-scale", type=float, default=None,
+                   help="--init reference: start moving at this x the reference's velocity (frames 0 -> 1, 30 Hz) "
+                        "instead of at rest, e.g. 0.7 = the reference played at 0.7x speed")
+    p.add_argument("--init-ref", default=None,
+                   help="with --init reference: take frame 0 from this .npz instead of --ref (e.g. track the adult's "
+                        "own walk while starting from the body's feasible pose)")
     p.add_argument("--anchor", default=None,
                    help="latent .npy the --anchor-weight term pulls toward (e.g. the original start of a two-stage search)")
     p.add_argument("--anchor-weight", type=float, default=0.0,
@@ -272,7 +331,11 @@ def main():
                         "warm-started search that never beats z0's own cost reports z0 as its answer, which "
                         "is wrong whenever the question is where the search from THAT start ended up")
     p.add_argument("--pos-weight", type=float, default=0.0,
-                   help="add w * mean_t |root_xy_s - root_xy_g| (metres)")
+                   help="add w * mean_t |root_xy_s - root_xy_g| (metres, see --pos-unit)")
+    p.add_argument("--pos-unit", default="adult", choices=["adult", "body"],
+                   help="adult (default since 11/04, as robot_z_search.py): adult-equivalent metres, the body's metres / its "
+                        "root scale s (--obs-scale exact only; other obs modes have no s and stay in body metres). "
+                        "body: the body's own metres, every search before 11/04")
     p.add_argument("--subspace", default=None,
                    help=".npy of orthonormal rows (K, 256): move only within start + span(first --subspace-dim rows), "
                         "plus the radial re-projection. es only. Perturbations and Adam steps are scaled by "
@@ -296,9 +359,10 @@ def main():
     from model import losses
 
     task, stem = args.clip.split("/")
-    z0_path = REPO_ROOT / "data" / "origin_z" / task / f"{stem}.npy"
+    data_root = Path(args.data_root) if Path(args.data_root).is_absolute() else REPO_ROOT / args.data_root
+    z0_path = data_root / "origin_z" / task / f"{stem}.npy"
     ref_path = (Path(args.ref) if args.ref else
-                REPO_ROOT / "data" / args.body / "retargeting_motion" / task / f"{stem}.npz")
+                data_root / args.body / "retargeting_motion" / task / f"{stem}.npz")
     for q in (z0_path, ref_path):
         if not q.exists():
             raise SystemExit(f"{q} not found")
@@ -340,34 +404,55 @@ def main():
 
     model = FBcprModel.from_pretrained(args.metamotivo).to(args.device)
     model.eval()
-    env, _ = make_humenv(num_envs=n_envs, vectorization_mode="async", task=None,
-                        xml=str(xml), state_init="Default")
-    fk = mujoco.MjModel.from_xml_path(str(xml))
-    exact = None
+    kw, wrappers = None, None
     if args.obs_scale == "exact":
-        from model.exact_obs import ExactObs
+        from model.exact_obs import ExactObs, ExactObsWrapper
         kw = {}
         if args.body != "child":
             # every body's retarget copies the joints and scales root x, y by its own s (constant to 1e-16),
             # so read s off this clip against the adult's; the child keeps ExactObs's measured default
-            a = np.load(REPO_ROOT / "data" / "origin_motion" / task / f"{stem}.npz")["qpos"][:, :2]
+            a = np.load(data_root / "origin_motion" / task / f"{stem}.npz")["qpos"][:, :2]
             n = min(len(a), len(ref)); m = np.abs(a[:n]) > 1e-3
             kw["scale"] = float(np.median(ref[:n, :2][m] / a[:n][m]))
             print(f"exact obs: root scale {kw['scale']:.6f} (from the reference vs the adult motion)")
+        # each env worker computes its own slot's obs right after its physics step (was ~46% of a step when
+        # the main process did all slots in turn)
+        wrappers = [functools.partial(ExactObsWrapper, child_xml=str(xml),
+                                      adult_xml=str(REPO_ROOT / args.obs_scale_ref), **kw)]
+    if args.floor_friction is not None:       # a slippery / sticky floor in every worker (model/friction.py)
+        from model.friction import FloorFrictionWrapper
+        wrappers = [functools.partial(FloorFrictionWrapper, mu=args.floor_friction)] + (wrappers or [])
+        print(f"floor friction {args.floor_friction} (the floor wins every contact)")
+    env, _ = make_humenv(num_envs=n_envs, vectorization_mode="async", task=None, max_episode_steps=max(args.steps, 300),
+                        xml=str(xml), state_init="Default", wrappers=wrappers)
+    fk = mujoco.MjModel.from_xml_path(str(xml))
+    exact = None
+    if kw is not None:
         exact, obs_mul = ExactObs(xml, REPO_ROOT / args.obs_scale_ref, **kw), None
     else:
         obs_mul = build_obs_multiplier(xml, REPO_ROOT / args.obs_scale_ref,
                                        mode=args.obs_scale, parts=cfg.obs_scale_parts,
                                        verbose=False)
 
-    init_qpos = ref[0] if args.init == "reference" else None
+    init_qpos = ((np.load(args.init_ref)["qpos"][0] if args.init_ref else ref[0])
+                 if args.init == "reference" else None)
+    init_qvel = None
+    if args.init_vel_scale is not None and init_qpos is not None:
+        src = np.load(args.init_ref)["qpos"] if args.init_ref else ref
+        init_qvel = np.zeros(fk.nv); mujoco.mj_differentiatePos(fk, init_qvel, 1.0 / 30, src[0], src[1])
+        init_qvel *= args.init_vel_scale
+        print(f"start velocity: {args.init_vel_scale:g} x the reference's (pelvis {np.linalg.norm(init_qvel[:2]):.2f} m/s)")
 
     Bg = None
-    if args.objective == "bfm":
+    VEL = slice(214, 358)                    # humenv proprio: local_body_vel + local_body_ang_vel
+    if args.objective in ("bfm", "dtw"):
         from model import bfm_align
         env1, _ = make_humenv(num_envs=1, task=None, xml=str(xml), state_init="Default")
         if exact is None:
-            Bg = bfm_align.reference_embeddings(model, env1, ref, args.device, obs_mul)
+            ro = bfm_align.obs_from_qpos(env1, ref, bfm_align.DEFAULT_DT, obs_mul)
+            if args.bfm_zero_vel:
+                ro[:, VEL] = 0
+            Bg = bfm_align.embed(model, ro, args.device)
         else:
             # the reference through the SAME reverse retargeting as the rollout states
             vr, ro = np.zeros(fk.nv), []
@@ -375,9 +460,15 @@ def main():
                 if t:
                     mujoco.mj_differentiatePos(fk, vr, bfm_align.DEFAULT_DT, ref[t - 1], ref[t])
                 ro.append(exact(ref[t], vr))
-            Bg = bfm_align.embed(model, np.stack(ro), args.device)
+            ro = np.stack(ro)
+            if args.bfm_zero_vel:
+                ro[:, VEL] = 0
+            Bg = bfm_align.embed(model, ro, args.device)
 
     glob_w = (args.heading_weight, args.pos_weight)
+    pos_div = exact.s if args.pos_unit == "adult" and exact is not None else 1.0
+    if args.pos_weight:
+        print(f"position term: metres / {pos_div:.6f} ({args.pos_unit if exact is not None else 'body, no s without --obs-scale exact'})")
     anchor = None
     if args.anchor_weight:
         if not args.anchor:
@@ -396,11 +487,23 @@ def main():
 
     ref_h, ref_xy = root_heading_xy(ref)
 
+    def tmse(qi):
+        return losses.tracking_mse(fk, qi, ref, root_xy=not args.mse_no_xy)[0]
+
+    DTW_KEYS = ("dtw", "done", "pace", "head_al", "fallen")
+
+    def dext(i, with_path=True):
+        """the dtw numbers of slot i of the last score(), for the best / base records"""
+        d = {k: float(extra[k][i]) for k in ("dtw", "done", "pace", "head_al", "fallen") if k in extra}
+        if with_path and "path" in extra:
+            d["path"] = extra["path"][i].copy()
+        return d
+
     def global_terms(q):
         T = min(q.shape[1], len(ref))
         h, xy = root_heading_xy(q[:, :T])
         head = ((1 - np.cos(h - ref_h[None, :T])) / 2).mean(1)
-        pos = np.linalg.norm(xy - ref_xy[None, :T], axis=-1).mean(1)
+        pos = np.linalg.norm(xy - ref_xy[None, :T], axis=-1).mean(1) / pos_div
         return head, pos
 
     def score(zs):
@@ -408,18 +511,46 @@ def main():
         cost is the objective; L_align / L_phys are always the joint-space
         terms, so a bfm run's summary stays comparable with the others."""
         zt = torch.as_tensor(zs, dtype=torch.float32, device=args.device)
-        q, o = rollout(model, env, zt, args.steps, args.device, obs_mul,
-                       init_qpos=init_qpos, nv=fk.nv, return_obs=True, exact=exact)
-        cost, align, phys = compute_batch_cost(fk, cfg, q, [ref] * len(zs))
+        acts = []
+        q, o = rollout(model, env, zt, args.steps, args.device, obs_mul, init_qpos=init_qpos, nv=fk.nv,
+                       return_obs=True, exact=exact, act_out=acts, exact_in_env=exact is not None, init_qvel=init_qvel)
+        extra["act"] = np.stack(acts, axis=1)
+        if Bg is not None:
+            # bfm only logs L_align / L_phys / tracking_mse: logged() computes them for the slots kept
+            cost = align = phys = extra["mse"] = np.full(len(zs), np.nan)
+        else:
+            cost, align, phys = compute_batch_cost(fk, cfg, q, [ref] * len(zs))
+            extra["mse"] = np.array([tmse(qi) for qi in q])
         bfm = np.full(len(zs), np.nan, dtype=np.float32)
         if Bg is not None:
-            bfm = bfm_align.batch_bfm_align(model, o, Bg, args.device)
+            if args.bfm_zero_vel:
+                o = np.array(o, copy=True); o[..., VEL] = 0
+            if args.objective == "dtw":
+                from model import dtw
+                n_, T_, D_ = o.shape
+                Bs = bfm_align.embed(model, o.reshape(n_ * T_, D_), args.device).reshape(n_, T_, -1)
+                bfm = np.array([bfm_align.bfm_align_loss(Bs[k], Bg) for k in range(n_)], dtype=np.float32)
+                sc, je, ie, path = dtw.align_slow(dtw.cosine_matrix(Bs, Bg))
+                extra["dtw"], extra["done"], extra["pace"], extra["path"] = 1 - sc, (je + 1) / len(Bg), (je + 1) / (ie + 1), path
+            else:
+                bfm = bfm_align.batch_bfm_align(model, o, Bg, args.device)
             cost = bfm
-        extra["mse"] = np.array([losses.tracking_mse(fk, qi, ref)[0] for qi in q])
         if args.objective == "mse":
             cost = extra["mse"].astype(np.float32)
         extra["head"], extra["pos"] = global_terms(q)
-        if any(glob_w):
+        if args.objective == "dtw":                    # heading along the alignment; pos stays frame by frame
+            h_all, _ = root_heading_xy(q); P = extra["path"]
+            extra["head_al"] = np.array([((1 - np.cos(h_all[k][P[k] >= 0] - ref_h[P[k][P[k] >= 0]])) / 2).mean()
+                                         for k in range(len(zs))])
+            dk, hid = mujoco.MjData(fk), fk.body("Head").id
+            hz = np.empty(q.shape[:2])
+            for k in range(q.shape[0]):
+                for i in range(q.shape[1]):
+                    dk.qpos[:] = q[k, i]; mujoco.mj_kinematics(fk, dk); hz[k, i] = dk.xpos[hid][2]
+            extra["fallen"] = np.array([(hz[k][P[k] >= 0] < args.fall_head).mean() for k in range(len(zs))])
+            cost = (extra["dtw"] + glob_w[0] * extra["head_al"] + glob_w[1] * extra["pos"]
+                    + args.fall_weight * extra["fallen"])
+        elif any(glob_w):
             cost = cost + glob_w[0] * extra["head"] + glob_w[1] * extra["pos"]
         extra["anchor_dist"] = (np.linalg.norm(np.asarray(zs) - anchor, axis=1) if anchor is not None
                                 else np.full(len(zs), np.nan))
@@ -427,10 +558,20 @@ def main():
             cost = cost + args.anchor_weight * (extra["anchor_dist"] / 16.0) ** 2
         return cost, align, phys, bfm, q
 
+    def logged(i, q, align, phys):
+        """(L_align, L_phys, tracking_mse) of slot i of the last score() -- computed here for that one rollout
+        when the objective did not need them for every slot"""
+        if Bg is None:
+            return float(align[i]), float(phys[i]), float(extra["mse"][i])
+        _, a1, p1 = compute_batch_cost(fk, cfg, q[i][None], [ref])
+        return float(a1[0]), float(p1[0]), float(tmse(q[i]))
+
     # --- where we start, and the floor we are aiming at ----------------------
     c0, a0, p0, f0, q0 = score(np.repeat(z0[None], n_envs, axis=0))
-    base = dict(cost=float(c0[0]), align=float(a0[0]), phys=float(p0[0]), bfm=float(f0[0]),
-                head=float(extra["head"][0]), pos=float(extra["pos"][0]), mse=float(extra["mse"][0]))
+    la, lp, lm = logged(0, q0, a0, p0)
+    base = dict(cost=float(c0[0]), align=la, phys=lp, bfm=float(f0[0]),
+                head=float(extra["head"][0]), pos=float(extra["pos"][0]), mse=lm, **dext(0, False))
+    base_path = extra["path"][0].copy() if "path" in extra else None
     _, ra, rp = compute_batch_cost(fk, cfg, ref[None, :args.steps], [ref])
     floor = dict(cost=float(lam_a * ra[0] + lam_p * rp[0]),
                  align=float(ra[0]), phys=float(rp[0]), bfm=0.0 if Bg is not None else float("nan"))
@@ -443,14 +584,38 @@ def main():
     print(f"  reference: cost {floor['cost']:.4f}  L_align {floor['align']:.4f}  "
           f"L_phys {floor['phys']:.4f}   <- kinematic floor")
 
+    if args.eval_z:
+        Z = np.load(args.eval_z).reshape(-1, z0.size).astype(np.float64)
+        rows, qs, acts = [], [], []
+        for i in range(0, len(Z), n_envs):
+            chunk = Z[i:i + n_envs]
+            pad = np.concatenate([chunk, np.repeat(z0[None], n_envs - len(chunk), axis=0)])
+            c, _, _, f, qq = score(pad)
+            qs.append(np.asarray(qq)[:len(chunk)]); acts.append(extra["act"][:len(chunk)])
+            for k in range(len(chunk)):
+                rows.append((i + k, float(c[k]), float(f[k]), float(extra["head"][k]), float(extra["pos"][k]),
+                             float(extra["anchor_dist"][k]))
+                            + tuple(float(extra[x][k]) for x in DTW_KEYS if x in extra))
+        with open(out_dir / "eval.csv", "w") as fh:
+            fh.write("index,cost,bfm,head,pos,anchor_dist" + "".join("," + x for x in DTW_KEYS if x in extra) + "\n")
+            fh.writelines(",".join(f"{x:.6g}" if isinstance(x, float) else str(x) for x in r) + "\n" for r in rows)
+        (out_dir / "eval_base.json").write_text(json.dumps(base))
+        if args.eval_save_qpos:
+            np.savez_compressed(out_dir / "eval_qpos.npz", qpos=np.concatenate(qs).astype(np.float32))
+        if args.eval_save_act:
+            np.savez_compressed(out_dir / "eval_act.npz", act=np.concatenate(acts).astype(np.float32))
+        print(f"eval: {len(rows)} latents scored -> {out_dir / 'eval.csv'}")
+        return
+
     # --- ES ------------------------------------------------------------------
     rng = np.random.default_rng(args.seed)
     z_start = z0.copy()
     if args.z_start:
         z_start = project_z(np.load(args.z_start).reshape(-1).astype(np.float64))
         cs, ca, cp, cf, cq = score(np.repeat(z_start[None], n_envs, axis=0))
-        start_best = dict(cost=float(cs[0]), align=float(ca[0]), phys=float(cp[0]), bfm=float(cf[0]),
-                          head=float(extra["head"][0]), pos=float(extra["pos"][0]), mse=float(extra["mse"][0]),
+        la, lp, lm = logged(0, cq, ca, cp)
+        start_best = dict(cost=float(cs[0]), align=la, phys=lp, bfm=float(cf[0]),
+                          head=float(extra["head"][0]), pos=float(extra["pos"][0]), mse=lm, **dext(0),
                           z=z_start.copy(), qpos=cq[0].copy(), gen=-1, source="z_start")
         print(f"  warm start: cost {float(cs[0]):.4f} "
               f"({float(cs[0]) / max(base['cost'], 1e-9):.3f} x origin_z), "
@@ -470,6 +635,7 @@ def main():
     m = np.zeros(z.size if U is None else len(U))
     v = np.zeros_like(m)
     b1, b2, eps_adam = 0.9, 0.999, 1e-8
+    cem_sigma = np.full(z.size, float(args.sigma)); cem_sigma_min = args.cem_sigma_min if args.cem_sigma_min is not None else args.sigma / 5
     cma_es = None
     if args.algo == "cmaes":
         import cma
@@ -492,36 +658,54 @@ def main():
     trace_mean, trace_best = [z_start.copy()], [z_start.copy()]
     t0 = time.time()
     for gen in range(n_gens):
-        if cma_es is not None:
+        if args.algo == "cem":
+            cand = project_z(z + cem_sigma * rng.standard_normal((n_envs, z.size)))
+        elif args.algo == "random":
+            cand = project_z(best["z"] + args.sigma * rng.standard_normal((n_envs, z.size)))
+        elif cma_es is not None:
             cand = project_z(np.asarray(cma_es.ask(), dtype=np.float64))
         else:
+            n_eps = args.pairs if args.sampling == "antithetic" else 2 * args.pairs
             if U is None:
-                eps = rng.standard_normal((args.pairs, z.size))
+                eps = rng.standard_normal((n_eps, z.size))
             else:
-                xi = sub_scale * rng.standard_normal((args.pairs, len(U)))
+                xi = sub_scale * rng.standard_normal((n_eps, len(U)))
                 eps = xi @ U
-            cand = project_z(np.concatenate([z + args.sigma * eps,
-                                             z - args.sigma * eps], axis=0))
+            if args.sampling == "antithetic":
+                cand = project_z(np.concatenate([z + args.sigma * eps,
+                                                 z - args.sigma * eps], axis=0))
+            else:
+                cand = project_z(z + args.sigma * eps)
         cost, align, phys, bfm, qpos = score(cand)
 
         i = int(np.argmin(cost))
         if cost[i] < best["cost"]:
-            best = dict(cost=float(cost[i]), align=float(align[i]),
-                        phys=float(phys[i]), bfm=float(bfm[i]), z=cand[i].copy(),
+            la, lp, lm = logged(i, qpos, align, phys)
+            best = dict(cost=float(cost[i]), align=la,
+                        phys=lp, bfm=float(bfm[i]), z=cand[i].copy(),
                         qpos=qpos[i].copy(), gen=gen, source="sample",
-                        head=float(extra["head"][i]), pos=float(extra["pos"][i]), mse=float(extra["mse"][i]))
+                        head=float(extra["head"][i]), pos=float(extra["pos"][i]), mse=lm, **dext(i))
 
         z_prev = z
-        if cma_es is not None:
+        if args.algo == "cem":
+            elite = cand[np.argsort(cost)[:args.cem_elites]]
+            z = project_z(elite.mean(0)); cem_sigma = np.maximum(elite.std(0), cem_sigma_min)
+        elif args.algo == "random":
+            z = best["z"].copy()
+        elif cma_es is not None:
             # tell the projected candidates (what was actually scored); keep the
             # mean on the sphere too so sigma stays a fractional perturbation
             cma_es.tell(list(cand), list(map(float, cost)))
             cma_es.mean = project_z(np.asarray(cma_es.mean, dtype=np.float64))
             z = cma_es.mean.copy()
         else:
-            s = rank_normalize(cost)
-            g = ((s[:args.pairs] - s[args.pairs:])[:, None] * (eps if U is None else xi)).sum(0) \
-                / (2 * args.pairs * args.sigma)
+            s = rank_normalize(cost) if args.fitness == "rank" else np.asarray(cost, dtype=np.float64)
+            if args.sampling == "antithetic":
+                g = ((s[:args.pairs] - s[args.pairs:])[:, None] * (eps if U is None else xi)).sum(0) \
+                    / (2 * args.pairs * args.sigma)
+            else:                                   # leave-one-out baseline, as lso_search.py
+                adv = s - (s.sum() - s) / (len(s) - 1)
+                g = (adv[:, None] * (eps if U is None else xi)).sum(0) / (2 * args.pairs * args.sigma)
             m = b1 * m + (1 - b1) * g
             v = b2 * v + (1 - b2) * g * g
             mh = m / (1 - b1 ** (gen + 1))
@@ -537,21 +721,25 @@ def main():
                    start_deg_from_z0=ang_pair(z_start, z0),
                    cos_z0=float(np.dot(z, z0) / (np.linalg.norm(z) * np.linalg.norm(z0))),
                    path_len_deg=round(path_len, 2), net_deg=round(ang(z0, z), 2),
-                   sigma=float(cma_es.sigma) if cma_es is not None else args.sigma)
+                   sigma=float(cma_es.sigma) if cma_es is not None else float(cem_sigma.mean()) if args.algo == "cem" else args.sigma)
         # The iterate itself, not just its samples -- one extra rollout, and it
         # is the only way to see whether the mean is tracking the population.
         if args.eval_every and (gen % args.eval_every == 0 or gen == n_gens - 1):
             mc, ma, mp, mf, mq = score(np.repeat(z[None], n_envs, axis=0))
             row["mean_z_cost"] = float(mc[0])
             if mc[0] < best["cost"]:
-                best = dict(cost=float(mc[0]), align=float(ma[0]), phys=float(mp[0]),
+                la, lp, lm = logged(0, mq, ma, mp)
+                best = dict(cost=float(mc[0]), align=la, phys=lp,
                             bfm=float(mf[0]), z=z.copy(), qpos=mq[0].copy(), gen=gen,
-                            source="mean_z", head=float(extra["head"][0]), pos=float(extra["pos"][0]), mse=float(extra["mse"][0]))
+                            source="mean_z", head=float(extra["head"][0]), pos=float(extra["pos"][0]), mse=lm, **dext(0))
             el = time.time() - t0
             print(f"  gen {gen:5d}/{n_gens}  best {best['cost']:9.4f}  "
                   f"gen_best {cost.min():9.4f}  mean_z {mc[0]:9.4f}  "
                   f"cos(z,z0) {row['cos_z0']:.3f}  path {path_len:5.0f} deg / net {row['net_deg']:4.0f} deg"
-                  + (f"  sigma {cma_es.sigma:.4f}" if cma_es is not None else "") + f"  [{el / 60:.1f} min]", flush=True)
+                  + (f"  sigma {cma_es.sigma:.4f}" if cma_es is not None else "")
+                  + (f"  | best dtw {best['dtw']:.4f} done {best['done']:.2f} pace {best['pace']:.2f} heading_al {best['head_al']:.4f}"
+                     f" fallen {best['fallen']:.3f}"
+                     if "pace" in best else "") + f"  [{el / 60:.1f} min]", flush=True)
         curve.append(row)
         trace_mean.append(z.copy())
         trace_best.append(best["z"].copy())
@@ -563,14 +751,14 @@ def main():
     # --- what came out -------------------------------------------------------
     np.save(out_dir / "best_z.npy", best["z"].astype(np.float32).reshape(1, -1))
     np.savez_compressed(out_dir / "best.npz", qpos=best["qpos"].astype(np.float32),
-                        fps=cfg.control_fps)
+                        fps=cfg.control_fps, **({"dtw_path": best["path"]} if "path" in best else {}))
     # The origin_z rollout under the SAME init and env as the search. Saved so a
     # plot does not have to re-derive the baseline from a separate render, which
     # would not reproduce it: a rollout that falls is chaotic enough that a
     # different device or a different env wrapper lands somewhere else entirely
     # (measured: L_align 1.569 in the async search vs 1.290 re-rendered).
     np.savez_compressed(out_dir / "origin_z.npz", qpos=q0[0].astype(np.float32),
-                        fps=cfg.control_fps)
+                        fps=cfg.control_fps, **({"dtw_path": base_path} if base_path is not None else {}))
     # gen -1 is z0 itself, so row i is "after i steps" and row 0 is the
     # starting point -- scripts/rollout_z_trace.py indexes it that way.
     np.savez_compressed(
@@ -585,19 +773,23 @@ def main():
 
     summary = {
         "clip": args.clip, "body": args.body, "xml": str(xml), "ref": str(ref_path),
-        "objective": args.objective, "lambda_align": lam_a, "lambda_phys": lam_p,
+        "objective": args.objective, "bfm_zero_vel": args.bfm_zero_vel,
+        "fall_weight": args.fall_weight, "fall_head": args.fall_head, "init_vel_scale": args.init_vel_scale, "mse_no_xy": args.mse_no_xy,
+        "lambda_align": lam_a, "lambda_phys": lam_p,
         "phys_weights": cfg.phys_weights, "phys_fall_ref": cfg.phys_fall_ref,
         # "generations" is the on-disk name for what the logs and figures now
         # call steps -- kept so older summary.json files stay readable
         "evals": n_gens * n_envs, "generations": n_gens, "pairs": args.pairs,
-        "sigma": args.sigma, "lr": args.lr, "steps": args.steps, "algo": args.algo,
+        "sigma": args.sigma, "lr": args.lr, "steps": args.steps, "algo": args.algo, "fitness": args.fitness, "sampling": args.sampling, "floor_friction": args.floor_friction,
         "path_len_deg": round(path_len, 1), "net_deg": round(ang(z0, z), 1),
-        "obs_scale": args.obs_scale, "seed": args.seed, "init": args.init,
+        "obs_scale": args.obs_scale, "seed": args.seed, "init": args.init, "init_ref": args.init_ref,
         "align_discount": args.discount, "heading_weight": args.heading_weight, "pos_weight": args.pos_weight,
+        "pos_unit": args.pos_unit if exact is not None else "body", "pos_div": pos_div,
         "anchor": args.anchor, "anchor_weight": args.anchor_weight,
         "subspace": args.subspace, "subspace_dim": None if U is None else len(U),
         "origin_z": base, "reference_floor": floor,
-        "best": {k: best[k] for k in ("cost", "align", "phys", "bfm", "gen", "source", "head", "pos", "mse") if k in best},
+        "best": {k: best[k] for k in ("cost", "align", "phys", "bfm", "gen", "source", "head", "pos", "mse",
+                                      "dtw", "done", "pace", "head_al", "fallen") if k in best},
         "improvement_vs_origin_z": (base["cost"] - best["cost"]) / max(abs(base["cost"]), 1e-12),
         "cos_best_z0": float(np.dot(best["z"], z0)
                              / (np.linalg.norm(best["z"]) * np.linalg.norm(z0))),
@@ -615,6 +807,11 @@ def main():
     print(f"{'reference':12s}{floor['cost']:10.4f}{floor['align']:10.4f}{floor['phys']:10.4f}"
           f"   <- kinematic floor")
     print(f"cos(best z, z0) = {summary['cos_best_z0']:.4f}")
+    if "pace" in best:
+        for n_, b_ in (("origin_z", base), ("best z", best)):
+            print(f"{n_:9s} dtw {b_['dtw']:.4f}  done {b_['done']:.2f}  pace {b_['pace']:.2f}  heading_al {b_['head_al']:.4f}  "
+                  f"fallen {b_['fallen']:.3f}  "
+                  f"(frame-by-frame bfm {b_['bfm']:.4f})")
     print(f"-> {out_dir}")
 
 

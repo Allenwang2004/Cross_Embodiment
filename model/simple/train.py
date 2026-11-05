@@ -667,8 +667,16 @@ def plot_loss_curve(loss_history, align_history, l_phys_history, out_path, body_
 
 
 def _exact_obs(xml, ref_xml):
+    """ExactObs with THIS body's root scale. ExactObs defaults to the child's 0.611036, which is only right for the
+    child; every body's retarget scaled the root by its own skeleton rest-height ratio against the adult
+    (scripts/qpos_retarget.py), so the reverse mapping must use the same ratio (child: 0.6110358, as before)."""
     from model.exact_obs import ExactObs
-    return ExactObs(xml, ref_xml)
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    from qpos_retarget import load_root_rest_height
+    body = Path(xml).resolve().parent.name
+    s = (load_root_rest_height(REPO_ROOT / f"assets/robots/{body}/skeleton.json")
+         / load_root_rest_height(REPO_ROOT / "assets/robots/adult/skeleton.json"))
+    return ExactObs(xml, ref_xml, scale=s)
 
 
 def make_body_ctx(cfg, dataset_dir, label, xml_rel):

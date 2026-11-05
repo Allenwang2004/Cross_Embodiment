@@ -37,13 +37,13 @@ Chinese): [`new_body.md`](new_body.md); one-shot driver: `scripts/new_body_pipel
 
 ## 3. Searching a latent for one clip
 
-`single_z_search.py` is the workhorse: antithetic ES + Adam on one z for one (clip, body). The flags that
+`single_z_search.py` is the workhorse: ES (16 independent perturbations, ranked; `--sampling antithetic` for the mirrored pairs of every search before 11/04) + Adam on one z for one (clip, body). The flags that
 matter:
 
 | Flag | Meaning |
 |---|---|
 | `--objective bfm \| align` | Cost: bfm, or L_align in joint space |
-| `--heading-weight`, `--pos-weight` | Add heading and root-xy terms (the "global" cost) |
+| `--heading-weight`, `--pos-weight` | Add heading and root-xy terms (the "global" cost); position in adult-equivalent metres, `--pos-unit body` for the body's own (every search before 11/04) |
 | `--z-start`, `--best-from-start` | Start from another latent (e.g. the bfm stage's best) |
 | `--anchor`, `--anchor-weight` | Penalty λ (‖z − anchor‖ / 16)² inside the cost |
 | `--subspace`, `--subspace-dim` | Move only within start + span of the first k rows of a basis |
@@ -60,7 +60,6 @@ are run by small schedulers next to their outputs (`outputs/b500_targets/schedul
 |---|---|
 | `score_z_matrix.py` | Roll arbitrary latents out on arbitrary (clip, body) and score them like training does |
 | `batch_z_search.py` | One search per (clip, body) in a single process (older driver) |
-| `segment_z_search.py` | Search a short latent sequence instead of one z |
 
 ## 4. Labels for supervised learning
 
@@ -93,7 +92,6 @@ An adapter maps (β, z0) to a z for the body. `model/simple/train_es.py` trains 
 | `rollout_ckpt_on_body.py` | Roll a trained adapter out on a body |
 | `rollout_z_on_body.py`, `rollout_z_trace.py` | Drive the frozen policy with a z (sequence) from disk; watch a search learn |
 | `render_panels.py`, `render_seed_bests.py`, `compare_videos.py` | Side-by-side videos |
-| `test_track_z.py` | The child's own backward z, per frame, vs z0 and search targets |
 | `test_exact_obs.py` | z0 and targets under raw / multiplier / exact observations |
 | `compare_noscale.py`, `compare_exact_search.py` | The same search without obs scaling / with exact observations |
 
@@ -107,25 +105,3 @@ An adapter maps (β, z0) to a z for the body. `model/simple/train_es.py` trains 
 | `plot_b500_pca.py` | Do the searched latents keep the motion categories' structure? |
 | `plot_correction_orthogonality.py`, `plot_correction_learnability.py` | Why corrections from search labels cannot be learned |
 | `analyze_lowdim_search.py`, `plot_lowdim_trend.py` | Does a k-d subspace make corrections consistent, and at what cost? |
-
-## 8. Earlier lines still in the repo
-
-**Single-z diagnostics** (2026-09): `plot_single_z.py`, `loss_test.py`, `compare_align_losses.py`,
-`plot_seed_consistency.py`, `plot_z_scree.py`, `probe_z_flat.py`, `walk_z_plateau.py`, `cross_body_plateau.py`,
-`compare_es_cmaes.py`, `cross_clip_z_transfer.py`, `analyze_z_targets.py`, `rollout_fitted_map.py`,
-`geodesic_profile.py`, `cost_profile.py`, `plot_cost_profile.py`, `replay_noise.py`, `analyze_segment_z.py`,
-`compare_global_cost.py`, `plot_nonunique.py`, `plot_lowdim.py`.
-
-**Single-body ES adapter variants** (2026-09, none beat the plain run): `run_rowweight_experiments.sh`,
-`run_budget_experiments.sh`, `run_memorize_experiments.sh`, `run_head_experiments.sh`,
-`run_size_experiments.sh`, `run_size_headstand.sh`, `run_headstand_floor_search.sh`, `run_plateau_pipeline.sh`,
-`analyze_collapse.py`.
-
-**Morphology study** (how the best latent changes with β; 2026-09-27 to 09-30, figures on the project page):
-`pipeline_morph.sh`, `pipeline_morph_analyses.sh`, `pipeline_axis.sh`, `pipeline_grid.sh`, `queue_paths.sh`,
-`launch_when_free.sh`, `run_continuation.sh`, `run_grid_continuation.sh`, `run_path_controls.sh`,
-`run_long_control.sh`, `run_warm_start_ab.sh`, `run_warm_start_ab2.sh`, `run_bnn.sh`, `plan_bnn.py`,
-`run_beta_prior.sh`, `analyze_continuation.py`, `analyze_bnn.py`, `analyze_interp.py`, `analyze_transfer.py`,
-`analyze_map_real.py`, `build_interp_jobs.py`, `build_transfer_jobs.py`, `build_correction_transfer_jobs.py`,
-`analyze_correction_transfer.py`, `fit_beta_map.py`, `grid_zero_shot.py`, `plot_path_angles.py`,
-`plot_real_bodies.py`, `plot_summary_figs.py`.

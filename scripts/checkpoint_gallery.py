@@ -96,7 +96,7 @@ def main():
             dz = float(np.linalg.norm(project_z(z) - z0))
             m = metrics(fk, q, ref, losses, kin)
             m.update(name=name, gen=g, rollouts=16 * g, cos=cosv, head_deg=float(np.degrees(np.abs(dh)).mean()), pos_m=pos, dz=dz,
-                     cost=cosv + head + 0.1 * pos + 0.3 * (dz / 16) ** 2,
+                     cost=cosv + head + 0.1 * pos / summ.get("pos_div", 1.0) + 0.3 * (dz / 16) ** 2,
                      cost_logged=float(c0 if g == 0 else best[g - 1]),
                      fallen=float(np.mean(q[:T, 2] < 0.5 * ref[:T, 2])))
             rows.append(m)

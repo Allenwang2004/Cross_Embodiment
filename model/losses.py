@@ -322,13 +322,13 @@ def root_heading(quat_wxyz):
     return kin.quat_to_yaw(_quat_mul(quat_wxyz, _SMPL_BASE_CONJ))
 
 
-def tracking_mse(model, qpos_a: np.ndarray, qpos_b: np.ndarray, weights: dict = None):
+def tracking_mse(model, qpos_a: np.ndarray, qpos_b: np.ndarray, weights: dict = None, root_xy: bool = True):
     """L_align's replacement: plain squared errors, local pose and global placement kept apart.
 
       pose     mean (joint angle_a - joint angle_b)^2, wrapped to [-pi, pi)            rad^2
       ee       mean |p_a - p_b|^2 of hands, toes and head relative to the pelvis, each
                expressed in its own body's heading frame (so it is the local shape only)  m^2
-      root     mean |pelvis_a - pelvis_b|^2, world x, y, z                               m^2
+      root     mean |pelvis_a - pelvis_b|^2, world x, y, z (root_xy False: the height z only)  m^2
       heading  mean 1 - cos(heading_a - heading_b)  (~ d^2 / 2)                           -
 
     Means over the frames both have (truncated to the shorter). No d_root curvature / yaw-rate / Froude
@@ -355,10 +355,36 @@ def tracking_mse(model, qpos_a: np.ndarray, qpos_b: np.ndarray, weights: dict = 
     terms = {
         "pose": float(np.mean(dq ** 2)),
         "ee": float(np.mean(ee)),
-        "root": float(np.mean(np.sum((pa[kin.ROOT_BODY] - pb[kin.ROOT_BODY]) ** 2, -1))),
+        "root": float(np.mean(np.sum((pa[kin.ROOT_BODY] - pb[kin.ROOT_BODY])[:, slice(None) if root_xy else slice(2, 3)] ** 2, -1))),
         "heading": float(np.mean(1.0 - np.cos(ha - hb))),
     }
     return sum(weights[k] * v for k, v in terms.items()), terms
+
+
+def tracking_mse_frames(model, qpos_a: np.ndarray, qpos_b: np.ndarray, weights: dict = None, root_xy: bool = True,
+                        ref_pose=None):
+    """tracking_mse frame by frame: (T,) the weighted sum of its four terms at each frame (their mean over the frames
+    is tracking_mse's total), for a per-step reward (scripts/lso_search.py --objective mse). ref_pose: qpos_b's
+    kin.batch_forward_pose output, to skip recomputing it when qpos_b is the same every call."""
+    weights = MSE_WEIGHTS if weights is None else weights
+    T = min(len(qpos_a), len(qpos_b))
+    a, b = qpos_a[:T], qpos_b[:T]
+    bodies = kin.EE_BODIES + [kin.ROOT_BODY]
+    pa, qa = kin.batch_forward_pose(model, a, bodies)
+    pb, qb = kin.batch_forward_pose(model, b, bodies) if ref_pose is None else ref_pose
+    pb, qb = {k: v[:T] for k, v in pb.items()}, {k: v[:T] for k, v in qb.items()}
+    dq = (a[:, 7:] - b[:, 7:] + np.pi) % (2 * np.pi) - np.pi
+    ha, hb = root_heading(qa[kin.ROOT_BODY]), root_heading(qb[kin.ROOT_BODY])
+
+    def local(p, h):
+        c, s = np.cos(h), np.sin(h)
+        return np.stack([c * p[:, 0] + s * p[:, 1], -s * p[:, 0] + c * p[:, 1], p[:, 2]], -1)
+
+    ee = np.mean([np.sum((local(pa[n] - pa[kin.ROOT_BODY], ha) - local(pb[n] - pb[kin.ROOT_BODY], hb)) ** 2, -1)
+                  for n in kin.EE_BODIES], 0)
+    d = (pa[kin.ROOT_BODY] - pb[kin.ROOT_BODY])[:, slice(None) if root_xy else slice(2, 3)]
+    return (weights["pose"] * np.mean(dq ** 2, 1) + weights["ee"] * ee + weights["root"] * np.sum(d ** 2, -1)
+            + weights["heading"] * (1.0 - np.cos(ha - hb)))
 
 
 # MIGRATION NOTE. These are the weights that reproduce the OLD (dt = 1.0)

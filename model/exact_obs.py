@@ -16,6 +16,8 @@ motion this reproduces body positions, rotations and angular velocities exactly;
 """
 import itertools
 
+import gymnasium
+
 import mujoco
 import numpy as np
 
@@ -81,3 +83,17 @@ class ExactObs:
         qa, va = self.adult_state(qpos_c, qvel_c)
         self.env.unwrapped.set_physics(qpos=qa, qvel=va)
         return self.env.unwrapped.get_obs()["proprio"].astype(np.float32)
+
+
+class ExactObsWrapper(gymnasium.Wrapper):
+    """Adds info["exact_proprio"] = ExactObs(info["qpos"], info["qvel"]) to every step, so in a vector env each
+    worker computes its own slot's observation in parallel; same numbers as calling ExactObs on the returned info."""
+
+    def __init__(self, env, child_xml, adult_xml=ADULT_XML, scale=0.611036):
+        super().__init__(env)
+        self.exact = ExactObs(child_xml, adult_xml, scale)
+
+    def step(self, action):
+        obs, reward, terminated, truncated, info = self.env.step(action)
+        info["exact_proprio"] = self.exact(info["qpos"], info["qvel"])
+        return obs, reward, terminated, truncated, info
