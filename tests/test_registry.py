@@ -59,7 +59,7 @@ def test_paths_match_the_literals():
     assert paths.ADULT_XML_REL == exact_obs.ADULT_XML == "assets/robots/adult/robot.xml"
     assert paths.ADULT_XML == robots.ADULT_XML
     assert paths.CHILD_XML_REL == "assets/robots_torque/child/robot_torque_full.xml"
-    src = (REPO / "scripts/eval_metrics.py").read_text()
+    src = (REPO / "crossenbodiment/eval_metrics.py").read_text()          # scripts/eval_metrics.py until refactor step 8 (it re-exports it)
     assert f'"child": "{paths.CHILD_XML_REL}"' in src
     m = re.search(r'add_argument\("--metamotivo", default="([^"]+)"\)', (REPO / "scripts/single_z_search.py").read_text())
     assert m and m.group(1) == paths.MOTIVO_CKPT == "facebook/metamotivo-M-1"

@@ -11,7 +11,17 @@ moves or checks a file.
 
 Clip names: a task clip is "<task>/<stem>" (data/origin_motion/<task>/<stem>.npz); an AMASS clip is the bare ACCAD file
 stem (amass_data/amass_origin_motion/ACCAD/<clip>.npz). The robots' targets are keyed by the stem alone.
+
+Experiment outputs (refactor step 8): the drivers READ their experiment folders under outputs_root() and WRITE their analysis
+results (per_run.npz, results.json, means.json, README.md, the re-roll indexes) under results_root(). Both are REPO/outputs unless
+the environment says otherwise:
+  CE_OUTPUTS_ROOT   where experiment folders are read (e.g. the main tree's outputs, read only, to re-analyse finished runs)
+  CE_RESULTS_ROOT   where analyses write (default: the read root, i.e. next to the inputs as before); every results writer checks
+                    writable(): inside REPO only, so pointing CE_OUTPUTS_ROOT at another tree without CE_RESULTS_ROOT fails instead
+                    of writing there (printing commands still works)
+The command lines keep their repository-relative "outputs/..." spellings (they run with the repository as cwd).
 """
+import os
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -98,6 +108,43 @@ def roundtrip(robot, stem):
     """the task clip mapped onto a robot (scripts/robot_roundtrip.py; the G1's g1_roundtrip.py):
     outputs/<robot>/roundtrip/<stem>/g1.npz for the G1, .../robot.npz otherwise (model/robots.py target_path)"""
     return f"{robot_out(robot)}/roundtrip/{stem}/{'g1.npz' if robot == 'g1' else 'robot.npz'}"
+
+
+# ---------------------------------------------------------------- experiment outputs: read root and results root (step 8)
+OUTPUTS_ROOT_ENV = "CE_OUTPUTS_ROOT"
+RESULTS_ROOT_ENV = "CE_RESULTS_ROOT"
+
+
+def outputs_root():
+    """where the drivers read experiment folders: $CE_OUTPUTS_ROOT, else REPO/outputs"""
+    v = os.environ.get(OUTPUTS_ROOT_ENV)
+    return Path(v) if v else OUTPUTS
+
+
+def results_root():
+    """where the drivers write analysis results: $CE_RESULTS_ROOT, else outputs_root() (writes are checked by writable())"""
+    v = os.environ.get(RESULTS_ROOT_ENV)
+    return Path(v) if v else outputs_root()
+
+
+def writable(path):
+    """`path` if it lies inside REPO (symlinks resolved), else RuntimeError: the results writers (crossenbodiment/results.py,
+    reroll.py) call this, so a CE_OUTPUTS_ROOT pointing at another tree without CE_RESULTS_ROOT cannot write into that tree"""
+    path = Path(path)
+    if not path.resolve().is_relative_to(REPO):
+        raise RuntimeError(f"refusing to write {path}: outside the repository {REPO} (set {RESULTS_ROOT_ENV} to a folder inside it; "
+                           f"the read root is {outputs_root()})")
+    return path
+
+
+def output(rel=""):
+    """an experiment path to READ: outputs_root() / rel (rel without the leading "outputs/", e.g. "child_52_rerun")"""
+    return outputs_root() / rel
+
+
+def result(rel=""):
+    """an analysis path to WRITE: results_root() / rel (parents are created by the writers)"""
+    return results_root() / rel
 
 
 def clips_file(name):

@@ -40,6 +40,17 @@ are thin CLIs over them (same flags, defaults and output files):
   search    SearchLoop (generation loop, best so far, mean-z rollouts, curve rows, z trace, resume) and SequenceSearchLoop
             (iterations, budgets, kept rollouts, mu trace)
   records   RunRecorder: every output file of a search, written (and read back) exactly as the scripts did
-Importing the package imports nothing heavy (no torch, mujoco or humenv); align_cost (model.losses -> mujoco), robot_rollout
-and policy (torch) import them when they are imported.
+Step 8 adds the experiment layer the drivers (child_52_*, body_52_test, g1_small_test, kpkd_test, loes_*, lsor_mpjae_test,
+tall_body_52, amass_baselines, cost_correlation, drift_success_child, success_ / fall_definitions) are built on:
+  experiment    ClipSet, RunSpec, Experiment: the grid (clips, methods, seeds, bodies, budgets), run folders and the "dir|cmd"
+                command lines; workers() ($CE_WORKERS), parse_flag / output_arg (the drivers read their flags in main now)
+  reroll        Reroller (prepare: z.npy + the schema-2 index.json, best per generation / centre per budget / the budgets) and
+                RerollIndex (reads it and the three older layouts); check_vs_curve; EvalRollouts (an --eval-z folder)
+  results       ResultsTable (motions x seeds x budgets x metrics; the drivers' reductions, paired Wilcoxon, markdown), Checks,
+                ReportWriter, write_json / save_npz (per_run.npz, results.json, means.json, README.md as before)
+  queue         CommandQueue + ResourceGate: the shell queues' loop in Python (scripts/run_queue.py)
+  eval_metrics  moved from scripts/eval_metrics.py (which re-exports it)
+  paths         + outputs_root() / results_root() ($CE_OUTPUTS_ROOT, $CE_RESULTS_ROOT) and writable()
+Importing the package imports nothing heavy (no torch, mujoco or humenv); align_cost (model.losses -> mujoco), robot_rollout,
+eval_metrics (mujoco, ot) and policy (torch) import them when they are imported.
 """

@@ -13,7 +13,7 @@ Task-page definitions (since 11/08)
                       0.5 m adult-equivalent, i.e. threshold 0.5 x s on a body of root scale s (0.31 m on the child)
   drift               mean pelvis x, y distance to the reference: unit "body" (the body's own metres) or "adult" (/ s)
   heading_error       mean |facing - the reference's facing|, degrees (facing = root yaw - 90 deg; drift_success_child.py)
-  MPJPE, MMPJPE (cm) and MPJAE (m/s^2: the per-joint ACCELERATION error, not an angle) stay in scripts/eval_metrics.py
+  MPJPE, MMPJPE (cm) and MPJAE (m/s^2: the per-joint ACCELERATION error, not an angle) stay in eval_metrics.py (the package's)
   tracking_metrics; the suite calls it.
 Legacy definitions (the Task page until 11/08; outputs/child_52*/per_run.npz, eval_metrics.metrics, kpkd means.json)
   root_success        the root never more than 1.5 m (horizontal) or 45 deg (geodesic rotation) from the reference
@@ -29,12 +29,11 @@ computed once). MetricSuite.task_page(body, s) gives the Task page's (fall_s, su
     suite = MetricSuite.task_page(body, s).reference(ref[1:])          # Pw, Dr computed here (or pass the caller's)
     suite.values(q)  -> [fall_s, success, mpjpe, mmpjpe, mpjae, drift]   suite(q) -> the same as a dict
 
-`body` is a scripts/eval_metrics.py Body (m, d, part_floor, local, hand_floor); metric_body(xml, smpl) is one per (xml, smpl) and
+`body` is an eval_metrics.Body (crossenbodiment/eval_metrics.py) (m, d, part_floor, local, hand_floor); metric_body(xml, smpl) is one per (xml, smpl) and
 process. Importing this module imports numpy only.
 """
 from __future__ import annotations
 
-import sys
 from functools import lru_cache
 
 import numpy as np
@@ -48,12 +47,9 @@ ROOT_POS, ROOT_ROT = 1.5, 45              # legacy root_success: m, deg
 
 
 def _eval_metrics():
-    """scripts/eval_metrics.py as the scripts import it (module name eval_metrics: one module object, one Body class)"""
-    if "eval_metrics" not in sys.modules:
-        p = str(paths.REPO / "scripts")
-        if p not in sys.path:
-            sys.path.insert(0, p)
-    import eval_metrics
+    """crossenbodiment/eval_metrics.py (scripts/eval_metrics.py until refactor step 8; that file now re-exports this module, so the
+    scripts' `import eval_metrics` is the same module object and Body class), imported on first use (it imports mujoco and ot)"""
+    from . import eval_metrics
     return eval_metrics
 
 

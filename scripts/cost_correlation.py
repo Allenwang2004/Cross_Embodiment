@@ -29,7 +29,13 @@ from crossenbodiment.metrics import metric_body   # noqa: E402  one Body per (xm
 from crossenbodiment.geometry import sphere16   # noqa: E402  16 z / |z| (refactor step 3)
 from crossenbodiment.bodies import BODIES
 from crossenbodiment.paths import CHILD_XML_REL
-RR = REPO / "outputs/child_52_rerun"; OUT = REPO / "outputs/cost_corr"; XML = CHILD_XML_REL
+from crossenbodiment import paths
+from crossenbodiment.experiment import Experiment, workers
+from crossenbodiment.results import ReportWriter, save_npz, write_json
+# refactor step 8: runs and re-rolls are read under paths.outputs_root() ($CE_OUTPUTS_ROOT), results (and prepare's z.npy) written
+# under paths.results_root() ($CE_RESULTS_ROOT); both REPO/outputs by default
+RR = paths.output("child_52_rerun"); OUT = paths.output("cost_corr"); RES = paths.result("cost_corr"); XML = CHILD_XML_REL
+EXP = Experiment("outputs/cost_corr")
 W_HEAD, W_POS, W_ANCHOR = 1.0, 0.1, 0.3
 
 
@@ -40,7 +46,7 @@ def clips():
 
 def prepare():
     for c in clips():
-        st = c.split("/")[1]; d = OUT / st; d.mkdir(parents=True, exist_ok=True)
+        st = c.split("/")[1]; d = paths.writable(RES / st); d.mkdir(parents=True, exist_ok=True)
         z0 = np.load(REPO / f"data/origin_z/{c}.npy").reshape(-1).astype(np.float64); z0 = sphere16(z0)
         np.save(d / "z.npy", np.concatenate([np.load(RR / "rollouts" / st / "z.npy").astype(np.float64), z0[None]]))
     print("prepared", len(clips()))
@@ -48,10 +54,10 @@ def prepare():
 
 def commands():
     for c in clips():
-        d = (OUT / c.split("/")[1]).relative_to(REPO)
-        print(f"{d}|uv run python scripts/single_z_search.py --clip {c} --body child --xml {XML} --objective bfm --evals 1024 --pairs 8 --sigma 0.05 "
-              f"--lr 0.03 --obs-scale exact --heading-weight {W_HEAD} --pos-weight {W_POS} --anchor data/origin_z/{c}.npy --anchor-weight {W_ANCHOR} "
-              f"--eval-every 0 --init-vel-scale 1 --seed 0 --eval-z {d}/z.npy --eval-save-qpos --eval-save-act --eval-save-qvel --out {d}")
+        d = f"{EXP.out}/{c.split('/')[1]}"
+        print(EXP.eval_line(d, f"uv run python scripts/single_z_search.py --clip {c} --body child --xml {XML} --objective bfm --evals 1024 --pairs 8 --sigma 0.05 "
+                               f"--lr 0.03 --obs-scale exact --heading-weight {W_HEAD} --pos-weight {W_POS} --anchor data/origin_z/{c}.npy --anchor-weight {W_ANCHOR} "
+                               f"--eval-every 0 --init-vel-scale 1", seed=0, save=("qpos", "act", "qvel")))
 
 
 _ctx = {}
@@ -92,7 +98,7 @@ def one(c):
 
 def analyse():
     from scipy.stats import spearmanr, pearsonr
-    with Pool(16) as p:
+    with Pool(workers(16)) as p:
         res = p.map(one, clips(), chunksize=1)
     chk = {k: max(r[2][k] for r in res) for k in res[0][2]}; print("checks (largest):", chk, flush=True)
     MET = (("phc", -1), ("mpjpe", 1), ("mmpjpe", 1), ("mpjae", 1), ("reward", -1)); rep = dict(checks=chk, per_motion={}, summary={})
@@ -110,14 +116,14 @@ def analyse():
             rep["summary"][cname][m] = dict(spearman_median=float(np.median(S)), spearman_iqr=[float(np.percentile(S, 25)), float(np.percentile(S, 75))],
                                             pearson_median=float(np.median(P)), expected_sign_p05_spearman=ok_s, expected_sign_p05_pearson=ok_p, motions=len(S))
     rep["n_latents"] = {st: len(D["cost"]) for st, D, _ in res}
-    (OUT / "results.json").write_text(json.dumps(rep, indent=1)); np.savez_compressed(OUT / "per_latent.npz", **{f"{st}__{k}": v for st, D, _ in res for k, v in D.items()})
+    write_json(RES / "results.json", rep); save_npz(RES / "per_latent.npz", **{f"{st}__{k}": v for st, D, _ in res for k, v in D.items()})
     L = [f"latents per motion: median {int(np.median(list(rep['n_latents'].values())))} (total {sum(rep['n_latents'].values())})"]
     for cname, lab in (("track", "tracking cost (BFM + 1.0 heading + 0.1 position)"), ("cost", "full search cost (+ 0.3 anchor)")):
         L.append(f"\n{lab}: correlation across a motion's latents, 52 motions\n| vs | Spearman median [IQR] | Pearson median | motions with the expected sign, p<0.05 (Spearman / Pearson) |\n|---|---|---|---|")
         for m, _ in MET:
             v = rep["summary"][cname][m]
             L.append(f"| {m} | {v['spearman_median']:+.2f} [{v['spearman_iqr'][0]:+.2f}, {v['spearman_iqr'][1]:+.2f}] | {v['pearson_median']:+.2f} | {v['expected_sign_p05_spearman']} / {v['expected_sign_p05_pearson']} of {v['motions']} |")
-    (OUT / "README.md").write_text("# Our cost vs task reward and tracking errors (child, 52 task motions)\n\n" + __doc__ + "\n\nchecks: " + json.dumps(chk) + "\n\n" + "\n".join(L) + "\n")
+    ReportWriter("Our cost vs task reward and tracking errors (child, 52 task motions)", __doc__).write(RES / "README.md", L, gap="\n\nchecks: " + json.dumps(chk) + "\n\n")
     print("\n".join(L))
 
 

@@ -17,11 +17,17 @@ import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
 from crossenbodiment.metrics import mean_body_error, metric_body, phc_success, root_success, world_positions   # noqa: E402
-OUT = REPO / "outputs/success_definitions"; RERUN = REPO / "outputs/child_52_rerun"; CEMP = REPO / "outputs/child_52_cem_phc"; LSO = REPO / "outputs/child_52_lso"
+from crossenbodiment import paths   # noqa: E402
+from crossenbodiment.experiment import output_arg, parse_flag, workers   # noqa: E402
+from crossenbodiment.reroll import Reroller   # noqa: E402
+from crossenbodiment.results import write_json   # noqa: E402
+# refactor step 8: runs are read under paths.outputs_root() ($CE_OUTPUTS_ROOT), the result written under paths.results_root()
+# ($CE_RESULTS_ROOT); both REPO/outputs by default. --loes-dir is read in main (not at import).
+OUT = paths.result("success_definitions"); RERUN = paths.output("child_52_rerun"); CEMP = paths.output("child_52_cem_phc"); LSO = paths.output("child_52_lso")
 # --loes-dir outputs/noanchor/child (user 11/11): LOES ("es") from LOES without the anchor term, everything else unchanged;
 # the result goes to task_motions_noanchor.json next to the anchored one
-LOESD = REPO / sys.argv[sys.argv.index("--loes-dir") + 1] if "--loes-dir" in sys.argv else None       # None: RERUN, read at call time
-SUFFIX = "_noanchor" if "--loes-dir" in sys.argv else ""
+LOESD = None       # None: RERUN, read at call time
+SUFFIX = ""
 DEFS = ("root", "global", "global_raw", "local"); THR = 0.5
 body = None; S = None
 
@@ -54,11 +60,11 @@ def clip(c):
     R = (world(ref), body.local(ref)[0]); res = {"frozen": tests(np.load(RERUN / f"{stem}_es_s0/origin_z.npz")["qpos"], ref, R)}
     self_check = tests(ref, ref, R)
     for src, algos in ((LOESD or RERUN, ("es",)), (RERUN, ("random", "cmaes")), (CEMP, ("cem",))):            # LOES from --loes-dir (default RERUN)
-        ix = json.load(open(src / f"rollouts/{stem}/index.json"))["map"]; Q = np.load(src / f"rollouts/{stem}/eval_qpos.npz")["qpos"]
+        ix = Reroller.read(src / f"rollouts/{stem}"); Q = np.load(src / f"rollouts/{stem}/eval_qpos.npz")["qpos"]
         for a in algos:
             key = "cem_phc" if src == CEMP else a
-            res[key + "_best"] = [tests(Q[ix[f"{stem}_{a}_s{s}"]["best"][-1]], ref, R) for s in range(5)]
-            res[key + "_centre"] = [tests(Q[ix[f"{stem}_{a}_s{s}"]["centre"][-1]], ref, R) for s in range(5)]
+            res[key + "_best"] = [tests(Q[ix.best_last(f"{stem}_{a}_s{s}")], ref, R) for s in range(5)]
+            res[key + "_centre"] = [tests(Q[ix.centre_last(f"{stem}_{a}_s{s}")], ref, R) for s in range(5)]
     res["native"] = tests(np.load(LSO / f"{stem}_lso_s0/rollouts.npz")["q_ER8"], ref, R)
     for k in ("lso", "lsor_ours", "ta", "lsor_w005"):
         Rs = [np.load(LSO / f"{stem}_{k}_s{s}/rollouts.npz") for s in range(5)]
@@ -66,10 +72,13 @@ def clip(c):
     return stem, res, self_check
 
 
-def main():
+def main(argv=()):
+    global LOESD, SUFFIX
+    if "--loes-dir" in argv:                                           # LOES ("es") from --loes-dir -> task_motions_noanchor.json
+        LOESD, SUFFIX = output_arg(parse_flag(argv, "--loes-dir")), "_noanchor"
     from scipy.stats import wilcoxon
     cl = clips()
-    with Pool(24) as p:
+    with Pool(workers(24)) as p:
         out = p.map(clip, cl)
     print("reference against itself, all succeed:", all(all(v == 1.0 for v in o[2].values()) for o in out), "| child root scale s:", S if S else "(in workers)")
     per = {o[0]: o[1] for o in out}; keys = {"root": "root", "global": "global_", "global_raw": "global_raw", "local": "local"}
@@ -82,7 +91,7 @@ def main():
             for d, k in keys.items():
                 L, X = motion("es_best", k), motion(m, k); diff = L - X
                 summ[m]["vs_loes_best"][d] = dict(loes_higher=int((diff > 0).sum()), loes_lower=int((diff < 0).sum()), p=float(wilcoxon(L, X).pvalue) if (diff != 0).any() else 1.0)
-    OUT.mkdir(parents=True, exist_ok=True); (OUT / f"task_motions{SUFFIX}.json").write_text(json.dumps(dict(per_clip=per, mean=summ), indent=1))
+    write_json(OUT / f"task_motions{SUFFIX}.json", dict(per_clip=per, mean=summ))
     print(f"{'method':16s}" + "".join(f"{d:>11s}" for d in keys))
     for m, v in summ.items():
         print(f"{m:16s}" + "".join(f"{100 * v[d]:10.1f}%" for d in keys))
@@ -94,4 +103,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv)

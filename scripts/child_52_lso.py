@@ -22,17 +22,24 @@ import json, sys
 from multiprocessing import Pool
 from pathlib import Path
 import numpy as np
-from scipy.stats import wilcoxon
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
+from crossenbodiment import paths   # noqa: E402
+from crossenbodiment.experiment import ClipSet, Experiment, workers   # noqa: E402
 from crossenbodiment.metrics import metric_body   # noqa: E402  one Body per (xml, smpl) and process (refactor step 3)
-SRC = REPO / "outputs/child_52"; OUT = REPO / "outputs/child_52_lso"; RERUN = REPO / "outputs/child_52_rerun"
+from crossenbodiment.paths import CHILD_52_TASK   # noqa: E402
+from crossenbodiment.results import Checks, ResultsTable, save_npz, write_json   # noqa: E402
+# refactor step 8: runs are read under paths.outputs_root() ($CE_OUTPUTS_ROOT), results written under paths.results_root()
+# ($CE_RESULTS_ROOT); both REPO/outputs by default
+SRC = paths.output("child_52"); OUT = paths.output("child_52_lso"); RERUN = paths.output("child_52_rerun"); RES = paths.result("child_52_lso")
 METHODS = dict(lso="", lsor="--rank", ta="--method ta --objective phc", lsor_ours="--rank --heading-weight 1.0 --pos-weight 0.1", lsor_w005="--rank --heading-weight 0.05 --pos-weight 0.005"); SEEDS = range(5); G = (4, 8, 16, 32, 64)
 OWN = dict(heading_weight=0.0, pos_weight=0.0); OURS = dict(heading_weight=1.0, pos_weight=0.1, pos_unit="adult"); OURS005 = dict(heading_weight=0.05, pos_weight=0.005, pos_unit="adult")     # BFMTrack's own cost; ours without the anchor
 WANT = dict(lso=dict(method="lso", objective="bfm", rank=False, **OWN), lsor=dict(method="lso", objective="bfm", rank=True, **OWN),
             ta=dict(method="ta", objective="phc", rank=False, **OWN), lsor_ours=dict(method="lso", objective="bfm", rank=True, **OURS),
             lsor_w005=dict(method="lso", objective="bfm", rank=True, **OURS005))
 COMMON = dict(n=16, iters=64, init_vel_scale=1.0, sample_rollouts=1024, antithetic=False, sigma=0.0125)
+EXP = Experiment("outputs/child_52_lso", clips=ClipSet.named(CHILD_52_TASK), methods=METHODS, seeds=SEEDS, budgets=G,
+                 order=("clip", "method", "seed"), sep=" ")
 body = None
 
 
@@ -42,12 +49,8 @@ def clips():
 
 
 def commands():
-    for c in clips():
-        for k, f in METHODS.items():
-            for s in SEEDS:
-                d = f"outputs/child_52_lso/{c.split('/')[1]}_{k}_s{s}"
-                print(d, f"uv run python scripts/lso_search.py --ref data/child/retargeting_motion/{c}.npz --body child --n 16 --iters 64 "
-                         f"--init-vel-scale 1 --trace budgets --seed {s} {f} --out {d}".replace("  ", " "))
+    EXP.print_commands(lambda r: f"uv run python scripts/lso_search.py --ref data/child/retargeting_motion/{r.clip}.npz --body child --n 16 --iters 64 "
+                                 f"--init-vel-scale 1 --trace budgets --seed {r.seed} {METHODS[r.method]} --out {r.dir}".replace("  ", " "))
 
 
 def clip(c):
@@ -62,7 +65,7 @@ def clip(c):
     for k in METHODS:
         for s in SEEDS:
             d = OUT / f"{stem}_{k}_s{s}"; S = json.load(open(d / "summary.json")); R = np.load(d / "rollouts.npz")
-            bad += [(d.name, x, S.get(x)) for x, v in {**COMMON, **WANT[k]}.items() if S.get(x) != v]
+            bad += [(d.name, x, S.get(x)) for x in Checks.settings({**COMMON, **WANT[k]}, S)]
             if S.get("best_src") == "mean" or list(S.get("budgets", [])) != list(G):
                 bad.append((d.name, "best_src / budgets", S.get("best_src"), S.get("budgets")))
             nat_diff = max(nat_diff, float(np.abs(R["q_ER8"] - nat).max())); reroll = max(reroll, float(np.abs(R["q_LSO_best"] - R["q_best_it64"]).max()))
@@ -75,25 +78,25 @@ def clip(c):
 def analyse():
     from crossenbodiment.metrics import LEGACY_KEYS as KEYS   # child_52_means.KEYS (refactor step 4)
     cl = clips()
-    with Pool(24) as p:
+    with Pool(workers(24)) as p:
         res = p.map(clip, cl)
-    nat = np.array([r[1] for r in res]); B = {k: np.stack([r[2][k] for r in res]) for k in METHODS}; C = {k: np.stack([r[3][k] for r in res]) for k in METHODS}
+    T = ResultsTable(KEYS, [r[0] for r in res], G, SEEDS); nat = T.add("native", np.array([r[1] for r in res]))
+    B = {k: T.add(f"best_{k}", np.stack([r[2][k] for r in res])) for k in METHODS}; C = {k: T.add(f"mean_{k}", np.stack([r[3][k] for r in res])) for k in METHODS}
     bad = [x for r in res for x in r[4]]
     print("runs:", len(cl) * len(METHODS) * len(SEEDS), "| settings not as intended:", len(bad), bad[:6], "| native tracking across runs, largest difference:",
           max(r[5] for r in res), "| re-rolled best vs saved best rollout, largest difference:", max(r[6] for r in res), flush=True)
     old = np.load(RERUN / "per_run.npz"); assert list(old["clips"]) == cl and list(old["keys"]) == list(KEYS)
-    np.savez_compressed(OUT / "per_run.npz", clips=np.array(cl), keys=np.array(KEYS), gens=np.array(G), native=nat,
-                        **{f"best_{k}": B[k] for k in METHODS}, **{f"mean_{k}": C[k] for k in METHODS})
-    m = lambda A: {k: float(np.nanmean(A[..., i])) for i, k in enumerate(KEYS)}
+    save_npz(RES / "per_run.npz", clips=np.array(cl), keys=np.array(KEYS), gens=np.array(G), native=nat,
+             **{f"best_{k}": B[k] for k in METHODS}, **{f"mean_{k}": C[k] for k in METHODS})
+    m = lambda A: ResultsTable.pooled(A, KEYS, nan=True)                # every motion x seed at once (nanmean: ratio of centres)
     def test(X, Y):                       # X, Y: motions x seeds x metrics (or motions x metrics) -> per-motion means, paired
-        x = X.mean(1) if X.ndim == 3 else X; y = Y.mean(1) if Y.ndim == 3 else Y
-        return {k: dict(lower=int((x[:, i] < y[:, i]).sum()), p=float(wilcoxon(x[:, i], y[:, i]).pvalue)) for i, k in enumerate(KEYS) if k != "ratio"}
+        return ResultsTable.paired(X, Y, KEYS, per_metric=False)
     rep = dict(native=m(nat), z0=m(old["z0"]), best={k: {str(g * 16): m(B[k][:, :, j]) for j, g in enumerate(G)} for k in METHODS},
                centre={k: {str(g * 16): m(C[k][:, :, j]) for j, g in enumerate(G)} for k in METHODS},
                loes_best_vs={k: test(old["best_es"][:, :, -1], B[k][:, :, -1]) for k in METHODS},
                loes_centre_vs={k: test(old["mean_es"][:, :, -1], C[k][:, :, -1]) for k in METHODS},
                best_vs_native={k: test(B[k][:, :, -1], nat) for k in METHODS})
-    (OUT / "means.json").write_text(json.dumps(rep, indent=1)); print("written")
+    write_json(RES / "means.json", rep); print("written")
 
 
 if __name__ == "__main__":

@@ -30,9 +30,15 @@ import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
 from crossenbodiment.metrics import MetricSuite, metric_body, world_positions   # noqa: E402
-B = "len1.4_wid0.8"; XML = f"assets/robots_torque/{B}/robot_torque_full.xml"; OUT = REPO / "outputs/tall_body_52"
+from crossenbodiment import paths   # noqa: E402
+from crossenbodiment.experiment import ClipSet, Experiment, workers   # noqa: E402
+from crossenbodiment.results import ReportWriter, ResultsTable, write_json   # noqa: E402
+# refactor step 8: runs are read under paths.outputs_root() ($CE_OUTPUTS_ROOT; OUT, read by one() when called), results written
+# under paths.results_root() ($CE_RESULTS_ROOT; RES); both REPO/outputs by default
+B = "len1.4_wid0.8"; XML = f"assets/robots_torque/{B}/robot_torque_full.xml"; OUT = paths.output("tall_body_52"); RES = paths.result("tall_body_52")
 from crossenbodiment.paths import CHILD_52_TASK, read_clips   # noqa: E402  configs/clips/child_52_task.txt = outputs/child_52/clips.txt (refactor step 4)
 CLIPS = read_clips(CHILD_52_TASK)
+EXP = Experiment("outputs/tall_body_52", clips=ClipSet(CLIPS), methods=("es", "cem"), order=("clip", "method"))
 KEYS = ("mpjpe", "mmpjpe", "mpjae", "fall_s", "success", "phc", "drift")
 
 
@@ -41,13 +47,11 @@ def st_(c):
 
 
 def commands():
-    order = sorted(CLIPS, key=lambda c: -len(np.load(REPO / f"data/origin_motion/{c}.npz")["qpos"]))
     base = lambda c: (f"uv run python scripts/single_z_search.py --clip {c} --body {B} --xml {XML} --evals 1024 --pairs 8 --sigma 0.05 --lr 0.03 "
                       f"--obs-scale exact --eval-every 0 --init-vel-scale 1 --seed 0")
-    for c in order:
-        d = f"outputs/tall_body_52/{st_(c)}_es_s0"
-        print(f"{d}|{base(c)} --objective bfm --heading-weight 1.0 --pos-weight 0.1 --anchor data/origin_z/{c}.npy --anchor-weight 0 --out {d}")
-        d = f"outputs/tall_body_52/{st_(c)}_cem_s0"; print(f"{d}|{base(c)} --objective phc --algo cem --out {d}")
+    own = dict(es=lambda c: f"--objective bfm --heading-weight 1.0 --pos-weight 0.1 --anchor data/origin_z/{c}.npy --anchor-weight 0",
+               cem=lambda c: "--objective phc --algo cem")
+    EXP.print_commands(lambda r: f"{base(r.clip)} {own[r.method](r.clip)} --out {r.dir}", clip=EXP.clips.longest_first())
 
 
 _ctx = {}
@@ -77,7 +81,7 @@ def one(c):
 
 
 def analyse():
-    with Pool(16) as p:
+    with Pool(workers(16)) as p:
         out = p.map(one, CLIPS, chunksize=1)
     per = {st: r for st, r, _ in out}
     chk = dict(settings_bad=[(st, c["bad"]) for st, _, c in out if c["bad"]], z0_es_vs_cem=max(c["z0_same"] for _, _, c in out),
@@ -92,11 +96,9 @@ def analyse():
         rows.append(dict(motion=st, gain=min(z["mpjpe"], c["mpjpe"]) - o["mpjpe"], z0_bad=z0_bad, cem_not_good=cem_not_good, ours_clear=ours_clear,
                          passes=bool(z0_bad and cem_not_good and ours_clear)))
     rows.sort(key=lambda x: (-x["passes"], -x["gain"]))
-    rep = dict(checks=chk, mean=mean, per_motion=per, ranking=rows); (OUT / "results.json").write_text(json.dumps(rep, indent=1))
-    L = [f"checks: {json.dumps(chk)}", "", "mean over the 52 motions (best after 1,024 rollouts; z0 one rollout)",
-         "| method | MPJPE (cm) | MMPJPE | MPJAE (m/s^2) | Fall (s) | Success | PHC reward | drift (m, adult-eq) |", "|---|---|---|---|---|---|---|---|"]
-    for a, n in (("z0", "z0"), ("cem", "CEM (BFM-Zero)"), ("ours", "Ours (LOES)")):
-        v = mean[a]; L.append(f"| {n} | {v['mpjpe']:.2f} | {v['mmpjpe']:.2f} | {v['mpjae']:.2f} | {v['fall_s']:.2f} | {100 * v['success']:.1f}% | {v['phc']:.3f} | {v['drift']:.2f} |")
+    rep = dict(checks=chk, mean=mean, per_motion=per, ranking=rows); write_json(RES / "results.json", rep)
+    L = [f"checks: {json.dumps(chk)}", "", "mean over the 52 motions (best after 1,024 rollouts; z0 one rollout)"]
+    L += ResultsTable.markdown([(n, mean[a]) for a, n in (("z0", "z0"), ("cem", "CEM (BFM-Zero)"), ("ours", "Ours (LOES)"))], COLUMNS)
     L += ["", f"candidates: {sum(r['passes'] for r in rows)} of 52 pass all three tests; top 10 by ours' MPJPE gain over the better of z0 and CEM",
           "| # | motion | passes | gain (cm) | MPJPE z0 / CEM / ours | Success z0 / CEM / ours | Fall (s) z0 / CEM / ours | PHC reward z0 / CEM / ours |",
           "|---|---|---|---|---|---|---|---|"]
@@ -104,8 +106,12 @@ def analyse():
         p = per[r["motion"]]; f = lambda k, fm: " / ".join(fm.format(p[a][k]) for a in ("z0", "cem", "ours"))
         L.append(f"| {i + 1} | {r['motion']} | {'yes' if r['passes'] else 'no (' + ', '.join(n for n, k in (('z0 ok', 'z0_bad'), ('CEM good', 'cem_not_good'), ('ours not clear', 'ours_clear')) if not r[k]) + ')'} "
                  f"| {r['gain']:.2f} | {f('mpjpe', '{:.1f}')} | {f('success', '{:.0f}')} | {f('fall_s', '{:.1f}')} | {f('phc', '{:.3f}')} |")
-    (OUT / "README.md").write_text("# Tall, thin body (len1.4_wid0.8): LOES vs CEM on the 52 task motions\n\n" + __doc__ + "\n\n" + "\n".join(L) + "\n")
+    ReportWriter("Tall, thin body (len1.4_wid0.8): LOES vs CEM on the 52 task motions", __doc__).write(RES / "README.md", L, gap="\n\n")
     print("\n".join(L))
+
+
+COLUMNS = (("MPJPE (cm)", "mpjpe", "{:.2f}"), ("MMPJPE", "mmpjpe", "{:.2f}"), ("MPJAE (m/s^2)", "mpjae", "{:.2f}"), ("Fall (s)", "fall_s", "{:.2f}"),
+           ("Success", "success", "{:.1f}%", 100), ("PHC reward", "phc", "{:.3f}"), ("drift (m, adult-eq)", "drift", "{:.2f}"))
 
 
 if __name__ == "__main__":

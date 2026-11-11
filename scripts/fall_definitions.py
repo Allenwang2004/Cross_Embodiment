@@ -19,11 +19,17 @@ import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
 from crossenbodiment.metrics import contact_fall_time, height_fall, metric_body   # noqa: E402
-OUT = REPO / "outputs/fall_definitions"; RERUN = REPO / "outputs/child_52_rerun"; CEMP = REPO / "outputs/child_52_cem_phc"; LSO = REPO / "outputs/child_52_lso"
+from crossenbodiment import paths   # noqa: E402
+from crossenbodiment.experiment import output_arg, parse_flag, workers   # noqa: E402
+from crossenbodiment.reroll import Reroller   # noqa: E402
+from crossenbodiment.results import write_json   # noqa: E402
+# refactor step 8: runs are read under paths.outputs_root() ($CE_OUTPUTS_ROOT), the result written under paths.results_root()
+# ($CE_RESULTS_ROOT); both REPO/outputs by default. --loes-dir is read in main (not at import).
+OUT = paths.result("fall_definitions"); RERUN = paths.output("child_52_rerun"); CEMP = paths.output("child_52_cem_phc"); LSO = paths.output("child_52_lso")
 # --loes-dir outputs/noanchor/child (user 11/11): LOES ("es") from LOES without the anchor term, everything else unchanged;
 # the result goes to task_motions_noanchor.json next to the anchored one
-LOESD = REPO / sys.argv[sys.argv.index("--loes-dir") + 1] if "--loes-dir" in sys.argv else None       # None: RERUN, read at call time
-SUFFIX = "_noanchor" if "--loes-dir" in sys.argv else ""
+LOESD = None       # None: RERUN, read at call time
+SUFFIX = ""
 DEFS = ("height", "hand_mot", "hand_frm", "contact", "head"); TOUCH, NEAR = 0.01, 0.05
 body = None
 
@@ -59,11 +65,11 @@ def clip(c):
     R = (names, Dr, hr); res = {"frozen": falls(np.load(RERUN / f"{stem}_es_s0/origin_z.npz")["qpos"], ref, R)}
     self_check = falls(ref, ref, R)
     for src, algos in ((LOESD or RERUN, ("es",)), (RERUN, ("random", "cem", "cmaes")), (CEMP, ("cem",))):            # LOES from --loes-dir (default RERUN)
-        ix = json.load(open(src / f"rollouts/{stem}/index.json"))["map"]; Q = np.load(src / f"rollouts/{stem}/eval_qpos.npz")["qpos"]
+        ix = Reroller.read(src / f"rollouts/{stem}"); Q = np.load(src / f"rollouts/{stem}/eval_qpos.npz")["qpos"]
         for a in algos:
             key = "cem_phc" if src == CEMP else a
-            res[key + "_best"] = [falls(Q[ix[f"{stem}_{a}_s{s}"]["best"][-1]], ref, R) for s in range(5)]
-            res[key + "_centre"] = [falls(Q[ix[f"{stem}_{a}_s{s}"]["centre"][-1]], ref, R) for s in range(5)]
+            res[key + "_best"] = [falls(Q[ix.best_last(f"{stem}_{a}_s{s}")], ref, R) for s in range(5)]
+            res[key + "_centre"] = [falls(Q[ix.centre_last(f"{stem}_{a}_s{s}")], ref, R) for s in range(5)]
     res["native"] = falls(np.load(LSO / f"{stem}_lso_s0/rollouts.npz")["q_ER8"], ref, R)
     for k in ("lso", "lsor", "ta", "lsor_ours", "lsor_w005"):
         if all((LSO / f"{stem}_{k}_s{s}/rollouts.npz").exists() for s in range(5)):
@@ -72,9 +78,12 @@ def clip(c):
     return stem, res, self_check
 
 
-def main():
+def main(argv=()):
+    global LOESD, SUFFIX
+    if "--loes-dir" in argv:                                           # LOES ("es") from --loes-dir -> task_motions_noanchor.json
+        LOESD, SUFFIX = output_arg(parse_flag(argv, "--loes-dir")), "_noanchor"
     cl = clips()
-    with Pool(24) as p:
+    with Pool(workers(24)) as p:
         out = p.map(clip, cl)
     print("reference against itself, largest value per definition:", {k: max(o[2][k] for o in out if not np.isnan(o[2][k])) for k in DEFS})
     per = {o[0]: o[1] for o in out}; methods = sorted({m for o in out for m in o[1]}, key=lambda m: list(out[0][1]).index(m) if m in out[0][1] else 99)
@@ -85,11 +94,11 @@ def main():
         rows = [per[s][m] if isinstance(per[s][m], list) else [per[s][m]] for s in per]
         summ[m] = {k: float(np.nanmean([np.nanmean([r[k] for r in rr]) if not all(np.isnan(r[k]) for r in rr) else np.nan for rr in rows])) for k in DEFS}
         summ[m]["motions_with_fall"] = {k: int(sum(np.nanmean([r[k] for r in rr]) > 0 for rr in rows if not all(np.isnan(r[k]) for r in rr))) for k in DEFS}
-    OUT.mkdir(parents=True, exist_ok=True); (OUT / f"task_motions{SUFFIX}.json").write_text(json.dumps(dict(per_clip=per, mean=summ), indent=1))
+    write_json(OUT / f"task_motions{SUFFIX}.json", dict(per_clip=per, mean=summ))
     print(f"{'method':16s}" + "".join(f"{k:>10s}" for k in DEFS))
     for m, v in summ.items():
         print(f"{m:16s}" + "".join(f"{v[k]:10.3f}" for k in DEFS))
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv)

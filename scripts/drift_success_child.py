@@ -22,9 +22,15 @@ REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sy
 from crossenbodiment.bodies import BODIES
 from crossenbodiment.geometry import facing as _facing
 from crossenbodiment.metrics import MetricSuite, metric_body
-RR, LS = REPO / "outputs/child_52_rerun", REPO / "outputs/child_52_lso"; S = BODIES.scale("child"); SEEDS = range(5)
+from crossenbodiment import paths
+from crossenbodiment.experiment import output_arg, parse_flag, workers
+from crossenbodiment.reroll import Reroller
+from crossenbodiment.results import write_json
+# refactor step 8: runs are read under paths.outputs_root() ($CE_OUTPUTS_ROOT), the result written under paths.results_root()
+# ($CE_RESULTS_ROOT); both REPO/outputs by default. --loes-dir is read in main (not at import).
+RR, LS = paths.output("child_52_rerun"), paths.output("child_52_lso"); S = BODIES.scale("child"); SEEDS = range(5)
 # --loes-dir outputs/noanchor/child (user 11/11): LOES from the runs without the anchor term -> outputs/drift_success_child_noanchor.json
-RL = REPO / sys.argv[sys.argv.index("--loes-dir") + 1] if "--loes-dir" in sys.argv else None; SUFFIX = "_noanchor" if "--loes-dir" in sys.argv else ""   # None: RR, read at call time
+RL = None; SUFFIX = ""   # RL None: RR, read at call time
 SEQ = dict(lso="q_best_it64", lsor_w005="q_best_it64", ta="q_best_it64")
 _b = {}
 
@@ -46,18 +52,21 @@ def one(c):
     out = {k: [] for k in ("z0", "native", "es", *SEQ)}
     out["z0"].append(stats(np.load(RR / f"{st}_es_s0/origin_z.npz")["qpos"]))
     out["native"].append(stats(np.load(LS / f"{st}_lso_s0/rollouts.npz")["q_ER8"]))
-    L_ = RL or RR; ix = json.load(open(L_ / "rollouts" / st / "index.json"))["map"]; Q = np.load(L_ / "rollouts" / st / "eval_qpos.npz")["qpos"]
+    L_ = RL or RR; ix = Reroller.read(L_ / "rollouts" / st); Q = np.load(L_ / "rollouts" / st / "eval_qpos.npz")["qpos"]
     for s in SEEDS:
-        out["es"].append(stats(Q[ix[f"{st}_es_s{s}"]["best"][-1]]))
+        out["es"].append(stats(Q[ix.best_last(f"{st}_es_s{s}")]))
         for k, key in SEQ.items():
             out[k].append(stats(np.load(LS / f"{st}_{k}_s{s}/rollouts.npz")[key]))
     return st, out
 
 
-def main():
+def main(argv=()):
+    global RL, SUFFIX
+    if "--loes-dir" in argv:
+        RL, SUFFIX = output_arg(parse_flag(argv, "--loes-dir")), "_noanchor"
     from crossenbodiment.paths import CHILD_52_TASK, read_clips   # configs/clips/child_52_task.txt = outputs/child_52/clips.txt (refactor step 4)
     clips = read_clips(CHILD_52_TASK)
-    with Pool(12) as p:
+    with Pool(workers(12)) as p:
         res = p.map(one, clips, chunksize=1)
     names = dict(z0="Frozen z0", native="Native tracking", lso="LSO (BFMTrack)", lsor_w005="LSOR (ours)", ta="Trajectory Adaptation", es="LOES (ours)")
     rep = {}
@@ -68,8 +77,8 @@ def main():
     per = {st: {k: {m: float(np.mean([x[m] for x in o[k]])) for m in ("mpjpe", "drift", "heading", "success")} for k in o} for st, o in res}
     lso_lower = sum(per[st]["lso"]["mpjpe"] < per[st]["es"]["mpjpe"] for st in per); es_less_drift = sum(per[st]["es"]["drift"] < per[st]["lso"]["drift"] for st in per)
     print(f"motions where LSO's MPJPE < LOES's: {lso_lower}/52; LOES drifts less than LSO: {es_less_drift}/52")
-    (REPO / f"outputs/drift_success_child{SUFFIX}.json").write_text(json.dumps(dict(mean=rep, per_motion=per, lso_lower_mpjpe=lso_lower, loes_less_drift=es_less_drift), indent=1))
+    write_json(paths.result(f"drift_success_child{SUFFIX}.json"), dict(mean=rep, per_motion=per, lso_lower_mpjpe=lso_lower, loes_less_drift=es_less_drift))
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv)

@@ -13,7 +13,12 @@ REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sy
 from crossenbodiment.bodies import BODIES
 from crossenbodiment.paths import CHILD_XML_REL
 from crossenbodiment.metrics import contact_fall_time, mean_body_error, metric_body, phc_success, world_positions
-OUT = REPO / "outputs/kpkd"; SEEDS = range(5)
+from crossenbodiment import paths
+from crossenbodiment.experiment import Experiment, workers
+from crossenbodiment.results import Checks, save_npz, write_json
+# refactor step 8: runs (and, for summary, per_run.npz) are read under paths.outputs_root() ($CE_OUTPUTS_ROOT), results written under
+# paths.results_root() ($CE_RESULTS_ROOT); both REPO/outputs by default
+OUT = paths.output("kpkd"); RES = paths.result("kpkd"); SEEDS = range(5)
 BODY = dict(child=dict(xml=CHILD_XML_REL, ref="data/child/retargeting_motion/{c}.npz", label="child"), g1=dict(ref="outputs/g1/roundtrip/{stem}/g1.npz"),
             limit_leg=dict(xml="assets/robots/adult_lockRleg_bent_lim/robot.xml", ref="data/adult_lockRleg_bent_lim/retargeting_motion/{c}.npz", label="adult_lockRleg_bent_lim"),
             heavy_arm=dict(xml="assets/robots/adult_heavyRWristHand_x80/robot.xml", ref="data/origin_motion/{c}.npz", label="adult_heavyRWristHand_x80"))
@@ -28,6 +33,9 @@ def XML(b, name):
 
 
 GAINS = lambda name: "assets/robots/g1/gains_perjoint.json" if name == "kp1_kd1" else f"assets/robots/g1/gains_perjoint_{name}.json"
+# the run folders: outputs/kpkd/<body>_<condition>/<stem>_s<seed> (no method key: every run is LOES)
+EXP = Experiment("outputs/kpkd", clips=CLIPS, methods=[n for n, _, _ in COND], seeds=SEEDS, bodies=tuple(BODY),
+                 name=lambda r: f"{r.body}_{r.method}/{r.stem}_s{r.seed}", order=("body", "method", "clip", "seed"), sep=" ")
 body = {}
 
 
@@ -47,18 +55,16 @@ def prepare():
         (REPO / GAINS(name)).write_text(json.dumps(h, indent=1))
 
 
+def command(r):
+    b, name, c, s, d = r.body, r.method, r.clip, r.seed, r.dir
+    if b != "g1":
+        rf = "" if b == "child" else f" --ref {ref_path(b, c)}"
+        return f"uv run python scripts/single_z_search.py --clip {c} --body {BODY[b]['label']} --xml {XML(b, name)}{rf} --objective bfm --evals 1024 --pairs 8 --sigma 0.05 --lr 0.03 --obs-scale exact --heading-weight 1.0 --pos-weight 0.1 --anchor data/origin_z/{c}.npy --anchor-weight 0.3 --seed {s} --eval-every 0 --init-vel-scale 1 --out {d}"
+    return f"uv run python scripts/robot_z_search.py --robot g1 --clip {c} --fill ridge --ik-weight 1.0 --evals 1024 --init-vel reference --eval-every 0 --gains {GAINS(name)} --seed {s} --out {d}"
+
+
 def commands():
-    for b in BODY:
-        for name, _, _ in COND:
-            for c in CLIPS:
-                for s in SEEDS:
-                    d = f"outputs/kpkd/{b}_{name}/{c.split('/')[1]}_s{s}"
-                    if b != "g1":
-                        rf = "" if b == "child" else f" --ref {ref_path(b, c)}"
-                        cmd = f"uv run python scripts/single_z_search.py --clip {c} --body {BODY[b]['label']} --xml {XML(b, name)}{rf} --objective bfm --evals 1024 --pairs 8 --sigma 0.05 --lr 0.03 --obs-scale exact --heading-weight 1.0 --pos-weight 0.1 --anchor data/origin_z/{c}.npy --anchor-weight 0.3 --seed {s} --eval-every 0 --init-vel-scale 1 --out {d}"
-                    else:
-                        cmd = f"uv run python scripts/robot_z_search.py --robot g1 --clip {c} --fill ridge --ik-weight 1.0 --evals 1024 --init-vel reference --eval-every 0 --gains {GAINS(name)} --seed {s} --out {d}"
-                    print(d, cmd)
+    EXP.print_commands(command)
 
 
 def ref_path(b, c):
@@ -77,17 +83,17 @@ def one(job):
         body[b] = metric_body(E.XML["g1"] if b == "g1" else BODY[b]["xml"], b != "g1")
     d = OUT / f"{b}_{name}/{c.split('/')[1]}_s{s}"; S = json.load(open(d / "summary.json")); ref = ref_of(b, c); base = S["origin_z"]["cost"]; bq = np.load(d / "best.npz")["qpos"].astype(np.float64); zq = np.load(d / "origin_z.npz")["qpos"].astype(np.float64)
     vz, vb = full(body[b], zq, ref, 1.0), full(body[b], bq, ref, S["best"]["cost"] / base)
-    bad = [k for k, want in (("evals", 1024), ("seed", s), ("frame_offset", 1), ("sampling", "independent"), ("sigma", 0.05), ("lr", 0.03), ("heading_weight", 1.0), ("pos_weight", 0.1), ("anchor_weight", 0.3)) if S.get(k) != want]
+    bad = Checks.settings(dict(evals=1024, seed=s, frame_offset=1, sampling="independent", sigma=0.05, lr=0.03, heading_weight=1.0, pos_weight=0.1, anchor_weight=0.3), S)
     bad += [k for k, want in (("init_vel_scale", 1.0), ("obs_scale", "exact"), ("xml", XML(b, name) if b != "g1" else None)) if b != "g1" and S.get(k) != want] + [k for k, want in (("init_vel", "reference"), ("fill", "ridge"), ("ik_weight", 1.0), ("gains", GAINS(name))) if b == "g1" and S.get(k) != want]
     return job, [vz[k] for k in KEYS], [vb[k] for k in KEYS], zq[:len(ref)], base, S["best"]["cost"], bad
 
 
 def analyse():
     from crossenbodiment.metrics import LEGACY_KEYS as KEYS   # child_52_means.KEYS (refactor step 4)
-    done = lambda b: all((OUT / f"{b}_{n}/{c.split('/')[1]}_s{s}/summary.json").exists() for n, _, _ in COND for c in CLIPS for s in SEEDS)
+    done = lambda b: EXP.all_done(EXP.runs(body=(b,)))
     BODIES = [b for b in BODY if done(b)]; print("bodies finished:", BODIES, flush=True)
     jobs = [(b, n, c, s) for b in BODIES for n, _, _ in COND for c in CLIPS for s in SEEDS]
-    with Pool(16) as p:
+    with Pool(workers(16)) as p:
         res = p.map(one, jobs)
     R = {r[0]: r for r in res}; shape = (len(CLIPS), len(SEEDS), len(KEYS)); Z = {}; B = {}; CZ = {}; CB = {}; bad = [(r[0], r[6]) for r in res if r[6]]; spread = 0.0; same_across = 0
     for b in BODIES:
@@ -101,10 +107,10 @@ def analyse():
             q = [R[(b, n, c, 0)][3] for n, _, _ in COND]; same_across += int(np.abs(q[0] - q[1]).max() == 0 or np.abs(q[0] - q[2]).max() == 0)
     m52 = 0.0; n52 = 0
     for c in CLIPS:
-        st = c.split("/")[1]; o = REPO / f"outputs/child_52_rerun/{st}_es_s0/best_z.npy"
+        st = c.split("/")[1]; o = paths.output(f"child_52_rerun/{st}_es_s0/best_z.npy")
         if o.exists():
             for s in SEEDS:
-                m52 = max(m52, float(np.abs(np.load(REPO / f"outputs/child_52_rerun/{st}_es_s{s}/best_z.npy") - np.load(OUT / f"child_kp1_kd1/{st}_s{s}/best_z.npy")).max())); n52 += 1
+                m52 = max(m52, float(np.abs(np.load(paths.output(f"child_52_rerun/{st}_es_s{s}/best_z.npy")) - np.load(OUT / f"child_kp1_kd1/{st}_s{s}/best_z.npy")).max())); n52 += 1
     print("runs:", len(res), "| settings not as intended:", len(bad), bad[:4], "| z0 rollout, largest difference across seeds:", spread, "| clips whose z0 rollout did not change with the gains:", same_across, f"| child kp x 1 vs outputs/child_52_rerun on {n52} runs, largest z difference:", m52, flush=True)
     i = {k: j for j, k in enumerate(KEYS)}; rep = {}
     for b in BODIES:
@@ -114,8 +120,8 @@ def analyse():
             rep[b][n] = dict(z0=dict({k: float(zc[:, i[k]].mean()) for k in KEYS}, cost=float(CZ[b, n].mean())), best=dict({k: float(x[..., i[k]].mean()) for k in KEYS}, cost=float(CB[b, n].mean())),
                              per_clip={c.split("/")[1]: dict(z0_cost=float(CZ[b, n][j]), best_cost=float(CB[b, n][j].mean()), z0_success=float(zc[j, i["success"]]), z0_mpjpe=float(zc[j, i["mpjpe"]]), z0_fall=float(zc[j, i["fall_s"]]), best_success=int(x[j, :, i["success"]].sum()), best_mpjpe=float(x[j, :, i["mpjpe"]].mean()), best_fall=float(x[j, :, i["fall_s"]].mean()), improved=int(sum(R[(b, n, c, s)][5] < R[(b, n, c, s)][4] for s in SEEDS))) for j, c in enumerate(CLIPS)},
                              seed_success=[float(x[:, s, i["success"]].mean()) for s in SEEDS], seed_mpjpe=[float(x[:, s, i["mpjpe"]].mean()) for s in SEEDS])
-    np.savez_compressed(OUT / "per_run.npz", clips=np.array(CLIPS), keys=np.array(KEYS), **{f"z0_{b}_{n}": Z[b, n] for b, n in Z}, **{f"best_{b}_{n}": B[b, n] for b, n in B}, **{f"cost_z0_{b}_{n}": CZ[b, n] for b, n in CZ}, **{f"cost_best_{b}_{n}": CB[b, n] for b, n in CB})
-    (OUT / "means.json").write_text(json.dumps(rep, indent=1)); print("written")
+    save_npz(RES / "per_run.npz", clips=np.array(CLIPS), keys=np.array(KEYS), **{f"z0_{b}_{n}": Z[b, n] for b, n in Z}, **{f"best_{b}_{n}": B[b, n] for b, n in B}, **{f"cost_z0_{b}_{n}": CZ[b, n] for b, n in CZ}, **{f"cost_best_{b}_{n}": CB[b, n] for b, n in CB})
+    write_json(RES / "means.json", rep); print("written")
 
 
 def summary():
@@ -133,7 +139,7 @@ def summary():
             rep[b][n] = dict(z0=dict({k: float(z[:, i[k]].mean()) for k in keys}, cost=float(cz.mean())), best=dict({k: float(x[..., i[k]].mean()) for k in keys}, cost=float(cb.mean())),
                              improved=int((cb < cz[:, None]).sum()), searches=int(cb.size), success_by_clip={c: int(v) for c, v in zip(rep["clips"], x[..., i["success"]].sum(1))},
                              seed_success=[float(v) for v in x[..., i["success"]].mean(0)])
-    tag = "_".join(drop) or "none"; (OUT / f"means_without_{tag}.json").write_text(json.dumps(rep, indent=1)); print("written", OUT / f"means_without_{tag}.json")
+    tag = "_".join(drop) or "none"; write_json(RES / f"means_without_{tag}.json", rep); print("written", RES / f"means_without_{tag}.json")
     for b in BODY:
         if b not in rep:
             continue
@@ -160,7 +166,7 @@ def handfall():
     drop = sys.argv[sys.argv.index("--drop") + 1:] if "--drop" in sys.argv else []
     clips = [c for c in CLIPS if c.split("/")[1] not in drop]
     jobs = [(b, n, c, s) for b in BODY for n, _, _ in COND for c in clips for s in SEEDS]
-    with Pool(16) as p:
+    with Pool(workers(16)) as p:
         R = {r[0]: r[1:] for r in p.map(hand_one, jobs)}
     rep = dict(dropped=drop, clips=[c.split("/")[1] for c in clips])
     for b in BODY:
@@ -169,7 +175,7 @@ def handfall():
             z = np.array([[R[(b, n, c, 0)][0][k] for k in (0, 1)] for c in clips]); x = np.array([[[R[(b, n, c, s)][1][k] for k in (0, 1)] for s in SEEDS] for c in clips])
             rep[b][n] = dict(z0_by_motion=float(np.nanmean(z[:, 0])), best_by_motion=float(np.nanmean(x[..., 0])), z0_by_frame=float(z[:, 1].mean()), best_by_frame=float(x[..., 1].mean()),
                              per_clip={c.split("/")[1]: dict(z0=z[i].tolist(), best=x[i].mean(0).tolist()) for i, c in enumerate(clips)})
-    tag = "_".join(drop) or "none"; (OUT / f"means_handfall_without_{tag}.json").write_text(json.dumps(rep, indent=1))
+    tag = "_".join(drop) or "none"; write_json(RES / f"means_handfall_without_{tag}.json", rep)
     for b in BODY:
         print(b, "hand motions:", rep[b]["hand_motions"])
         for n, _, _ in COND:
@@ -194,7 +200,7 @@ def contactfall():
     drop = sys.argv[sys.argv.index("--drop") + 1:] if "--drop" in sys.argv else []
     clips = [c for c in CLIPS if c.split("/")[1] not in drop]
     jobs = [(b, n, c, s) for b in BODY for n, _, _ in COND for c in clips for s in SEEDS]
-    with Pool(16) as p:
+    with Pool(workers(16)) as p:
         R = dict(p.map(contact_one, jobs))
     rep = dict(dropped=drop, clips=[c.split("/")[1] for c in clips])
     for b in BODY:
@@ -203,7 +209,7 @@ def contactfall():
             z = np.array([R[(b, n, c, 0)][0] for c in clips]); x = np.array([[R[(b, n, c, s)][1] for s in SEEDS] for c in clips])
             rep[b][n] = dict(z0=float(z.mean()), best=float(x.mean()), per_clip={c.split("/")[1]: dict(z0=float(z[i]), best=float(x[i].mean())) for i, c in enumerate(clips)})
             print(f"{b:9s} {n:12s} frozen {z.mean():.3f} -> LOES {x.mean():.3f}")
-    tag = "_".join(drop) or "none"; (OUT / f"means_contactfall_without_{tag}.json").write_text(json.dumps(rep, indent=1))
+    tag = "_".join(drop) or "none"; write_json(RES / f"means_contactfall_without_{tag}.json", rep)
 
 
 SCALE = {b: BODIES.scale(b) for b in ("child", "g1", "limit_leg", "heavy_arm")}   # body / adult: ExactObs's s, RobotMap("g1").s, 1, 1
@@ -226,7 +232,7 @@ def phcsuccess():
     """Success Rate as on the Task page (PHC's test): the clip fails if the mean world-frame body position error ever exceeds
     0.5 m in adult-equivalent metres (0.5 x SCALE on the body) -> means_phcsuccess.json"""
     jobs = [(b, n, c, s) for b in BODY for n, _, _ in COND for c in CLIPS for s in SEEDS]
-    with Pool(16) as p:
+    with Pool(workers(16)) as p:
         R = dict(p.map(phc_one, jobs))
     rep = dict(clips=[c.split("/")[1] for c in CLIPS], threshold_m={b: 0.5 * v for b, v in SCALE.items()})
     for b in BODY:
@@ -236,7 +242,7 @@ def phcsuccess():
             rep[b][n] = dict(z0=float(z.mean()), best=float(x.mean()), per_clip={c.split("/")[1]: dict(z0=int(z[i]), best=int(x[i].sum())) for i, c in enumerate(CLIPS)},
                              seed=[float(v) for v in x.mean(0)])
             print(f"{b:9s} {n:12s} frozen {100 * z.mean():5.1f}% -> LOES {100 * x.mean():5.1f}% | per clip {[int(v) for v in x.sum(1)]}")
-    (OUT / "means_phcsuccess.json").write_text(json.dumps(rep, indent=1))
+    write_json(RES / "means_phcsuccess.json", rep)
 
 
 if __name__ == "__main__":

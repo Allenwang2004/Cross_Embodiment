@@ -141,3 +141,13 @@ tests/test_moves.py runs every helper step 4 moved against its 68c95f4 source.
   cmaes + phc / random with --frame-offset 0, --resume without state.npz, LSO --dtw / --steps-scale / --init-pace / mse /
   antithetic / phc / white noise, robot LSO phc --best-from all) were run once with the fa6c5f9 scripts and the new ones
   (20 short cases, outputs/refactor_tests/step6_extra, compared with compare.py's cmp_dirs): identical.
+* Step 8 (experiment layer: crossenbodiment/experiment.py, reroll.py, results.py, queue.py; eval_metrics.py moved into the
+  package, scripts/eval_metrics.py re-exports it) changed no search code; the golden cases and metrics.json must stay identical.
+  The drivers it ported are checked three ways:
+  - tests/test_experiments.py: every command list of the ported drivers (28 builder / flag combinations) byte-identical to its
+    d299653 source run as __main__; Reroller.prepare against the three old prepare loops (z.npy bytes, index lists); ResultsTable's
+    reductions against the drivers' expressions (bitwise); amass_baselines.analyse old vs new on a synthetic experiment.
+  - verify_analyses.py LABEL: each driver's analyse / prepare on the main tree's finished experiments, read only
+    (CE_OUTPUTS_ROOT=<main>/outputs), written into outputs/refactor_step8/LABEL (CE_RESULTS_ROOT), compared file by file with the
+    main tree's existing results (JSON and markdown byte-identical, npz array- and order-identical, z.npy byte-identical).
+  - tests/test_queue.py: scripts/run_queue.py's CommandQueue / ResourceGate with fake commands.

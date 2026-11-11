@@ -25,16 +25,23 @@ adult-equivalent metres are the body's own and PHC's 0.5 m is 0.5 m.
             runs, latent-sequence best re-roll = saved best, LOES's first 64 generations = the kpkd runs of the same body, motion, seed.
             Writes outputs/body_52/<body>/results.json (the layout of scripts/g1_small_test.py's) and prints the tables.
 usage: uv run python scripts/body_52_test.py commands | prepare | evalcmds | analyse [--body payload|limit_leg]"""
-import csv, json, sys
+import json, sys
 from multiprocessing import Pool
 from pathlib import Path
 import mujoco
 import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
+from crossenbodiment import paths   # noqa: E402
+from crossenbodiment.experiment import ClipSet, Experiment, parse_flag, workers   # noqa: E402
 from crossenbodiment.metrics import MetricSuite, metric_body, world_positions   # noqa: E402
 from crossenbodiment.paths import CHILD_52_TASK, read_clips   # noqa: E402  configs/clips/child_52_task.txt = outputs/child_52/clips.txt (refactor step 4)
-OUT = REPO / "outputs/body_52"; CLIPS = tuple(read_clips(CHILD_52_TASK))
+from crossenbodiment.reroll import EvalRollouts, Reroller, read_best_so_far   # noqa: E402
+from crossenbodiment.results import Checks, ResultsTable, write_json   # noqa: E402
+# refactor step 8: runs are read under paths.outputs_root() ($CE_OUTPUTS_ROOT), results written under paths.results_root()
+# ($CE_RESULTS_ROOT); both REPO/outputs by default. --algos / --body are read in main (not at import); prepare writes the
+# schema-2 index (crossenbodiment/reroll.py), analyse reads any.
+OUT = paths.output("body_52"); RES = paths.result("body_52"); CLIPS = tuple(read_clips(CHILD_52_TASK))
 SEEDS = (0,); G = (4, 8, 16, 32, 64, 128); GENS = G[-1]; EVALS = 16 * GENS; KEYS = ("fall_s", "success", "mpjpe", "mmpjpe", "mpjae", "drift")
 BODIES = dict(payload=dict(label="adult_heavyRWristHand_x80", xml="assets/robots/adult_heavyRWristHand_x80/robot.xml", ref="data/origin_motion/{c}.npz",
                            kpkd="heavy_arm_kp1_kd1"),
@@ -48,7 +55,10 @@ NAMES = dict(frozen="Frozen (z0)", random="Random Search", cem="CEM (BFM-Zero)",
              ta="Trajectory Adaptation (BFM-Zero)", es="LOES (our method)")
 ORDER = ("frozen", "random", "cem", "cmaes", "native", "lso", "lsor", "ta", "es")   # cem added 11/10, random / cmaes 11/10 (algocommands --algos ...);
 SINGLE = ("es", "random", "cem", "cmaes")                                # analyse keeps the methods whose latents were re-rolled for every motion
-ALGOS = sys.argv[sys.argv.index("--algos") + 1].split(",") if "--algos" in sys.argv else ["es", "cem"]
+ALGOS = ["es", "cem"]                                                    # --algos a,b (main)
+EXP = Experiment("outputs/body_52", clips=ClipSet(CLIPS), methods=("es", *SEQ), seeds=SEEDS, bodies=tuple(BODIES), budgets=G,
+                 name="{body}/{stem}_{method}_s{seed}", order=("seed", "clip", "body", "method"))
+REROLL = Reroller(GENS, G, best="budgets")                              # the best and the centre latent at each budget
 body = None
 
 
@@ -77,56 +87,51 @@ def ccmd(b, c):
             f"--pairs 8 --sigma 0.05 --lr 0.03 --obs-scale exact --eval-every 0 --evals {EVALS} --init-vel-scale 1")
 
 
+def longest_first():
+    return ClipSet(CLIPS).longest_first()
+
+
 def cemcommands():
-    order = sorted(CLIPS, key=lambda c: -len(np.load(REPO / f"data/origin_motion/{c}.npz")["qpos"]))
-    for s in SEEDS:
-        for c in order:
-            for b in BODIES:
-                d = f"outputs/body_52/{b}/{stem(c)}_cem_s{s}"; print(f"{d}|{ccmd(b, c)} --seed {s} --out {d}")
+    EXP.print_commands(lambda r: f"{ccmd(r.body, r.clip)} --seed {r.seed} --out {r.dir}", clip=longest_first(), method=("cem",))
 
 
-def algocommands():
+def algocommands(algos=None):
     """--algos random,cmaes (or cem): those single-latent searches, longest clips first, the two bodies interleaved"""
-    order = sorted(CLIPS, key=lambda c: -len(np.load(REPO / f"data/origin_motion/{c}.npz")["qpos"]))
-    for s in SEEDS:
-        for c in order:
-            for b in BODIES:
-                for k in ALGOS:
-                    d = f"outputs/body_52/{b}/{stem(c)}_{k}_s{s}"; print(f"{d}|{ccmd(b, c) if k == 'cem' else zcmd(b, c, k)} --seed {s} --out {d}")
+    EXP.print_commands(lambda r: f"{ccmd(r.body, r.clip) if r.method == 'cem' else zcmd(r.body, r.clip, r.method)} --seed {r.seed} --out {r.dir}",
+                       clip=longest_first(), method=algos or ALGOS)
 
 
 def commands():
-    order = sorted(CLIPS, key=lambda c: -len(np.load(REPO / f"data/origin_motion/{c}.npz")["qpos"]))
-    for s in SEEDS:
-        for c in order:
-            for b in BODIES:
-                d = f"outputs/body_52/{b}/{stem(c)}_es_s{s}"; print(f"{d}|{zcmd(b, c)} --seed {s} --out {d}")
-                for k in SEQ:
-                    d = f"outputs/body_52/{b}/{stem(c)}_{k}_s{s}"; print(f"{d}|" + " ".join(f"{lcmd(b, c, k)} --seed {s} --out {d}".split()))
+    def cmd(r):
+        if r.method == "es":
+            return f"{zcmd(r.body, r.clip)} --seed {r.seed} --out {r.dir}"
+        return " ".join(f"{lcmd(r.body, r.clip, r.method)} --seed {r.seed} --out {r.dir}".split())
+    EXP.print_commands(cmd, clip=longest_first())
+
+
+def rname(c, k):
+    return stem(c) + ("" if k == "es" else f"_{k}")                     # LOES's latents in rollouts/<stem>, CEM's in rollouts/<stem>_cem
 
 
 def rdir(b, c, k):
-    return OUT / b / "rollouts" / (stem(c) + ("" if k == "es" else f"_{k}"))     # LOES's latents in rollouts/<stem>, CEM's in rollouts/<stem>_cem
+    return OUT / b / "rollouts" / rname(c, k)
 
 
-def prepare():
+def prepare(algos=None):
+    algos = algos or ALGOS
     for b in BODIES:
         for c in CLIPS:
-          for k in ALGOS:
-            d = rdir(b, c, k); d.mkdir(parents=True, exist_ok=True); Z, idx = [], {}
-            for s in SEEDS:
-                r = f"{stem(c)}_{k}_s{s}"; t = np.load(OUT / b / r / "z_trace.npz"); zb, zm = t["z_best"], t["z_mean"]; assert len(zb) == GENS + 1 and len(zm) == GENS + 1, (b, r)
-                idx[r] = dict(best=list(range(len(Z), len(Z) + len(G)))); Z += [zb[g] for g in G]
-                idx[r]["centre"] = list(range(len(Z), len(Z) + len(G))); Z += [zm[g] for g in G]
-            np.save(d / "z.npy", np.stack(Z)); (d / "index.json").write_text(json.dumps(dict(body=b, clip=c, map=idx)))
-    print("prepared", ALGOS)
+            for k in algos:
+                REROLL.prepare(RES / b / "rollouts" / rname(c, k), [(f"{stem(c)}_{k}_s{s}", OUT / b / f"{stem(c)}_{k}_s{s}") for s in SEEDS],
+                               body=b, clip=c)
+    print("prepared", algos)
 
 
-def evalcmds():
+def evalcmds(algos=None):
     for b in BODIES:
         for c in CLIPS:
-            for k in ALGOS:                      # each latent rolled out and scored with its own search's cost
-                d = str(rdir(b, c, k).relative_to(REPO)); print(f"{d}|{ccmd(b, c) if k == 'cem' else zcmd(b, c, k)} --seed 0 --eval-z {d}/z.npy --eval-save-qpos --out {d}")
+            for k in algos or ALGOS:            # each latent rolled out and scored with its own search's cost
+                d = EXP.rollouts_dir(rname(c, k), body=b); print(EXP.eval_line(d, ccmd(b, c) if k == 'cem' else zcmd(b, c, k)))
 
 
 def world(Q):
@@ -163,18 +168,18 @@ def clip(job):
     if body is None or body.xml != B["xml"]:
         body = metric_body(str(REPO / B["xml"]), True); body.xml = B["xml"]
     ref = np.load(REPO / B["ref"].format(c=c))["qpos"].astype(np.float64)[1:]; Pw = world(ref); _, Dr = body.part_floor(ref)
-    R = {}; chk = dict(bad=[], native_diff=0.0, reroll_cost=0.0, reroll_best_qpos=0.0, seq_reroll=0.0, cem_z0=0.0)
+    R = {}; chk = Checks(("native_diff", "reroll_cost", "reroll_best_qpos", "seq_reroll", "cem_z0"), ("bad",))
     R["frozen"] = np.array([stats(np.load(D / f"{st}_es_s0/origin_z.npz")["qpos"], ref, Pw, Dr)])
     for k in [k for k in SINGLE if (rdir(b, c, k) / "eval_qpos.npz").exists()]:   # the single-latent searches: best and centre latents re-rolled
-        d = rdir(b, c, k); ix = json.load(open(d / "index.json"))["map"]; Q = np.load(d / "eval_qpos.npz")["qpos"]
-        cost = np.array([float(r["cost"]) for r in csv.DictReader(open(d / "eval.csv"))]); Bm = np.zeros((len(SEEDS), len(G), len(KEYS))); Cm = np.zeros_like(Bm)
+        ev = EvalRollouts(rdir(b, c, k), G, GENS); ix = ev.index; Q = ev.qpos
+        cost = np.array(ev.cost); Bm = np.zeros((len(SEEDS), len(G), len(KEYS))); Cm = np.zeros_like(Bm)
         for i, s in enumerate(SEEDS):
-            r = f"{st}_{k}_s{s}"; S_ = json.load(open(D / r / "summary.json")); chk["bad"] += [(b, r, x) for x in settings_bad(b, c, k, S_, s)]
-            bs = np.array([float(x["best_so_far"]) for x in csv.DictReader(open(D / r / "curve.csv"))])
-            chk["reroll_cost"] = max(chk["reroll_cost"], float(np.abs(cost[ix[r]["best"]] - bs[[g - 1 for g in G]]).max()))
-            chk["reroll_best_qpos"] = max(chk["reroll_best_qpos"], float(np.abs(Q[ix[r]["best"][-1]] - np.load(D / r / "best.npz")["qpos"][:Q.shape[1]]).max()))
+            r = f"{st}_{k}_s{s}"; S_ = json.load(open(D / r / "summary.json")); chk.add("bad", [(b, r, x) for x in settings_bad(b, c, k, S_, s)])
+            chk.high("reroll_cost", ix.check_vs_curve(r, cost, read_best_so_far(D / r)))
+            chk.diff("reroll_best_qpos", Q[ix.best_last(r)], np.load(D / r / "best.npz")["qpos"][:Q.shape[1]])
+            bi, ci = ix.best_budgets(r), ix.centre(r)
             for j in range(len(G)):
-                Bm[i, j] = stats(Q[ix[r]["best"][j]], ref, Pw, Dr); Cm[i, j] = stats(Q[ix[r]["centre"][j]], ref, Pw, Dr)
+                Bm[i, j] = stats(Q[bi[j]], ref, Pw, Dr); Cm[i, j] = stats(Q[ci[j]], ref, Pw, Dr)
         R[f"{k}_best"], R[f"{k}_centre"] = Bm, Cm
     z0 = np.load(D / f"{st}_es_s0/origin_z.npz")["qpos"]                # every single-latent search starts from the same z0 rollout
     chk["cem_z0"] = max(float(np.abs(np.load(D / f"{st}_{k}_s0/origin_z.npz")["qpos"] - z0).max()) for k in SINGLE if f"{k}_best" in R and k != "es")
@@ -182,24 +187,24 @@ def clip(job):
     for k in SEQ:
         Bm = np.zeros((len(SEEDS), len(G), len(KEYS))); Cm = np.zeros_like(Bm)
         for i, s in enumerate(SEEDS):
-            r = f"{st}_{k}_s{s}"; S_ = json.load(open(D / r / "summary.json")); chk["bad"] += [(b, r, x) for x in settings_bad(b, c, k, S_, s)]
-            X = np.load(D / r / "rollouts.npz"); chk["native_diff"] = max(chk["native_diff"], float(np.abs(X["q_ER8"] - nat).max()))
-            chk["seq_reroll"] = max(chk["seq_reroll"], float(np.abs(X["q_LSO_best"] - X[f"q_best_it{GENS}"]).max()))
+            r = f"{st}_{k}_s{s}"; S_ = json.load(open(D / r / "summary.json")); chk.add("bad", [(b, r, x) for x in settings_bad(b, c, k, S_, s)])
+            X = np.load(D / r / "rollouts.npz"); chk.diff("native_diff", X["q_ER8"], nat)
+            chk.diff("seq_reroll", X["q_LSO_best"], X[f"q_best_it{GENS}"])
             for j, g in enumerate(G):
                 Bm[i, j] = stats(X[f"q_best_it{g}"], ref, Pw, Dr); Cm[i, j] = stats(X[f"q_mean_it{g}"], ref, Pw, Dr)
         R[f"{k}_best"], R[f"{k}_centre"] = Bm, Cm
-    kp = REPO / f"outputs/kpkd/{B['kpkd']}/{st}_s0/z_trace.npz"
+    kp = paths.output(f"kpkd/{B['kpkd']}/{st}_s0/z_trace.npz")
     chk["loes_vs_kpkd"] = (float(np.abs(np.load(D / f"{st}_es_s0/z_trace.npz")["z_best"][:65] - np.load(kp)["z_best"]).max()) if kp.exists() else None)
     return b, st, R, chk
 
 
-def analyse():
-    bodies = [sys.argv[sys.argv.index("--body") + 1]] if "--body" in sys.argv else list(BODIES)
-    with Pool(16) as p:
+def analyse(bodies=None):
+    bodies = bodies or list(BODIES)
+    with Pool(workers(16)) as p:
         out = p.map(clip, [(b, c) for b in bodies for c in CLIPS], chunksize=1)
     for b in bodies:
         o = [x for x in out if x[0] == b]; bad = [y for x in o for y in x[3]["bad"]]
-        chk = {k: max(x[3][k] for x in o) for k in ("native_diff", "reroll_cost", "reroll_best_qpos", "seq_reroll", "cem_z0")}
+        chk = {k: Checks.worst([x[3] for x in o], k) for k in ("native_diff", "reroll_cost", "reroll_best_qpos", "seq_reroll", "cem_z0")}
         kp = [x[3]["loes_vs_kpkd"] for x in o if x[3]["loes_vs_kpkd"] is not None]; chk["loes_vs_kpkd"] = (max(kp) if kp else None, len(kp))
         print(f"\n===== {b} ({BODIES[b]['label']}) =====")
         print(f"settings not as intended: {len(bad)} {bad[:6]} | native across runs, largest qpos difference: {chk['native_diff']}")
@@ -210,15 +215,13 @@ def analyse():
         res = {x[1]: x[2] for x in o}; rep = dict(checks=dict(chk, bad=bad), per_motion={}, mean={})
         ORDER = [k for k in globals()["ORDER"] if k in ("frozen", "native") or all(f"{k}_best" in res[st] for st in res)]
 
-        def get(st, k, w):
-            if k in ("frozen", "native"):
-                return np.repeat(res[st][k][:, None], len(G), axis=1)
-            return res[st][f"{k}_{w}"]
+        T = table(res)
+        key = lambda k, w: k if k in ("frozen", "native") else f"{k}_{w}"
         for w in ("best", "centre"):
-            rep["mean"][w] = {k: {str(g * 16): dict(zip(KEYS, np.mean([get(st, k, w)[:, j].mean(0) for st in res], 0).tolist())) for j, g in enumerate(G)} for k in ORDER}
-            rep["per_motion"][w] = {st: {k: dict(zip(KEYS, get(st, k, w)[:, -1].mean(0).tolist())) for k in ORDER} for st in res}
-        rep["per_motion_1024"] = {w: {st: {k: dict(zip(KEYS, get(st, k, w)[:, G.index(64)].mean(0).tolist())) for k in ORDER} for st in res} for w in ("best", "centre")}
-        (OUT / b / "results.json").write_text(json.dumps(rep, indent=1))
+            rep["mean"][w] = {k: T.by_budget(key(k, w)) for k in ORDER}
+            rep["per_motion"][w] = per_motion(T, ORDER, key, w, -1)
+        rep["per_motion_1024"] = {w: per_motion(T, ORDER, key, w, G.index(64)) for w in ("best", "centre")}
+        write_json(RES / b / "results.json", rep)
         for n_ in (1024, EVALS):
             for w, lab in (("best", "Best latent so far"), ("centre", "Centre latent")):
                 print(f"\n{lab}, after {n_:,} rollouts: {len(res)} motions x 1 seed (frozen, native: one rollout per motion)")
@@ -233,6 +236,27 @@ def analyse():
                     print(f"  {NAMES[k]:34s}" + "".join(f"{(100 if m == 'success' else 1) * rep['mean'][w][k][str(g * 16)][m]:8.2f}" for g in G))
 
 
+def table(res):
+    """{motion: R} (clip()'s results) -> a ResultsTable: frozen / native (one rollout per motion) and <method>_best / _centre"""
+    T = ResultsTable(KEYS, list(res), G, SEEDS)
+    for k in [k for k in next(iter(res.values())) if all(k in res[st] for st in res)]:   # the methods every motion has
+        T.add(k, np.stack([res[st][k][0] if k in ("frozen", "native") else res[st][k] for st in res]))
+    return T
+
+
+def per_motion(T, order, key, w, j):
+    """{motion: {method: {metric: mean over seeds}}} at budget index j (motion-major, as results.json lays it out)"""
+    pm = {k: T.per_motion(key(k, w), j) for k in order}
+    return {st: {k: pm[k][st] for k in order} for st in T.motions}
+
+
+def main(argv):
+    global ALGOS
+    ALGOS = parse_flag(argv, "--algos", "es,cem").split(",")
+    A = {"commands": commands, "cemcommands": cemcommands, "algocommands": algocommands, "prepare": prepare, "evalcmds": evalcmds,
+         "analyse": lambda: analyse([argv[argv.index("--body") + 1]] if "--body" in argv else None)}
+    A[[x for x in argv[1:] if x in A][0]]()
+
+
 if __name__ == "__main__":
-    A = {"commands": commands, "cemcommands": cemcommands, "algocommands": algocommands, "prepare": prepare, "evalcmds": evalcmds, "analyse": analyse}
-    A[[x for x in sys.argv[1:] if x in A][0]]()
+    main(sys.argv)

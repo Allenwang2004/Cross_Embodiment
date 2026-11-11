@@ -27,12 +27,19 @@ REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sy
 from crossenbodiment.bodies import BODIES
 from crossenbodiment.paths import AMASS_LOCOMOTION_5S, CHILD_XML_REL, read_clips
 from crossenbodiment.metrics import MetricSuite, metric_body, world_positions
-OUT = REPO / "outputs/amass_baselines"; CLIPS = read_clips(AMASS_LOCOMOTION_5S)   # = outputs/amass_baselines/clips.txt (refactor step 4)
+from crossenbodiment import paths
+from crossenbodiment.experiment import ClipSet, Experiment, workers
+from crossenbodiment.results import ReportWriter, ResultsTable, write_json
+# refactor step 8: runs are read under paths.outputs_root() ($CE_OUTPUTS_ROOT), results written under paths.results_root()
+# ($CE_RESULTS_ROOT); both REPO/outputs by default
+OUT = paths.output("amass_baselines"); RES = paths.result("amass_baselines"); CLIPS = read_clips(AMASS_LOCOMOTION_5S)   # = outputs/amass_baselines/clips.txt (refactor step 4)
 BODY = dict(child=dict(ref="amass_data/amass_retargeting_motion/ACCAD/{c}.npz", iters=64, G=(4, 8, 16, 32, 64), xml=CHILD_XML_REL),
             tall=dict(label="len1.4_wid0.8", ref="data/len1.4_wid0.8/amass_retargeting_motion/ACCAD/{c}.npz", iters=64, G=(4, 8, 16, 32, 64),
                       xml="assets/robots_torque/len1.4_wid0.8/robot_torque_full.xml"))
 METHODS = dict(lso="", lsor="--rank --heading-weight 0.05 --pos-weight 0.005", ta="--method ta --objective phc")
 KEYS = ("mpjpe", "mmpjpe", "mpjae", "fall_s", "success", "drift")
+EXP = Experiment("outputs/amass_baselines", clips=ClipSet(CLIPS), methods=tuple(METHODS), bodies=tuple(BODY), name="{body}/{stem}_{method}_s{seed}",
+                 order=("body", "clip", "method"))
 
 
 def scale(b, c):
@@ -43,14 +50,14 @@ def scale(b, c):
 
 
 def commands():
-    order = sorted(CLIPS, key=lambda c: -len(np.load(REPO / BODY["child"]["ref"].format(c=c))["qpos"]))
-    for b, B in BODY.items():
-        for c in order:
-            for k, f in METHODS.items():
-                d = f"outputs/amass_baselines/{b}/{c}_{k}_s0"
-                sc = "" if b == "child" else f"--scale {scale(b, c)!r} "
-                print(f"{d}|" + " ".join((f"uv run python scripts/lso_search.py --ref {B['ref'].format(c=c)} --body {B.get('label', b)} --n 16 --iters {B['iters']} "
-                                          f"--init-vel-scale 1 --trace budgets --budgets {' '.join(map(str, B['G']))} --seed 0 {f} {sc}--out {d}").split()))
+    order = EXP.clips.longest_first(lambda c: BODY["child"]["ref"].format(c=c))       # by the child's clip length
+
+    def cmd(r):
+        b, c, k, d = r.body, r.clip, r.method, r.dir; B = BODY[b]
+        sc = "" if b == "child" else f"--scale {scale(b, c)!r} "
+        return " ".join((f"uv run python scripts/lso_search.py --ref {B['ref'].format(c=c)} --body {B.get('label', b)} --n 16 --iters {B['iters']} "
+                         f"--init-vel-scale 1 --trace budgets --budgets {' '.join(map(str, B['G']))} --seed 0 {METHODS[k]} {sc}--out {d}").split())
+    EXP.print_commands(cmd, clip=order)
 
 
 _ctx = {}
@@ -83,7 +90,7 @@ def one(job):
 
 def analyse():
     jobs = [(b, c) for b in BODY for c in CLIPS if all((OUT / b / f"{c}_{k}_s0/rollouts.npz").exists() for k in METHODS)]
-    with Pool(16) as p:
+    with Pool(workers(16)) as p:
         res = p.map(one, jobs, chunksize=1)
     rep, L = {}, []
     names = dict(native="Native tracking", lso="LSO (BFMTrack)", lsor="LSOR (ours)", ta="Trajectory Adaptation (BFM-Zero)")
@@ -92,18 +99,23 @@ def analyse():
         if not o:
             continue
         chk = dict(motions=len(o), native_diff=max(x[3]["native_diff"] for x in o), bad=[y for x in o for y in x[3]["bad"]][:10])
-        mean = {"native": dict(zip(KEYS, np.mean([x[2]["native"] for x in o], 0).tolist()))}
+        T = ResultsTable(KEYS, [x[1] for x in o], B["G"], (0,)); T.add("native", np.stack([x[2]["native"] for x in o]))
         for k in METHODS:
             for w in ("best", "centre"):
-                mean[f"{k}_{w}"] = {str(16 * g): dict(zip(KEYS, np.mean([x[2][k][w][j] for x in o], 0).tolist())) for j, g in enumerate(B["G"])}
+                T.add(f"{k}_{w}", np.stack([x[2][k][w][None] for x in o]))      # one seed: (motions, 1, budgets, metrics)
+        mean = {"native": T.mean("native", 0)}
+        for k in METHODS:
+            for w in ("best", "centre"):
+                mean[f"{k}_{w}"] = T.by_budget(f"{k}_{w}")
         rep[b] = dict(checks=chk, mean=mean, per_motion={x[1]: {k: (v.tolist() if isinstance(v, np.ndarray) else {w: a.tolist() for w, a in v.items()}) for k, v in x[2].items()} for x in o})
-        n = str(16 * B["G"][-1]); L.append(f"\n## {b} ({len(o)} AMASS motions, seed 0), the best sequence after {int(n):,} rollouts\nchecks: {json.dumps(chk)}\n"
-                                          "| method | MPJPE (cm) | MMPJPE | MPJAE (m/s^2) | Fall (s) | Success | drift (m, adult-eq) |\n|---|---|---|---|---|---|---|")
-        for k in ("native", "lso", "lsor", "ta"):
-            v = mean["native"] if k == "native" else mean[f"{k}_best"][n]
-            L.append(f"| {names[k]} | {v['mpjpe']:.2f} | {v['mmpjpe']:.2f} | {v['mpjae']:.2f} | {v['fall_s']:.2f} | {100 * v['success']:.1f}% | {v['drift']:.2f} |")
-    (OUT / "results.json").write_text(json.dumps(rep, indent=1)); (OUT / "README.md").write_text("# Latent-sequence methods on AMASS motions\n\n" + __doc__ + "\n" + "\n".join(L) + "\n")
+        n = str(16 * B["G"][-1]); L.append(f"\n## {b} ({len(o)} AMASS motions, seed 0), the best sequence after {int(n):,} rollouts\nchecks: {json.dumps(chk)}")
+        L += ResultsTable.markdown([(names[k], mean["native"] if k == "native" else mean[f"{k}_best"][n]) for k in ("native", "lso", "lsor", "ta")], COLUMNS)
+    write_json(RES / "results.json", rep); ReportWriter("Latent-sequence methods on AMASS motions", __doc__).write(RES / "README.md", L)
     print("\n".join(L))
+
+
+COLUMNS = (("MPJPE (cm)", "mpjpe", "{:.2f}"), ("MMPJPE", "mmpjpe", "{:.2f}"), ("MPJAE (m/s^2)", "mpjae", "{:.2f}"), ("Fall (s)", "fall_s", "{:.2f}"),
+           ("Success", "success", "{:.1f}%", 100), ("drift (m, adult-eq)", "drift", "{:.2f}"))
 
 
 if __name__ == "__main__":

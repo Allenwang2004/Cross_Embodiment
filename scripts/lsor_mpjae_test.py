@@ -23,7 +23,12 @@ from scipy.stats import spearmanr
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
 from crossenbodiment.bodies import BODIES
 from crossenbodiment.metrics import MetricSuite, drift, metric_body, world_positions
-OUT = REPO / "outputs/lsor_mpjae_test"; OLD = REPO / "outputs/child_52_lso"; S = BODIES.scale("child")
+from crossenbodiment import paths
+from crossenbodiment.experiment import ClipSet, workers
+from crossenbodiment.results import write_json
+# refactor step 8: runs (and clips.txt) are read under paths.outputs_root() ($CE_OUTPUTS_ROOT), results written under
+# paths.results_root() ($CE_RESULTS_ROOT); both REPO/outputs by default
+OUT = paths.output("lsor_mpjae_test"); OLD = paths.output("child_52_lso"); S = BODIES.scale("child"); RES = paths.result("lsor_mpjae_test")
 COND = ("lsor", "w0.01", "w0.02", "w0.05", "w0.1", "w0.2", "w0.3", "w0.5", "lsor_ours", "w2", "head", "pos"); SEEDS = range(3)
 WEIGHTS = {"lsor": "x 0", "w0.01": "x 0.01", "w0.02": "x 0.02", "w0.05": "x 0.05", "w0.1": "x 0.1", "w0.2": "x 0.2", "w0.3": "x 0.3", "w0.5": "x 0.5", "lsor_ours": "x 1", "w2": "x 2", "head": "heading only", "pos": "position only"}
 body = None
@@ -78,8 +83,8 @@ def drift_vs_mpjae(c):
 
 
 def main():
-    cl = [l.strip() for l in open(OUT / "clips.txt") if l.strip()]
-    with Pool(len(cl)) as p:
+    cl = list(ClipSet.from_file(OUT / "clips.txt"))
+    with Pool(workers(len(cl))) as p:
         res = dict(p.map(clip, cl))
     keys = ("mpjpe", "mmpjpe", "mpjae", "success", "drift", "acc", "dz")
     mean = {k: {m: float(np.mean([r[m] for st in res for r in res[st][k]])) for m in keys} for k in COND}
@@ -94,11 +99,11 @@ def main():
     print("MPJAE, per motion (mean of seeds):", json.dumps(tests))
     from crossenbodiment.paths import CHILD_52_TASK, read_clips   # configs/clips/child_52_task.txt = outputs/child_52/clips.txt (refactor step 4)
     all52 = read_clips(CHILD_52_TASK)
-    with Pool(24) as p:
+    with Pool(workers(24)) as p:
         dv = p.map(drift_vs_mpjae, all52)
     dd = np.array([x["lsor"][0] - x["lsor_ours"][0] for x in dv]); da = np.array([x["lsor_ours"][1] - x["lsor"][1] for x in dv]); rho = spearmanr(dd, da)
     print(f"52 motions, lsor -> lsor_ours: drift drop {dd.mean():.3f} m, MPJAE rise {da.mean():.2f}; Spearman rho(drift drop, MPJAE rise) = {rho.statistic:.2f}, p = {rho.pvalue:.2g}")
-    (OUT / "results.json").write_text(json.dumps(dict(per_motion=res, mean=mean, mpjae_tests=tests, all52=dict(drift_drop=dd.tolist(), mpjae_rise=da.tolist(), rho=float(rho.statistic), p=float(rho.pvalue))), indent=1))
+    write_json(RES / "results.json", dict(per_motion=res, mean=mean, mpjae_tests=tests, all52=dict(drift_drop=dd.tolist(), mpjae_rise=da.tolist(), rho=float(rho.statistic), p=float(rho.pvalue))))
 
 
 if __name__ == "__main__":

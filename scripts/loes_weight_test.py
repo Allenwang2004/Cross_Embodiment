@@ -22,14 +22,26 @@ REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sy
 from crossenbodiment.bodies import BODIES
 from crossenbodiment.paths import CHILD_XML_REL
 from crossenbodiment.metrics import MetricSuite, metric_body, world_positions
-OUT = REPO / "outputs/loes_weight_test"; ROLL = OUT / "rollouts"; RERUN = REPO / "outputs/child_52_rerun"; S = BODIES.scale("child")
+from crossenbodiment import paths
+from crossenbodiment.experiment import ClipSet, Experiment, workers
+from crossenbodiment.reroll import Reroller
+from crossenbodiment.results import write_json
+# refactor step 8: runs (and clips.txt) are read under paths.outputs_root() ($CE_OUTPUTS_ROOT), results written under
+# paths.results_root() ($CE_RESULTS_ROOT); both REPO/outputs by default. prepare writes the schema-2 index (crossenbodiment/reroll.py)
+OUT = paths.output("loes_weight_test"); ROLL = OUT / "rollouts"; RERUN = paths.output("child_52_rerun"); S = BODIES.scale("child")
+RES = paths.result("loes_weight_test")
 XML = CHILD_XML_REL; SEEDS = range(3)
 NEW = {"w0": (0.0, 0.0), "w0.05": (0.05, 0.005)}; COND = ("w0", "w0.05", "w1")
+REROLL = Reroller(64, best="last", centre=False)                       # each new run's best latent after 64 generations
 body = None
 
 
 def clips():
-    return [l.strip() for l in open(OUT / "clips.txt") if l.strip()]
+    return list(ClipSet.from_file(OUT / "clips.txt"))
+
+
+def experiment():
+    return Experiment("outputs/loes_weight_test", clips=clips(), methods=tuple(NEW), seeds=SEEDS, order=("seed", "method", "clip"))
 
 
 def base_cmd(c, h, p):
@@ -38,25 +50,20 @@ def base_cmd(c, h, p):
 
 
 def commands():
-    for s in SEEDS:
-        for k, (h, p) in NEW.items():
-            for c in clips():
-                d = f"outputs/loes_weight_test/{c.split('/')[1]}_{k}_s{s}"; print(f"{d}|{base_cmd(c, h, p)} --seed {s} --out {d}")
+    experiment().print_commands(lambda r: f"{base_cmd(r.clip, *NEW[r.method])} --seed {r.seed} --out {r.dir}")
 
 
 def prepare():
     for c in clips():
-        stem = c.split("/")[1]; d = ROLL / stem; d.mkdir(parents=True, exist_ok=True); Z, idx = [], {}
-        for k in NEW:
-            for s in SEEDS:
-                r = f"{stem}_{k}_s{s}"; t = np.load(OUT / r / "z_trace.npz")["z_best"]; assert len(t) == 65, r; idx[r] = len(Z); Z.append(t[64])
-        np.save(d / "z.npy", np.stack(Z)); (d / "index.json").write_text(json.dumps(dict(clip=c, map=idx)))
+        stem = c.split("/")[1]
+        REROLL.prepare(RES / "rollouts" / stem, [(f"{stem}_{k}_s{s}", OUT / f"{stem}_{k}_s{s}") for k in NEW for s in SEEDS], clip=c)
     print("prepared")
 
 
 def evalcmds():
+    E = experiment()
     for c in clips():
-        d = f"outputs/loes_weight_test/rollouts/{c.split('/')[1]}"; print(f"{d}|{base_cmd(c, 0.0, 0.0)} --seed 0 --eval-z {d}/z.npy --eval-save-qpos --out {d}")
+        d = E.rollouts_dir(c.split('/')[1]); print(E.eval_line(d, base_cmd(c, 0.0, 0.0)))
 
 
 def world(Q):
@@ -73,22 +80,22 @@ def clip(c):
     global body
     import eval_metrics as E
     body = body or metric_body(E.XML["child"], True); stem = c.split("/")[1]; ref = np.load(REPO / f"data/child/retargeting_motion/{c}.npz")["qpos"].astype(np.float64)[1:]; Pw = world(ref)
-    d = ROLL / stem; ix = json.load(open(d / "index.json"))["map"]; Q = np.load(d / "eval_qpos.npz")["qpos"]; res = {}; worst = 0.0
+    d = ROLL / stem; ix = Reroller.read(d, (64,), 64); Q = np.load(d / "eval_qpos.npz")["qpos"]; res = {}; worst = 0.0
     for k in NEW:
         res[k] = []
         for s in SEEDS:
-            r = f"{stem}_{k}_s{s}"; res[k].append(stats(Q[ix[r]], ref, Pw))
+            r = f"{stem}_{k}_s{s}"; i = ix.best_last(r); res[k].append(stats(Q[i], ref, Pw))
             b = np.load(OUT / r / "best.npz")                      # the search's own rollout of its best latent
             if "qpos" in b.files:
-                worst = max(worst, float(np.abs(b["qpos"][: len(Q[ix[r]])] - Q[ix[r]][: len(b["qpos"])]).max()))
-    ox = json.load(open(RERUN / f"rollouts/{stem}/index.json"))["map"]; OQ = np.load(RERUN / f"rollouts/{stem}/eval_qpos.npz")["qpos"]
-    res["w1"] = [stats(OQ[ox[f"{stem}_es_s{s}"]["best"][-1]], ref, Pw) for s in SEEDS]
+                worst = max(worst, float(np.abs(b["qpos"][: len(Q[i])] - Q[i][: len(b["qpos"])]).max()))
+    ox = Reroller.read(RERUN / f"rollouts/{stem}"); OQ = np.load(RERUN / f"rollouts/{stem}/eval_qpos.npz")["qpos"]
+    res["w1"] = [stats(OQ[ox.best_last(f"{stem}_es_s{s}")], ref, Pw) for s in SEEDS]
     return stem, res, worst
 
 
 def analyse():
     cl = clips()
-    with Pool(len(cl)) as p:
+    with Pool(workers(len(cl))) as p:
         out = p.map(clip, cl)
     res = {o[0]: o[1] for o in out}; keys = ("mpjpe", "mmpjpe", "mpjae", "success", "drift")
     print("best rollout re-rolled vs the search's saved best rollout, largest qpos difference:", max(o[2] for o in out))
@@ -100,7 +107,7 @@ def analyse():
     for st in res:
         print(f"  {st:30s}" + " | ".join(f"{k}: MPJPE {np.mean([r['mpjpe'] for r in res[st][k]]):5.2f} drift {np.mean([r['drift'] for r in res[st][k]]):4.2f} "
                                           f"succ {sum(r['success'] for r in res[st][k]):.0f}/3" for k in COND))
-    (OUT / "results.json").write_text(json.dumps(dict(per_motion=res, mean=mean), indent=1))
+    write_json(RES / "results.json", dict(per_motion=res, mean=mean))
 
 
 if __name__ == "__main__":
