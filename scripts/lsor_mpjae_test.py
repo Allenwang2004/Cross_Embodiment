@@ -21,7 +21,8 @@ import numpy as np
 from scipy.stats import spearmanr
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
-OUT = REPO / "outputs/lsor_mpjae_test"; OLD = REPO / "outputs/child_52_lso"; S = 0.611036
+from crossenbodiment.bodies import BODIES
+OUT = REPO / "outputs/lsor_mpjae_test"; OLD = REPO / "outputs/child_52_lso"; S = BODIES.scale("child")
 COND = ("lsor", "w0.01", "w0.02", "w0.05", "w0.1", "w0.2", "w0.3", "w0.5", "lsor_ours", "w2", "head", "pos"); SEEDS = range(3)
 WEIGHTS = {"lsor": "x 0", "w0.01": "x 0.01", "w0.02": "x 0.02", "w0.05": "x 0.05", "w0.1": "x 0.1", "w0.2": "x 0.2", "w0.3": "x 0.3", "w0.5": "x 0.5", "lsor_ours": "x 1", "w2": "x 2", "head": "heading only", "pos": "position only"}
 body = None

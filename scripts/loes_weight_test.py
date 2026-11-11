@@ -19,8 +19,10 @@ import mujoco
 import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
-OUT = REPO / "outputs/loes_weight_test"; ROLL = OUT / "rollouts"; RERUN = REPO / "outputs/child_52_rerun"; S = 0.611036
-XML = "assets/robots_torque/child/robot_torque_full.xml"; SEEDS = range(3)
+from crossenbodiment.bodies import BODIES
+from crossenbodiment.paths import CHILD_XML_REL
+OUT = REPO / "outputs/loes_weight_test"; ROLL = OUT / "rollouts"; RERUN = REPO / "outputs/child_52_rerun"; S = BODIES.scale("child")
+XML = CHILD_XML_REL; SEEDS = range(3)
 NEW = {"w0": (0.0, 0.0), "w0.05": (0.05, 0.005)}; COND = ("w0", "w0.05", "w1")
 body = None
 

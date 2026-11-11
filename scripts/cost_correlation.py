@@ -25,7 +25,9 @@ from pathlib import Path
 import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
-RR = REPO / "outputs/child_52_rerun"; OUT = REPO / "outputs/cost_corr"; XML = "assets/robots_torque/child/robot_torque_full.xml"
+from crossenbodiment.bodies import BODIES
+from crossenbodiment.paths import CHILD_XML_REL
+RR = REPO / "outputs/child_52_rerun"; OUT = REPO / "outputs/cost_corr"; XML = CHILD_XML_REL
 W_HEAD, W_POS, W_ANCHOR = 1.0, 0.1, 0.3
 
 
@@ -65,7 +67,7 @@ def one(c):
     body, ex, ma, da = _ctx["body"], _ctx["ex"], _ctx["ma"], _ctx["da"]
     task, st = c.split("/"); d = OUT / st; rew = reward_of(task)
     ref_all = np.load(REPO / f"data/child/retargeting_motion/{c}.npz")["qpos"].astype(np.float64); ref = ref_all[1:]
-    phc = PHCCost(_ctx["mc"], ref_all[0], ref_all[1:], scale=0.611036)
+    phc = PHCCost(_ctx["mc"], ref_all[0], ref_all[1:], scale=BODIES.scale("child"))
     Q = np.load(d / "eval_qpos.npz")["qpos"].astype(np.float64); V = np.load(d / "eval_qvel.npz")["qvel"].astype(np.float64); A = np.load(d / "eval_act.npz")["act"].astype(np.float64)
     rows = list(csv.DictReader(open(d / "eval.csv"))); n = len(rows)
     old = np.load(RR / "rollouts" / st / "eval_qpos.npz")["qpos"]; oldc = [float(r["cost"]) for r in csv.DictReader(open(RR / "rollouts" / st / "eval.csv"))]

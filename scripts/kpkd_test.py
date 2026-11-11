@@ -10,8 +10,10 @@ from pathlib import Path
 import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
+from crossenbodiment.bodies import BODIES
+from crossenbodiment.paths import CHILD_XML_REL
 OUT = REPO / "outputs/kpkd"; SEEDS = range(5)
-BODY = dict(child=dict(xml="assets/robots_torque/child/robot_torque_full.xml", ref="data/child/retargeting_motion/{c}.npz", label="child"), g1=dict(ref="outputs/g1/roundtrip/{stem}/g1.npz"),
+BODY = dict(child=dict(xml=CHILD_XML_REL, ref="data/child/retargeting_motion/{c}.npz", label="child"), g1=dict(ref="outputs/g1/roundtrip/{stem}/g1.npz"),
             limit_leg=dict(xml="assets/robots/adult_lockRleg_bent_lim/robot.xml", ref="data/adult_lockRleg_bent_lim/retargeting_motion/{c}.npz", label="adult_lockRleg_bent_lim"),
             heavy_arm=dict(xml="assets/robots/adult_heavyRWristHand_x80/robot.xml", ref="data/origin_motion/{c}.npz", label="adult_heavyRWristHand_x80"))
 COND = (("kp1_kd1", 1.0, 1.0), ("kp0.8_kd1.2", 0.8, 1.2), ("kp1.2_kd0.8", 1.2, 0.8), ("kp0.8_kd0.8", 0.8, 0.8), ("kp1.2_kd1.2", 1.2, 1.2))
@@ -203,7 +205,7 @@ def contactfall():
     tag = "_".join(drop) or "none"; (OUT / f"means_contactfall_without_{tag}.json").write_text(json.dumps(rep, indent=1))
 
 
-SCALE = dict(child=0.611036, g1=0.8212611427612194, limit_leg=1.0, heavy_arm=1.0)   # body / adult: ExactObs's s, RobotMap("g1").s
+SCALE = {b: BODIES.scale(b) for b in ("child", "g1", "limit_leg", "heavy_arm")}   # body / adult: ExactObs's s, RobotMap("g1").s, 1, 1
 
 
 def phc_one(job):

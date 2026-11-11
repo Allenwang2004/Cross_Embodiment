@@ -24,8 +24,10 @@ from pathlib import Path
 import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
+from crossenbodiment.bodies import BODIES
+from crossenbodiment.paths import CHILD_XML_REL
 OUT = REPO / "outputs/amass_baselines"; CLIPS = [l.strip() for l in open(OUT / "clips.txt")]
-BODY = dict(child=dict(ref="amass_data/amass_retargeting_motion/ACCAD/{c}.npz", iters=64, G=(4, 8, 16, 32, 64), xml="assets/robots_torque/child/robot_torque_full.xml"),
+BODY = dict(child=dict(ref="amass_data/amass_retargeting_motion/ACCAD/{c}.npz", iters=64, G=(4, 8, 16, 32, 64), xml=CHILD_XML_REL),
             tall=dict(label="len1.4_wid0.8", ref="data/len1.4_wid0.8/amass_retargeting_motion/ACCAD/{c}.npz", iters=64, G=(4, 8, 16, 32, 64),
                       xml="assets/robots_torque/len1.4_wid0.8/robot_torque_full.xml"))
 METHODS = dict(lso="", lsor="--rank --heading-weight 0.05 --pos-weight 0.005", ta="--method ta --objective phc")
@@ -33,12 +35,10 @@ KEYS = ("mpjpe", "mmpjpe", "mpjae", "fall_s", "success", "drift")
 
 
 def scale(b, c):
-    """the body's root scale s for clip c: ExactObs's child default, or single_z_search.py's rule (median ref / adult root x, y)"""
-    if b == "child":
-        return 0.611036
-    a = np.load(REPO / f"amass_data/amass_origin_motion/ACCAD/{c}.npz")["qpos"][:, :2]; r = np.load(REPO / BODY[b]["ref"].format(c=c))["qpos"][:, :2]
-    n = min(len(a), len(r)); m = np.abs(a[:n]) > 1e-3
-    return float(np.median(r[:n][m] / a[:n][m]))
+    """the body's root scale s for clip c: ExactObs's child default, or single_z_search.py's rule (median ref / adult root x, y)
+    against amass_data/amass_origin_motion/ACCAD/<c>.npz -- crossenbodiment/bodies.py BodyRegistry.scale (the same expression)"""
+    assert BODIES.reference(BODY[b].get("label", b), c, amass=True) == BODY[b]["ref"].format(c=c)
+    return BODIES.scale(BODY[b].get("label", b), c, amass=True)
 
 
 def commands():

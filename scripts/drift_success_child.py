@@ -19,7 +19,9 @@ from pathlib import Path
 import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
-RR, LS = REPO / "outputs/child_52_rerun", REPO / "outputs/child_52_lso"; S = 0.611036; SEEDS = range(5)
+from crossenbodiment.bodies import BODIES
+from crossenbodiment.paths import CHILD_XML
+RR, LS = REPO / "outputs/child_52_rerun", REPO / "outputs/child_52_lso"; S = BODIES.scale("child"); SEEDS = range(5)
 # --loes-dir outputs/noanchor/child (user 11/11): LOES from the runs without the anchor term -> outputs/drift_success_child_noanchor.json
 RL = REPO / sys.argv[sys.argv.index("--loes-dir") + 1] if "--loes-dir" in sys.argv else None; SUFFIX = "_noanchor" if "--loes-dir" in sys.argv else ""   # None: RR, read at call time
 SEQ = dict(lso="q_best_it64", lsor_w005="q_best_it64", ta="q_best_it64")
@@ -35,7 +37,7 @@ def one(c):
     import mujoco
     import eval_metrics as E
     if not _b:
-        _b["body"] = E.Body(E.XML["child"], True); _b["m"] = mujoco.MjModel.from_xml_path(str(REPO / "assets/robots_torque/child/robot_torque_full.xml")); _b["d"] = mujoco.MjData(_b["m"])
+        _b["body"] = E.Body(E.XML["child"], True); _b["m"] = mujoco.MjModel.from_xml_path(str(CHILD_XML)); _b["d"] = mujoco.MjData(_b["m"])
     body, m, d = _b["body"], _b["m"], _b["d"]; st = c.split("/")[1]
     ref = np.load(REPO / f"data/child/retargeting_motion/{c}.npz")["qpos"].astype(np.float64)[1:]
 

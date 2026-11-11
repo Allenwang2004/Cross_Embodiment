@@ -25,8 +25,10 @@ from pathlib import Path
 import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO))
-OUT = REPO / "outputs/obs_canon_52"; XML = "assets/robots_torque/child/robot_torque_full.xml"; ADULT = "assets/robots/adult/robot.xml"
-S = 0.611036
+from crossenbodiment.bodies import BODIES
+from crossenbodiment.paths import ADULT_XML_REL, CHILD_XML_REL, MOTIVO_CKPT
+OUT = REPO / "outputs/obs_canon_52"; XML = CHILD_XML_REL; ADULT = ADULT_XML_REL
+S = BODIES.scale("child")
 SETTINGS = dict(raw="none", perbody="auto", uniform=str(S), exact="exact")
 NAMES = dict(raw="raw", perbody="per-body multiplier", uniform="uniform multiplier (s)", exact="Phi_beta (exact)")
 
@@ -61,7 +63,7 @@ def cosine():
     from model import bfm_align
     from model.exact_obs import ExactObs
     from model.obs_scale import build_obs_multiplier
-    model = FBcprModel.from_pretrained("facebook/metamotivo-M-1").to("cuda"); model.eval()
+    model = FBcprModel.from_pretrained(MOTIVO_CKPT).to("cuda"); model.eval()
     envc, _ = make_humenv(num_envs=1, task=None, xml=str(REPO / XML), state_init="Default")
     enva, _ = make_humenv(num_envs=1, task=None, xml=str(REPO / ADULT), state_init="Default")
     mul = dict(raw=None, perbody=build_obs_multiplier(str(REPO / XML), str(REPO / ADULT), mode="auto", verbose=False),

@@ -23,13 +23,15 @@ import sys
 from pathlib import Path
 import numpy as np
 
-REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO / "scripts")); OUT = "outputs/noanchor"
+REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts")); OUT = "outputs/noanchor"
+from crossenbodiment.bodies import BODIES
+from crossenbodiment.paths import CHILD_XML_REL
 CLIPS = [l.strip() for l in open(REPO / "outputs/child_52/clips.txt")]
 ORDER = sorted(CLIPS, key=lambda c: -len(np.load(REPO / f"data/origin_motion/{c}.npz")["qpos"]))
 
 
 def child_cmd(c, s):
-    return (f"uv run python scripts/single_z_search.py --clip {c} --body child --xml assets/robots_torque/child/robot_torque_full.xml --objective bfm "
+    return (f"uv run python scripts/single_z_search.py --clip {c} --body child --xml {CHILD_XML_REL} --objective bfm "
             f"--evals 1024 --pairs 8 --sigma 0.05 --lr 0.03 --obs-scale exact --heading-weight 1.0 --pos-weight 0.1 --anchor data/origin_z/{c}.npy "
             f"--anchor-weight 0.3 --eval-every 0 --init-vel-scale 1 --seed {s}")
 
@@ -54,8 +56,8 @@ def commands():
 
 
 REP = Path(__file__).resolve().parent.parent
-CONF = dict(child=dict(seeds=range(5), G=(4, 8, 16, 32, 64), s=0.611036), payload=dict(seeds=(0,), G=(4, 8, 16, 32, 64, 128), s=1.0),
-            limit_leg=dict(seeds=(0,), G=(4, 8, 16, 32, 64, 128), s=1.0), g1=dict(seeds=(0,), G=(4, 8, 16, 32, 64, 128), s=0.8212611427612194))
+CONF = dict(child=dict(seeds=range(5), G=(4, 8, 16, 32, 64), s=BODIES.scale("child")), payload=dict(seeds=(0,), G=(4, 8, 16, 32, 64, 128), s=BODIES.scale("payload")),
+            limit_leg=dict(seeds=(0,), G=(4, 8, 16, 32, 64, 128), s=BODIES.scale("limit_leg")), g1=dict(seeds=(0,), G=(4, 8, 16, 32, 64, 128), s=BODIES.scale("g1")))
 KEYS = ("fall_s", "success", "mpjpe", "mmpjpe", "mpjae", "drift")
 BODIES = sys.argv[sys.argv.index("--bodies") + 1].split(",") if "--bodies" in sys.argv else list(CONF)
 
