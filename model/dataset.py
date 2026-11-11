@@ -28,12 +28,11 @@ from pathlib import Path
 
 import numpy as np
 
-# Must match scripts/scale_robot.py's AXES order -- beta is this 8-dim
-# vector read straight out of a robot_<label>_parameter.json (NOT
-# robot_<label>.json -- that name now means the skeleton-export schema with
-# a "bodies" list, see scripts/export_skeleton_json.py).
-BETA_AXES = ["leg_scale", "arm_scale", "torso_scale", "head_scale",
-             "leg_girth", "arm_girth", "torso_girth", "head_girth"]
+# beta is this 8-dim vector read straight out of a body's parameter.json (NOT
+# skeleton.json -- that is the skeleton-export schema with a "bodies" list, see
+# scripts/export_skeleton_json.py). One list for the whole repository since OOP refactor
+# step 9: crossenbodiment/bodybuild/beta.py (scripts/scale_robot.py AXES is the same object).
+from crossenbodiment.bodybuild.beta import BETA_AXES  # noqa: E402,F401
 
 
 def load_beta(morphology_json_path) -> np.ndarray:

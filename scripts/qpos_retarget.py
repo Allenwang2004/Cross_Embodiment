@@ -54,6 +54,11 @@ tolerance (e.g. genuine mid-air frames in a jump or rotate flip) are left
 alone -- this only ever pulls the body UP out of the floor, never pushes a
 legitimately airborne pose down.
 
+OOP refactor step 9: the code is crossenbodiment/bodybuild/retarget.py (SameTopologyRetargeter; retarget_qpos,
+min_geom_z = _min_geom_z, ground_correct_qpos are re-exported here for the scripts that import them); scripts/build_body.py
+runs it on every motion folder of a new body (nested output, data/<body>/retargeting_motion/<task>/<stem>.npz). This file is the
+old CLI, same flags, byte-identical files.
+
 Run with (this repo's own venv):
     python3 scripts/qpos_retarget.py --input_npz <robot_clip.npz> \
         --output_npz <robot_child_clip.npz> \
@@ -69,79 +74,15 @@ Run with (this repo's own venv):
         [--target_xml assets/robots/child/robot.xml]
 """
 import argparse
-import itertools
-import json
-import os
+import sys
 from pathlib import Path
 
-os.environ.setdefault("MUJOCO_GL", "egl")
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from crossenbodiment.bodybuild.retarget import (SameTopologyRetargeter, _min_geom_z, ground_correct_qpos,  # noqa: E402,F401
+                                                retarget_qpos, save_clip)
+from crossenbodiment.bodybuild.skeleton import load_root_rest_height  # noqa: E402,F401
 
-import mujoco
-import numpy as np
-
-
-def load_root_rest_height(skeleton_json_path):
-    with open(skeleton_json_path) as f:
-        data = json.load(f)
-    bodies = {b["name"]: b for b in data["bodies"]}
-    root_name = next(b["name"] for b in data["bodies"] if b["parent"] == "world")
-    return bodies[root_name]["world_pos"][2]
-
-
-def retarget_qpos(qpos, scale):
-    out = qpos.copy()
-    out[:, 0:3] *= scale  # root (free joint) world position only; quat (3:7)
-    # and every hinge angle (7:) are joint-local and topology-identical, so
-    # they carry over unchanged.
-    return out
-
-
-def _min_geom_z(model, data):
-    """Exact lowest world-z point over all non-floor geoms for the CURRENT
-    data.qpos (caller must have already run mj_kinematics). Same math as
-    scale_robot.py's measure_min_z / check_retarget_ground_clearance.py's
-    min_geom_z -- geom_rbound is a bounding-sphere radius and isn't tight
-    for box geoms (the feet here are boxes)."""
-    lo = np.inf
-    for gid in range(model.ngeom):
-        if mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, gid) == "floor":
-            continue
-        gtype = model.geom_type[gid]
-        pos = data.geom_xpos[gid]
-        mat = data.geom_xmat[gid].reshape(3, 3)
-        size = model.geom_size[gid]
-        if gtype == mujoco.mjtGeom.mjGEOM_BOX:
-            for signs in itertools.product([1, -1], repeat=3):
-                lo = min(lo, (pos + mat @ (np.array(signs) * size))[2])
-        elif gtype == mujoco.mjtGeom.mjGEOM_CAPSULE:
-            c1 = (pos + mat @ np.array([0, 0, size[1]]))[2] - size[0]
-            c2 = (pos + mat @ np.array([0, 0, -size[1]]))[2] - size[0]
-            lo = min(lo, c1, c2)
-        elif gtype == mujoco.mjtGeom.mjGEOM_SPHERE:
-            lo = min(lo, pos[2] - size[0])
-        else:
-            lo = min(lo, pos[2])
-    return lo
-
-
-def ground_correct_qpos(target_model, qpos, tolerance=-0.005):
-    """Per-frame: if the target skeleton's lowest geometry point is below
-    `tolerance`, lift the whole pose (root z only) so it's exactly at
-    `tolerance`. Never pushes an already-clear/airborne frame down."""
-    data = mujoco.MjData(target_model)
-    out = qpos.copy()
-    n_corrected = 0
-    max_shift = 0.0
-    for t in range(out.shape[0]):
-        data.qpos[:] = out[t]
-        mujoco.mj_kinematics(target_model, data)
-        min_z = _min_geom_z(target_model, data)
-        if min_z < tolerance:
-            shift = tolerance - min_z
-            out[t, 2] += shift
-            n_corrected += 1
-            max_shift = max(max_shift, shift)
-    return out, n_corrected, max_shift
+import numpy as np  # noqa: E402
 
 
 def main():
@@ -153,43 +94,31 @@ def main():
     parser.add_argument("--source_skeleton_json", default="assets/robots/adult/skeleton.json")
     parser.add_argument("--target_skeleton_json", default="assets/robots/child/skeleton.json")
     parser.add_argument("--target_xml", default="assets/robots/child/robot.xml",
-                         help="target MJCF, used for --ground-correct's forward kinematics")
+                        help="target MJCF, used for --ground-correct's forward kinematics")
     parser.add_argument("--ground-correct", dest="ground_correct", action="store_true", default=True,
-                         help="per-frame lift the pose so it never sinks below --tolerance (default: on)")
+                        help="per-frame lift the pose so it never sinks below --tolerance (default: on)")
     parser.add_argument("--no-ground-correct", dest="ground_correct", action="store_false",
-                         help="disable ground correction, output the pure naive-scale retarget")
+                        help="disable ground correction, output the pure naive-scale retarget")
     parser.add_argument("--tolerance", type=float, default=-0.005,
-                         help="min allowed lowest-geom z before correction kicks in (m); "
-                              "matches MuJoCo's normal soft-contact penetration range")
+                        help="min allowed lowest-geom z before correction kicks in (m); "
+                             "matches MuJoCo's normal soft-contact penetration range")
     parser.add_argument("--fps", type=float, default=30.0,
-                         help="robotmotion .npz files carry no fps of their own; render_qpos.py "
-                              "expects one in the output, so it's passed through explicitly.")
+                        help="robotmotion .npz files carry no fps of their own; render_qpos.py "
+                             "expects one in the output, so it's passed through explicitly.")
     args = parser.parse_args()
 
     if bool(args.input_npz) == bool(args.input_dir):
         raise SystemExit("Pass exactly one of --input_npz/--output_npz or --input_dir/--output_dir")
 
-    source_h = load_root_rest_height(args.source_skeleton_json)
-    target_h = load_root_rest_height(args.target_skeleton_json)
-    scale = target_h / source_h
-    print(f"Root height scale ({args.source_skeleton_json} -> {args.target_skeleton_json}): {scale:.4f}")
-
-    target_model = mujoco.MjModel.from_xml_path(args.target_xml) if args.ground_correct else None
-
-    def process(qpos):
-        out = retarget_qpos(qpos, scale)
-        if args.ground_correct:
-            out, n_corrected, max_shift = ground_correct_qpos(target_model, out, args.tolerance)
-            return out, n_corrected, max_shift
-        return out, 0, 0.0
+    r = SameTopologyRetargeter(args.source_skeleton_json, args.target_skeleton_json, args.target_xml,
+                               ground_correct=args.ground_correct, tolerance=args.tolerance)
+    print(f"Root height scale ({args.source_skeleton_json} -> {args.target_skeleton_json}): {r.scale:.4f}")
 
     if args.input_npz:
-        qpos = np.load(args.input_npz)["qpos"]
-        out, n_corrected, max_shift = process(qpos)
-        args.output_npz.parent.mkdir(parents=True, exist_ok=True)
-        np.savez(args.output_npz, qpos=out, fps=args.fps)
+        out = r.retarget(np.load(args.input_npz)["qpos"])
+        save_clip(args.output_npz, out, args.fps)
         print(f"Wrote {out.shape} -> {args.output_npz}"
-              + (f" (ground-corrected {n_corrected}/{out.shape[0]} frames, max shift {max_shift:.4f}m)"
+              + (f" (ground-corrected {r.last['n_corrected']}/{out.shape[0]} frames, max shift {r.last['max_shift']:.4f}m)"
                  if args.ground_correct else ""))
     else:
         npz_paths = sorted(args.input_dir.rglob("*.npz"))
@@ -197,11 +126,8 @@ def main():
         args.output_dir.mkdir(parents=True, exist_ok=True)
         total_corrected = 0
         for i, npz_path in enumerate(npz_paths):
-            qpos = np.load(npz_path)["qpos"]
-            out, n_corrected, max_shift = process(qpos)
-            total_corrected += n_corrected
-            out_path = args.output_dir / f"{npz_path.stem}.npz"
-            np.savez(out_path, qpos=out, fps=args.fps)
+            r.write_clip(npz_path, args.output_dir / f"{npz_path.stem}.npz", args.fps)
+            total_corrected += r.last["n_corrected"]
             if (i + 1) % 50 == 0:
                 print(f"  {i + 1}/{len(npz_paths)}")
         print(f"Wrote {len(npz_paths)} retargeted qpos files -> {args.output_dir}"

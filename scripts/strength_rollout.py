@@ -16,7 +16,6 @@ usage: uv run python scripts/strength_rollout.py [--scale 0.8 --label s08] [--wi
 """
 import argparse, json, sys
 from pathlib import Path
-import mujoco
 import numpy as np
 import torch
 
@@ -35,19 +34,15 @@ ADULT = REPO / "assets/robots/adult"
 
 
 def build(label, scale, what):
-    dst = REPO / "assets/robots" / label; dst.mkdir(parents=True, exist_ok=True)
-    spec = mujoco.MjSpec.from_file(str(ADULT / "robot.xml"))
-    for a in spec.actuators:
-        if what == "gear":
-            a.gear[0] *= scale
-        else:
-            a.forcerange = [a.forcerange[0] * scale, a.forcerange[1] * scale]
-    spec.compile()
-    (dst / "robot.xml").write_text(spec.to_xml())
-    for f in ("parameter.json", "skeleton.json"):
-        if (ADULT / f).exists():
-            (dst / f).write_bytes((ADULT / f).read_bytes())
-    return dst / "robot.xml"
+    """assets/robots/<label>/robot.xml: the adult with every actuator's gear (what="gear") or forcerange ("cap") x scale
+    (crossenbodiment/bodybuild ActuatorStrength, OOP refactor step 9: the same MjSpec edit, byte-identical robot.xml;
+    parameter.json is the adult's keys + name / kind / parent / builder / edit, skeleton.json exported from the new XML)"""
+    from crossenbodiment.bodybuild.builders import ActuatorStrength
+    from crossenbodiment.bodybuild.skeleton import dump_skeleton
+    b = ActuatorStrength(label, scale, what)
+    b.build(log=lambda *_: None)
+    dump_skeleton(b.xml, b.dir / "skeleton.json")
+    return b.xml
 
 
 def rollout(model, env, z, T):

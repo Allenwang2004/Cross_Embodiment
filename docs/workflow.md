@@ -10,20 +10,24 @@ they find the repository from their own path, so move one back with `git mv` bef
 
 A body is an MJCF scaled from `assets/robots/adult/robot.xml` by 8 parameters β (length and girth of leg,
 arm, torso, head), then given actuators calibrated to the torque it actually needs. Step-by-step guide (in
-Chinese): [`new_body.md`](new_body.md); one-shot driver: `scripts/new_body_pipeline.sh`.
+Chinese): [`new_body.md`](new_body.md); one CLI for every recipe: `scripts/build_body.py` (crossenbodiment/bodybuild: BodyBuilder
+subclasses, SameTopologyRetargeter, TorqueCalibrator, GainScaler, BodyPipeline; finished steps are skipped). The scripts below keep
+their flags and call the same classes.
 
 | Script | What it does |
 |---|---|
-| `scale_robot.py` | Scaled variant of the adult MJCF from β |
-| `qpos_retarget.py` | Retarget adult motions to a body: joint angles copied, root position scaled, lifted to the ground (foot-locked IK refinement: `archive/scripts/qpos_retarget_ik.py`, *archived 2026-11-11*) |
+| `build_body.py` | Build bodies: `scaled` (β axes, `--len/--wid`, `--preset`), `scaled-set`, `grid`, `morph`, the adult-size variants (`heavy-limb`, `lock-joints`, `limit-joints`, `elderly`, `strength`) and `gains` (kp / kd of an MJCF or a robot's gains json); steps shape → skeleton → retarget → torque ratio → aggregate → physics → registry, idempotent, memory-gated |
+| `scale_robot.py` | Scaled variant of the adult MJCF from β (`ScaledBody`) |
+| `qpos_retarget.py` | Retarget adult motions to a body: joint angles copied, root position scaled, lifted to the ground (`SameTopologyRetargeter`; foot-locked IK refinement: `archive/scripts/qpos_retarget_ik.py`, *archived 2026-11-11*) |
 | `export_skeleton_json.py` | Rest-pose transform of every body part |
-| `torque_ratio_per_joint.py`, `torque_ratio_across_motions.py`, `torque_aggregate_motion_k.py` | Inverse-dynamics torque demand of a body vs the adult, per joint and over motions |
-| `torque_scale_actuators.py` | Write `robot_torque_full.xml` with actuators scaled by that ratio |
+| `torque_ratio_per_joint.py`, `torque_ratio_across_motions.py`, `torque_aggregate_motion_k.py` | Gravity torque demand of a body vs the adult, per joint and over motions; the aggregate writes `robot_torque_full.xml` with actuators and joint dynamics scaled by that ratio (`TorqueCalibrator`; the one-clip writer `archive/scripts/torque_scale_actuators.py` is *archived 2026-11-12*) |
+| `scale_body_gains.py` | A body with its kp / kd (or k) multiplied (`GainScaler`) |
+| `heavy_arm_body.py`, `lock_joint_body.py`, `limit_joint_body.py`, `elderly_body.py` | Adult-size variants and their references: heavier arm (payload), locked joints, joints limited to a band (limited leg), stooped elderly walker |
 | `torque_capability_check.py`, `plot_k_diagnostics.py` | Checks: can the actuators hold the poses; the old 11-body roster's checks (reach commanded angles, replay the adult's controls) are `archive/scripts/pd_track_bodies.py`, `archive/scripts/replay_actions_on_body.py` (*archived 2026-11-11*) |
 | `archive/scripts/ik_action_from_qpos.py` | Control stream that commands a pose-only motion (*archived 2026-11-11*) |
 | `write_body_splits.py` | Write each body's train / test split (`model/bodies.py`) into its `parameter.json` |
 | `archive/scripts/render_bodies.py` | Contact sheet of a robot directory (default `assets/robots_advance`, gone; *archived 2026-11-11*) |
-| `make_grid_bodies.sh`, `make_morph_path.sh`, `make_all_paths.sh` | Bodies on a leg × arm grid, or straight paths in β from the adult (morphology study); the stature × build grid `archive/scripts/grid_l0_bodies.py` is *archived 2026-11-11* |
+| `make_scaled_bodies.py`, `make_grid_bodies.sh`, `make_morph_path.sh`, `make_all_paths.sh`, `new_body_pipeline.sh` | Thin wrappers over `build_body.py` (they print the line they run): the 8 len × wid bodies, bodies on a leg × arm grid, straight paths in β from the adult (morphology study), one body + its z0 cost ranking; the stature × build grid `archive/scripts/grid_l0_bodies.py` is *archived 2026-11-11* |
 | `archive/scripts/scale_robot_l1.py` | 30-axis generator; was library only for `render_bodies.py` / `grid_l0_bodies.py` (*archived 2026-11-11* with them) |
 
 ## 2. Data and clip sets

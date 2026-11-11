@@ -161,6 +161,18 @@ queues run it). File names the G1's existing outputs use stay G1-specific in the
 assets/robots/g1/smpl_fill.json, the target name g1.npz (model/robots.py target_path, crossenbodiment/paths.py roundtrip),
 outputs/g1/z0_perjoint (robot_z0.py, robot_z0_summary.py), the `_g1mse` run tag and `--objective g1mse`.
 
+## Step 9: the body-building pipeline (2026-11-12)
+
+The four copies of the pipeline (scripts/new_body_pipeline.sh, make_grid_bodies.sh, make_morph_path.sh, make_scaled_bodies.py) are
+thin wrappers over scripts/build_body.py now, and the building scripts (scale_robot, export_skeleton_json, qpos_retarget,
+torque_ratio_across_motions, torque_aggregate_motion_k, scale_body_gains, heavy_arm_body, lock_joint_body, limit_joint_body,
+elderly_body, strength_rollout's build) keep their flags over crossenbodiment/bodybuild; all of them stay in scripts/ (docs and
+the other scripts name them). One file is archived:
+
+| file | what it was | why archived (2026-11-12) |
+|---|---|---|
+| scripts/torque_scale_actuators.py | the library of the torque calibration (choose_k, symmetrize_k, mirror checks, scale_line, verify, joint_targets, closed_loop, write_scaled_xml) plus a CLI writing robots_torque.xml from ONE clip's k (outputs/torque_ratio_per_joint/<clip>/_ratios.csv) | the library moved verbatim to crossenbodiment/bodybuild/torque.py (TorqueCalibrator; robot_torque_full.xml of len0.8_wid1.2 and the child re-made byte-identical, tests/golden/verify_bodies.py); the one-clip CLI is the route torque_aggregate_motion_k.py replaced (the aggregate over every motion), its robots_torque.xml / robots_torque_move_only.xml are stale (docs/new_body.md); its only importer, torque_aggregate_motion_k.py, uses the package; no .sh / queue script launches it |
+
 ## Candidates kept (PLAN.md list, 2026-11-11)
 
 model/bodies.py (imported by strength_rollout.py and write_body_splits.py), write_body_splits.py (docs/new_body.md Step 1 tells

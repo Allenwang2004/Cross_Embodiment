@@ -12,7 +12,7 @@ The pipeline step by step, with every script: [`docs/workflow.md`](docs/workflow
 | Piece | Where |
 |---|---|
 | Frozen policy and backward map B | `facebook/metamotivo-M-1` (pulled by `metamotivo`) |
-| Bodies | `assets/robots/<body>/` (scaled MJCF, 8-d body parameters β, `scripts/scale_robot.py`); actuator-calibrated `assets/robots_torque/<body>/robot_torque_full.xml` — the child is the body used now |
+| Bodies | `assets/robots/<body>/` (scaled MJCF, 8-d body parameters β); actuator-calibrated `assets/robots_torque/<body>/robot_torque_full.xml`, both built by `scripts/build_body.py` (docs/new_body.md) — the child and the 8 len × wid bodies |
 | Adult motions, adult latents | `data/origin_motion/<task>/<task>_<trial>.npz` (540 clips); `data/origin_z/...` (one z0 per clip) |
 | Child references | `data/child/retargeting_motion/...`: joint angles copied from the adult, root position × 0.611, lifted so the lowest point is at −5 mm |
 | Clip sets | `datasets/crossenbodiment-child-balanced/` — manifest + `splits/balanced500_clips.txt` (500 clips, 6 categories: crawl, headstand, jump, move, raisearms, rotate) |

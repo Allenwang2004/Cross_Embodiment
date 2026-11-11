@@ -54,6 +54,14 @@ tall_body_52, amass_baselines, cost_correlation, drift_success_child, success_ /
   queue         CommandQueue + ResourceGate: the shell queues' loop in Python (scripts/run_queue.py)
   eval_metrics  moved from scripts/eval_metrics.py (which re-exports it)
   paths         + outputs_root() / results_root() ($CE_OUTPUTS_ROOT, $CE_RESULTS_ROOT) and writable()
+Step 9 adds the body-building pipeline (scripts/build_body.py; docs/new_body.md), the subpackage bodybuild:
+  BodyBuilder     ScaledBody (beta: the 8 axes, len x wid, presets), HeavyLimb, LockJoints, LimitJoints, Elderly, ActuatorStrength:
+                  load the adult -> edit -> ground -> robot.xml + parameter.json (the old keys + name / kind / parent / builder / edit)
+  Retargeter      SameTopologyRetargeter (qpos_retarget.py), CopyReference, LockedJointReference
+  TorqueCalibrator  k matrix -> aggregate k -> robot_torque_full.xml with its checks (torque_ratio_across_motions.py,
+                  torque_aggregate_motion_k.py, torque_scale_actuators.py's library, archived)
+  GainScaler      kp / kd multipliers, MJCF or gains json (scale_body_gains.py, kpkd_test.py prepare)
+  BodyPipeline    the idempotent, memory-gated steps; BuildRoots (where a build writes); beta.BETA_AXES, the one list of the 8 axes
 Importing the package imports nothing heavy (no torch, mujoco or humenv); align_cost (model.losses -> mujoco), robot_rollout,
-eval_metrics (mujoco, ot) and policy (torch) import them when they are imported.
+eval_metrics (mujoco, ot), policy (torch) and bodybuild's modules (mujoco) import them when they are imported.
 """

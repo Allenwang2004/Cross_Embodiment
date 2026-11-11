@@ -53,7 +53,7 @@ bodies:
     s: 0.611036                  # ExactObs's default (model/exact_obs.py), NOT recomputed: single_z_search.py keeps it for --body child
     aliases: [child_kp1_kd1]     # outputs/kpkd/child_kp1_kd1
 
-  # the 8 isometric bodies of scripts/make_scaled_bodies.py (11/11): every length x len, every girth x len * wid
+  # the 8 isometric bodies of scripts/make_scaled_bodies.py (11/11; = scripts/build_body.py scaled-set): every length x len, every girth x len * wid
   len0.6_wid0.8: &scaled
     kind: smpl_scaled
     display: len 0.6 x wid 0.8
@@ -141,7 +141,7 @@ bodies:
     s: 1.103120466562799         # RobotMap("apollo").s
 
 # gain variants, generated as <parent>_<condition> (scripts/kpkd_test.py COND: kp and kd scaled apart, 11/06-08; the k-scale test,
-# scripts/scale_body_gains.py --m: kp x k, kd x sqrt(k), torque limit x k, 11/03). Each takes its parent's shape_xml, reference, s and
+# scripts/scale_body_gains.py --m: kp x k, kd x sqrt(k), torque limit x k, 11/03; both = crossenbodiment/bodybuild GainScaler). Each takes its parent's shape_xml, reference, s and
 # label; only physics_xml (human bodies) or gains (robots) changes. kp1_kd1 is the parent itself (its alias <parent>_kp1_kd1).
 gain_variants:
   conditions:

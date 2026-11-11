@@ -157,3 +157,16 @@ tests/test_moves.py runs every helper step 4 moved against its 68c95f4 source.
     (CE_OUTPUTS_ROOT=<main>/outputs), written into outputs/refactor_step8/LABEL (CE_RESULTS_ROOT), compared file by file with the
     main tree's existing results (JSON and markdown byte-identical, npz array- and order-identical, z.npy byte-identical).
   - tests/test_queue.py: scripts/run_queue.py's CommandQueue / ResourceGate with fake commands.
+* Step 9 (body-building pipeline: crossenbodiment/bodybuild, scripts/build_body.py; the four pipeline copies and the building
+  scripts are thin wrappers, scripts/torque_scale_actuators.py archived) changed no search code; the golden cases and
+  metrics.json must stay identical. The bodies are checked two ways:
+  - verify_bodies.py LABEL: the new pipeline rebuilds len0.8_wid1.2 and the child into outputs/refactor_step9/LABEL/root
+    (robot.xml, skeleton.json, parameter.json keys, all 720 retargets, the torque ratio files, robot_torque_full.xml), 3 AMASS
+    retargets each of len1.4_wid0.8 and the child, the payload's robot.xml, every gain variant of configs/bodies.yaml (MJCF and the
+    G1's gains json), all byte for byte against the stored files (data/ and the main tree's outputs read only); and the same two
+    bodies built by the 2bdb2fe scripts in a scratch root against the new files. The one stored file it cannot reproduce is the
+    child's robot_torque_full.xml (made 08-24 from the child's previous robot.xml; old and new code agree on the rebuild, the
+    compiled numbers differ by <= 1.1e-14 relative).
+  - tests/test_bodybuild.py: the variant scripts (heavy_arm_body, lock_joint_body, limit_joint_body, elderly_body,
+    strength_rollout's build) run from 2bdb2fe in a scratch root against the builders; the limited leg and adult_s08_* against
+    the stored files; the wrappers' CLIs against 2bdb2fe's parsers; one BETA_AXES; the pipeline's skips, prune and registry.

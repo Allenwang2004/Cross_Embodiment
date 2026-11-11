@@ -70,7 +70,8 @@ def origin_z(clip):
 
 
 def retargeting_motion(body, clip):
-    """a body's own task clip (scripts/qpos_retarget.py, make_scaled_bodies.py): data/<body>/retargeting_motion/<clip>.npz"""
+    """a body's own task clip (crossenbodiment/bodybuild Retargeter; scripts/build_body.py, qpos_retarget.py):
+    data/<body>/retargeting_motion/<clip>.npz"""
     return f"{DATA_REL}/{body}/retargeting_motion/{clip}.npz"
 
 

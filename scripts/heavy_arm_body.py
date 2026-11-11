@@ -3,17 +3,25 @@
 
   body      assets/robots/<label>/robot.xml: assets/robots/adult/robot.xml with the density of the arm's four geoms
             (<side>_Shoulder upper arm, <side>_Elbow forearm, <side>_Wrist, <side>_Hand; or only --parts) x --scale, so
-            their mass and inertia scale by it; parameter.json / skeleton.json copied from the adult (same geometry)
+            their mass and inertia scale by it; parameter.json: the adult's keys + name / kind / parent / builder / edit;
+            skeleton.json: exported from the new XML (its own masses; until step 9 the adult's file was copied)
   retarget  data/<label>/retargeting_motion/<clip>.npz: the adult's own motion (data/origin_motion), unchanged --
             the heavy-armed body is asked to do exactly what the adult did
+OOP refactor step 9: crossenbodiment/bodybuild HeavyLimb + CopyReference (scripts/build_body.py heavy-limb does the same); this
+file keeps its flags and its robot.xml is byte-identical.
 usage: uv run python scripts/heavy_arm_body.py --scale 5 [--side R] [--clip move-ego-0-2/move-ego-0-2_4]
 """
-import argparse, shutil
+import argparse
+import sys
 from pathlib import Path
-import mujoco
 
 REPO = Path(__file__).resolve().parent.parent
-PARTS = ("Shoulder", "Elbow", "Wrist", "Hand")
+sys.path.insert(0, str(REPO))
+from crossenbodiment.bodybuild.builders import HeavyLimb  # noqa: E402
+from crossenbodiment.bodybuild.retarget import CopyReference  # noqa: E402
+from crossenbodiment.bodybuild.skeleton import dump_skeleton  # noqa: E402
+
+PARTS = HeavyLimb.PARTS
 
 
 def main():
@@ -25,27 +33,16 @@ def main():
                     help="which of the arm's geoms get heavier, e.g. Wrist,Hand for a weight carried in the hand")
     ap.add_argument("--label", default=None)
     a = ap.parse_args()
-    parts = a.parts.split(",")
-    label = a.label or (f"adult_heavy{a.side}arm_x{a.scale:g}" if parts == list(PARTS) else
-                        f"adult_heavy{a.side}{''.join(parts)}_x{a.scale:g}")
-    src = REPO / "assets/robots/adult"
-    spec = mujoco.MjSpec.from_file(str(src / "robot.xml"))
-    m0 = spec.compile()
-    names = [f"{a.side}_{p}" for p in PARTS]
-    G = {g.name: g for g in spec.geoms}
-    for n in [f"{a.side}_{p}" for p in parts]:
-        G[n].density *= a.scale
-    m = spec.compile()
-    dst = REPO / "assets/robots" / label; dst.mkdir(parents=True, exist_ok=True)
-    (dst / "robot.xml").write_text(spec.to_xml())
-    for f in ("parameter.json", "skeleton.json"):
-        if (src / f).exists():
-            shutil.copy(src / f, dst / f)
-    ref = REPO / f"data/{label}/retargeting_motion/{a.clip}.npz"; ref.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy(REPO / f"data/origin_motion/{a.clip}.npz", ref)
-    arm0 = sum(m0.body(n).mass[0] for n in names); arm = sum(m.body(n).mass[0] for n in names)
-    print(f"{label}: {a.side} arm {arm0:.2f} -> {arm:.2f} kg (body {m0.body_mass.sum():.1f} -> {m.body_mass.sum():.1f} kg) "
-          f"-> {dst / 'robot.xml'}; reference = the adult's {a.clip}")
+    b = HeavyLimb(a.scale, a.side, a.parts.split(","), name=a.label)
+    print(f"scripts/heavy_arm_body.py -> crossenbodiment.bodybuild.HeavyLimb({a.scale:g}, {a.side!r}, {a.parts.split(',')}) "
+          f"(= scripts/build_body.py heavy-limb --scale {a.scale:g} --side {a.side} --parts {a.parts} --clip {a.clip})")
+    b.build()
+    dump_skeleton(b.xml, b.dir / "skeleton.json")
+    ref = REPO / f"data/{b.name}/retargeting_motion/{a.clip}.npz"
+    CopyReference().write_clip(REPO / f"data/origin_motion/{a.clip}.npz", ref)
+    arm0, arm, body0, body = b.arm_mass()
+    print(f"{b.name}: {a.side} arm {arm0:.2f} -> {arm:.2f} kg (body {body0:.1f} -> {body:.1f} kg) "
+          f"-> {b.xml}; reference = the adult's {a.clip}")
 
 
 if __name__ == "__main__":

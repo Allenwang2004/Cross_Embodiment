@@ -40,19 +40,21 @@ body = {}
 
 
 def prepare():
-    g = json.loads((REPO / GAINS("kp1_kd1")).read_text())
+    # refactor step 9: crossenbodiment/bodybuild GainScaler (scale_xml = scripts/scale_body_gains.py --kp --kd, which this ran as a
+    # subprocess; scale_json = the json this wrote inline): the same files byte for byte (tests/golden/verify_bodies.py, part gains)
+    from crossenbodiment.bodybuild.gains import GainScaler
     for name, a, b in COND[1:]:
+        g = GainScaler(a, b)
         for body_ in ("child", "limit_leg", "heavy_arm"):
             if (REPO / XML(body_, name)).exists():                       # made earlier: keep it as it is
                 continue
-            subprocess.run(["uv", "run", "python", "scripts/scale_body_gains.py", "--src", BODY[body_]["xml"], "--kp", str(a), "--kd", str(b), "--out", XML(body_, name)], cwd=REPO, check=True)
+            g.scale_xml(BODY[body_]["xml"], XML(body_, name))
             for f in ("parameter.json", "skeleton.json"):
                 if (REPO / BODY[body_]["xml"]).with_name(f).exists():
                     shutil.copy(REPO / Path(BODY[body_]["xml"]).with_name(f), REPO / Path(XML(body_, name)).with_name(f))
         if (REPO / GAINS(name)).exists():
             continue
-        h = dict(g, note=f"assets/robots/g1/gains_perjoint.json with kp x {a} and kd x {b} (scripts/kpkd_test.py); torque limits and armature unchanged. " + g["note"], kp_scale=a, kd_scale=b, kp={k: v * a for k, v in g["kp"].items()}, kd={k: v * b for k, v in g["kd"].items()})
-        (REPO / GAINS(name)).write_text(json.dumps(h, indent=1))
+        g.scale_json(GAINS("kp1_kd1"), GAINS(name))
 
 
 def command(r):
