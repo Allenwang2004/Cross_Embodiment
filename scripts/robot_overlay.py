@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""robot_overlay.py -- scripts/g1_overlay.py for any robot in model/robots.py (--robot): the extra robots are drawn
-from the robot's own scene model (mjv_addGeoms adds only the moving geoms, so the floor is not repeated).
+"""robot_overlay.py -- scripts/g1_overlay.py (archived in OOP refactor step 7) for any robot in model/robots.py (--robot): the
+extra robots are drawn from the robot's own scene model (mjv_addGeoms adds only the moving geoms, so the floor is not repeated).
 
 ---- g1_overlay.py: several G1 trajectories of one clip in ONE scene, so their differences show at a glance.
 

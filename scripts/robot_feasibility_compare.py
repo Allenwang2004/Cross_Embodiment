@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
-"""robot_feasibility_compare.py -- scripts/g1_feasibility_compare.py for any robot in model/robots.py: everything
-below reads "G1" for the robot chosen with --robot (model/robot_env.py, model/robot_map.py).
+"""robot_feasibility_compare.py -- scripts/g1_feasibility_compare.py (archived in OOP refactor step 7) for any robot in
+model/robots.py: everything below reads "G1" for the robot chosen with --robot (model/robot_env.py, model/robot_map.py).
 
 ---- g1_feasibility_compare.py: did the IK-feasibility penalty make the searched latent ask the G1 for reachable poses?
 
 For the latents of one clip -- z0, the best of a search with the penalty (--new) and, if given, the best of one
 without it (--old) -- this rolls each out
-  on the G1   G1VecEnv with 16 copies of the latent (the batch the search used, so the search's own rollout is
+  on the G1   RobotVecEnv with 16 copies of the latent (the batch the search used, so the search's own rollout is
               reproduced; checked against its best.npz / origin_z.npz), recording per step the IK residual of the
-              commanded pose (G1Env.last_resid) and how many G1 targets sit at a joint limit
+              commanded pose (RobotEnv.last_resid) and how many G1 targets sit at a joint limit
   on the adult  humenv, same start (the clip's frame 0 at rest), the actor's mean action; the adult's actual poses are
-              then mapped onto the G1 kinematically (G1Map.smpl_to_g1_joints) to measure how much of what the latent
+              then mapped onto the G1 kinematically (RobotMap.smpl_to_robot_joints) to measure how much of what the latent
               makes the ADULT do is something the G1 could not do
 and reports bfm, the residuals (all links / arms), the share of targets at a limit and the joints that hit limits most.
 Writes <out>/{compare.json, *_adult.npz} and <out>/feasibility.mp4: row 1 the adult (original clip / z0 or old z /
 new z), row 2 the G1 (clip mapped kinematically / z0 or old z / new z).
-usage: CUDA_VISIBLE_DEVICES=2 MUJOCO_EGL_DEVICE_ID=2 uv run python scripts/g1_feasibility_compare.py \\
+usage: CUDA_VISIBLE_DEVICES=2 MUJOCO_EGL_DEVICE_ID=2 uv run python scripts/robot_feasibility_compare.py --robot g1 \\
          --clip jump-2/jump-2_8 --new outputs/g1/search/jump-2_8_s0 [--old <search without the penalty>]
 """
 import argparse, json, os, subprocess, sys

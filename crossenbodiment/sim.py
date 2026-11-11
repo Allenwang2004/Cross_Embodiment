@@ -20,7 +20,8 @@ Without init_qpos (single_z_search --init default) the reset's own observation i
 RobotSim wraps model/robot_env.RobotVecEnv (n RobotEnv worker processes, "spawn"): construct it BEFORE CUDA is touched (before
 MotivoPolicy.load), as robot_z_search / robot_lso_search do. reset(init_qpos, init_next): the SMPL start pose mapped onto the
 robot at rest, or with the next frame moving at the velocity between the two mapped poses (--init-vel reference); the IK warm
-start (RobotEnv.q_tgt) restarts from the reset pose inside the workers. The G1-only model/g1_env stays as it is until step 7.
+start (RobotEnv.q_tgt) restarts from the reset pose inside the workers. The G1-only model/g1_env was archived in step 7 (the G1
+goes through RobotEnv, which reproduces it with the per-joint gains: tests/test_g1_generic.py).
 """
 from __future__ import annotations
 

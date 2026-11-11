@@ -18,7 +18,7 @@ Replaced copies (each script keeps its CLI and output files): single_z_search.ro
 robot_lso_search's rollout closures, robot_z_search's score loop, child_reward_eval.rollout, rank_initial_cost.rollout_multi,
 test_exact_obs's loop; rollout_z_trace / score_z_matrix (and batch_z_search, archived in step 6) reach it through single_z_search.rollout and
 rank_initial_cost.rollout_multi. Not replaced (outside step 5's list; each is its own analysis loop): g1_z_search.py and
-g1_feasibility_compare.py (the G1 line on model/g1_env, retired / merged in steps 6-7), robot_z0.py (crossenbodiment/robot_rollout.act:
+g1_feasibility_compare.py (the G1 line on model/g1_env, archived in step 7), robot_z0.py (crossenbodiment/robot_rollout.act:
 one observation computed in a batch of 16 identical rows, whose batch size changes the GPU's last bits), robot_feasibility_compare.py
 (16 robot slots of which slot 0 is kept, plus an adult single env stepped one row at a time) and robot_torque_limit.py (a vec
 env of its own returning per-substep torques).

@@ -5,10 +5,10 @@ From scripts/rollout_z_trace.py (render_panels.py and render_seed_bests.py impor
   frame_label(frame, text, sub=None)   rollout_z_trace.label: a 26 px light title band with PIL's bitmap font burnt into a video
                                        frame, an optional grey subtitle below it
 
-From scripts/g1_axes_demo.py (robot_pairs.py imported the module as `gad`), the explanation panels' helpers:
+From scripts/g1_axes_demo.py (robot_pairs.py imported the module as `gad`; archived in step 7), the explanation panels' helpers:
   S, K, px(v)            panel size 720 px; every pixel size v is drawn as round(v * K). K is module state: robot_pairs.py sets
                          `draw.K = W / 1.25 / 420` for its 1080 px panels, as it set g1_axes_demo.K before (g1_axes_demo.py
-                         imports these back and never changes K)
+                         imported these back and never changed K)
   FONT, font(size)       Noto Sans CJK TC at px(size)
   cam(az, lookat, dist, el)       a free MjvCamera
   project(r, pts, W, H)  world points -> pixel (u, v) through a Renderer's current camera

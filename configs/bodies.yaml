@@ -111,7 +111,7 @@ bodies:
     shape_xml: assets/robots/g1/g1.xml
     physics_xml: assets/robots/g1/scene.xml
     smpl: false
-    ref_task: outputs/g1/roundtrip/{stem}/g1.npz             # model/robots.py target_path (scripts/g1_roundtrip.py)
+    ref_task: outputs/g1/roundtrip/{stem}/g1.npz             # model/robots.py target_path (scripts/robot_roundtrip.py)
     ref_amass: null
     gains: assets/robots/g1/gains_perjoint.json
     s_rule: fixed

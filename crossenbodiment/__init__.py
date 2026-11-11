@@ -15,9 +15,9 @@ Step 4 moves library code out of scripts (the old modules import it back; tests/
   metrics          + legacy_metrics / body_hand_fall / LEGACY_KEYS (child_52_means.py, archived), pose_similarity
                    (mse_vs_align_test.metrics)
   survey, palette  the user survey's clips, bodies and run lookup (configs/survey.yaml), the video colours (survey_body_videos.py)
-  robot_rollout    act / motion of the robot rollouts (g1_z0_rollout.py)
+  robot_rollout    act / motion of the robot rollouts (g1_z0_rollout.py, archived in step 7)
   retiming         resample: a clip at another speed (bfm_velocity_check.py)
-  draw             frame_label (rollout_z_trace.label) and the explanation-panel helpers of g1_axes_demo.py
+  draw             frame_label (rollout_z_trace.label) and the explanation-panel helpers of g1_axes_demo.py (archived in step 7)
   multibody_study  the 10/10 multi-body correction experiment's layout (multibody_corr.py)
   paths            + the clip lists configs/clips/*.txt (read_clips)
 Step 5 adds the simulation layer, the one rollout loop every search and evaluation script uses:
@@ -40,6 +40,9 @@ are thin CLIs over them (same flags, defaults and output files):
   search    SearchLoop (generation loop, best so far, mean-z rollouts, curve rows, z trace, resume) and SequenceSearchLoop
             (iterations, budgets, kept rollouts, mu trace)
   records   RunRecorder: every output file of a search, written (and read back) exactly as the scripts did
+Step 7 retires the G1-only line (model/g1_map.py, model/g1_env.py and 13 scripts/g1_*.py, archived; the pre-10/20 "mass"
+gains dropped, user 11/12): the G1 goes through model/robot_map.py / robot_env.py like every robot, RobotMap("g1") /
+RobotEnv("g1") reproducing G1Map / G1Env(gains="perjoint") bit for bit (tests/test_g1_generic.py).
 Step 8 adds the experiment layer the drivers (child_52_*, body_52_test, g1_small_test, kpkd_test, loes_*, lsor_mpjae_test,
 tall_body_52, amass_baselines, cost_correlation, drift_success_child, success_ / fall_definitions) are built on:
   experiment    ClipSet, RunSpec, Experiment: the grid (clips, methods, seeds, bodies, budgets), run folders and the "dir|cmd"

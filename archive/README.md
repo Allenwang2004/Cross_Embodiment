@@ -119,6 +119,47 @@ Kept although step 6 listed it for retirement: **scripts/g1_z_search.py**. `robo
 --frame-offset 0` reproduces it for the per-joint gains, but its `--gains mass` (model/g1_env.py's first, pre-10/20 gains: kp x
 the mass ratio x s, no json) has no other path: model/robot_env.py takes a gains json only. Whether the mass gains stay is the
 user's decision in step 7 (PLAN.md: merge g1_map / g1_env into robot_map / robot_env); until then g1_z_search.py is unchanged.
+(Step 7: the user dropped the mass gains on 11/12, and g1_z_search.py was archived with the rest of the G1 line, below.)
+
+## Step 7: the G1-only line (2026-11-12)
+
+The user decided (2026-11-12) that the pre-10/20 G1 "mass" gains need not be kept, so the G1 goes through the generic robot
+code only: model/robots.py ROBOTS["g1"], model/robot_map.py RobotMap("g1"), model/robot_env.py RobotEnv / RobotVecEnv and the
+robot_* scripts with `--robot g1`. Evidence that this changes no G1 number (tests/test_g1_generic.py, which runs the two
+archived modules from their source at 543a303, np.array_equal on every array): RobotMap("g1") = G1Map (calibration q_nom,
+residuals, C of every pair, s; SMPL -> G1 qpos and IK residuals over the golden clip warm-started, cold starts, 40 random poses
+warm-started through each other, every one ending with a joint at a limit (the per-chain re-solve); G1 -> SMPL with the fixed fill on the mapped clip and 60 random G1 poses; robot_map.Lowest =
+g1_map._G1Lowest), although g1_map calls scipy without `assume_valid` and robot_map with it; RobotEnv("g1") = G1Env(gains=
+"perjoint") (every model parameter the physics reads, then reset + 60 random actions: obs, SMPL qpos, G1 qpos / qvel, ctrl,
+IK residuals, joints at a limit); the stored targets outputs/g1/roundtrip/move-ego-0-2_4 (g1_roundtrip.py, 10/20) re-made by
+RobotMap("g1") and move-ego-0-2_1 (robot_roundtrip.py, 11/09) by G1Map. The golden G1 cases (g1_es, g1_es_resume, g1_cem_phc,
+g1_evalz, g1_lsor, g1_ta) ran through robot_z_search / robot_lso_search already and stay identical. None of the files below
+is imported by a live .py file (tests/golden/import_check.py passes) or launched by a .py / .sh / .md file of the worktree or a
+queue script / command list of the main tree (`outputs/**/*.sh`, `*.cmds`; the robot_* docstrings now name their G1
+originals as archived); their outputs stay where they are.
+
+| file | what it was | why archived (2026-11-12) |
+|---|---|---|
+| model/g1_map.py | G1Map, the first SMPL <-> G1 map (10/18-20): segment pairs, the nominal-pose calibration, orientation IK; its docstring explains the construction | RobotMap("g1") reproduces it bit for bit (above); only importers g1_env.py, g1_roundtrip.py, g1_feasibility_compare.py, g1_z_search.py, g1_axes_demo.py (all archived). Its `_G1Lowest` goes with it (exact_obs._LowestPoint and robot_map.Lowest stay as they are) |
+| model/g1_env.py | G1Env / G1VecEnv: the G1 driven by Motivo, gains "perjoint" (assets/robots/g1/gains_perjoint.json) or "mass" (pre-10/20, computed, no json) | RobotEnv("g1") = G1Env(gains="perjoint") bit for bit (above); the mass gains were dropped (user, 11/12); its GAIN_SOURCE = ROBOTS["g1"]["gain_source"]; importers g1_z_search.py, g1_z0_rollout.py, g1_feasibility_compare.py, g1_gain_scaling.py (archived) |
+| scripts/g1_z_search.py | the G1 latent search (10/18-11/04) | `robot_z_search.py --robot g1 --sampling antithetic --frame-offset 0` reproduces it for the per-joint gains (step 6); its `--gains mass` was the only path to the mass gains, dropped |
+| scripts/g1_roundtrip.py | the clip mapped onto the G1 and back (outputs/g1/roundtrip/<stem>/{g1.npz, smpl_rt.npz, summary.json}) | `robot_roundtrip.py --robot g1` writes the same g1.npz / smpl_rt.npz (the 10/20 files re-made bit for bit); its summary.json lacked only rt_orient_deg / rt_pos_cm, which nothing reads; its one caller was g1_z0_rollout.py |
+| scripts/g1_gain_scaling.py | wrote assets/robots/g1/gains_perjoint.json (kept) | `robot_gain_scaling.py --robot g1` re-makes that json's kp / kd / k bit for bit with its 18 clips in this script's order (sorted by stem: tests/test_g1_generic.py); in outputs/g1/search_clips.txt's order the last bit differs (<= 3e-16 relative, summation order), so the json stays the G1's gains |
+| scripts/g1_feasibility_compare.py | did the IK penalty make the latent ask the G1 for reachable poses (G1VecEnv, G1Map) | `robot_feasibility_compare.py --robot g1`: the same loop on RobotVecEnv / RobotMap |
+| scripts/g1_z0_rollout.py | z0 rolled out on the G1 (outputs/g1/z0_perjoint/<stem>; `--gains mass`: outputs/g1/z0, gone) | `robot_z0.py --robot g1` (writes outputs/g1/z0_perjoint); its act / motion / g1_up_z are crossenbodiment/robot_rollout.py's since step 4 |
+| scripts/g1_z0_summary.py | z0 on the G1 across clips (perjoint vs mass) | `robot_z0_summary.py` (reads outputs/g1/z0_perjoint); the mass column is dropped |
+| scripts/g1_fill_compare.py | the G1 survey searches with the fixed vs the ridge fill (10/30, outputs/map_error/g1_fill_compare.json) | finished; no references (it already used RobotMap) |
+| scripts/g1_overlay.py | several G1 trajectories of one clip in one scene | superseded by `robot_overlay.py --robot g1` |
+| scripts/g1_amass_video.py | side-by-side video of a robot_lso_search.py AMASS run | superseded by `package_amass_lso_survey.py --body g1` (the survey's format, replay.py's videos); no references |
+| scripts/g1_axes_demo.py | explanation figures of the G1 map (outputs/g1/explain: frames, pairs, g1_to_smpl, pitch_roll_yaw, ...) | one-off; its drawing helpers are crossenbodiment/draw.py since step 4 (tests/test_moves.py reads this file at 68c95f4 through git), `robot_pairs.py --robot g1 [--to-smpl]` draws pairs / to-smpl for any robot; no references |
+| scripts/g1_side_render.py | one clip frame from the side, adult vs G1 target (outputs/g1/explain/*_side_*.png) | one-off figure; no references |
+| scripts/g1_floating_figure.py | where the kinematic G1 target floats (outputs/g1/explain/*_floating.png) | one-off figure; no references |
+| scripts/g1_static_torque.py | can the G1 hold a clip's support poses quasi-statically within its torque limits (10/20; outputs/g1/static_torque: headstand_6 / 9 / 37) | finished; no references anywhere; no generic version (robot_torque_limit.py measures the PD demand in rollouts, a different question); to run it again, move it back |
+
+Kept: scripts/g1_small_test.py (a live Task-page driver: generic robot code only; loes_noanchor.py imports it, the main tree's
+queues run it). File names the G1's existing outputs use stay G1-specific in the generic code: the shared fill
+assets/robots/g1/smpl_fill.json, the target name g1.npz (model/robots.py target_path, crossenbodiment/paths.py roundtrip),
+outputs/g1/z0_perjoint (robot_z0.py, robot_z0_summary.py), the `_g1mse` run tag and `--objective g1mse`.
 
 ## Candidates kept (PLAN.md list, 2026-11-11)
 
@@ -128,7 +169,7 @@ kept with model/simple, see below), rollout_z_on_body.py (single_z_search.py's d
 select_clips.py (writes top_clips.json, read by package_survey_picks.py), strobe_figures/replay.py (part of the self-contained
 strobe_figures bundle, listed in its README), scripts/survey_replay.py (package_survey.py copies it into the survey),
 model/networks.py (removing its unused heads is a code edit, not a move); g1_overlay.py, g1_amass_video.py and the rest of the
-G1 line (step 7), export_strobe_blender.py (step 10).
+G1 line (step 7: archived, above), export_strobe_blender.py (step 10).
 
 Step 4 (2026-11-11) moved `compute_batch_cost` and the settings single_z_search.py read from model/simple into
 crossenbodiment/align_cost.py (model/simple/train.py re-exports it; rollout_z_trace.py, rank_initial_cost.py and score_z_matrix.py

@@ -7,7 +7,7 @@ Per robot:
                 only touches the floor through explicit contact pairs (Apollo: soles only), a pair with the floor for
                 every collision geom, so hands, knees and head can land on it
   pairs         SMPL body <-> robot link carrying the same segment, pelvis first; the SMPL hand box pairs with the
-                robot's hand link if it has one (model/g1_map.py: the wrist capsule rides with the forearm)
+                robot's hand link if it has one (archive/model/g1_map.py: the wrist capsule rides with the forearm)
   calib         segment directions matched between the SMPL calibration pose (arms down, facing +x) and the robot's
                 nominal pose: ("seg", a, b) = b - a between body origins, ("axis", joint), ("col", body, k) = column k of
                 the body frame, ("geomcol", geom, k) = of a geom's frame, ("end", body) = the body's farthest collision / visual point from its origin, ("mid_up",
@@ -18,7 +18,8 @@ Per robot:
   ee            hands, feet, head points for the target-MSE search objective: ("body", b) origin, ("site", s),
                 ("geom_top", b) = the centre of b's highest-placed geom (the G1 / H1 head), ("end", b) = b's farthest point
                 (H1's forearm end: it has no hand)
-G1's entries reproduce model/g1_map.py and model/g1_env.py exactly.
+G1's entries reproduce the G1-only model/g1_map.py and model/g1_env.py (gains "perjoint") exactly (tests/test_g1_generic.py); those
+two were archived in OOP refactor step 7 (archive/model/).
 """
 import os
 import xml.etree.ElementTree as ET
@@ -270,5 +271,5 @@ def out_dir(name):
 
 
 def target_path(name, stem):
-    """the clip mapped onto the robot kinematically (scripts/robot_roundtrip.py; the G1's from g1_roundtrip.py)."""
+    """the clip mapped onto the robot kinematically (scripts/robot_roundtrip.py; the G1's first from g1_roundtrip.py, archived)."""
     return out_dir(name) / "roundtrip" / stem / ("g1.npz" if name == "g1" else "robot.npz")

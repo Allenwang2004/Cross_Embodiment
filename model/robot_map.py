@@ -1,7 +1,7 @@
-"""robot_map.py -- model/g1_map.py for any robot in model/robots.py: SMPL humanoid <-> robot through per-segment world
-orientations.
+"""robot_map.py -- the G1 map of model/g1_map.py (archived in OOP refactor step 7: archive/model/g1_map.py) for any robot in
+model/robots.py: SMPL humanoid <-> robot through per-segment world orientations.
 
-The same construction as G1Map (see model/g1_map.py for the reasoning), read from the robot's entry:
+The same construction as G1Map (see archive/model/g1_map.py's docstring for the reasoning), read from the robot's entry:
   pairs       SMPL body <-> robot link (ROBOTS[name]["pairs"]); C_b = R_robot(nominal)^T H R_smpl(calibration pose)
   nominal     the robot joint angles whose segment directions best match the SMPL calibration pose (arms down, turned
               to face +x), from ROBOTS[name]["calib"]
@@ -14,7 +14,8 @@ The same construction as G1Map (see model/g1_map.py for the reasoning), read fro
   SMPL -> robot  orientation-only damped least squares inside the joint ranges, warm-started, re-solved from the
               nominal pose per chain when a joint ends at a limit; robot joints with no paired link below them stay where
               they start (the nominal pose)
-s = robot / SMPL hip-to-ankle length in the nominal pose. RobotMap("g1") reproduces G1Map.
+s = robot / SMPL hip-to-ankle length in the nominal pose. RobotMap("g1") reproduces G1Map bit for bit (tests/test_g1_generic.py),
+so the G1 goes through this class since step 7.
 """
 import json
 from pathlib import Path
@@ -218,7 +219,7 @@ class RobotMap:
 
         def smpl_vec(spec):
             kind = spec[0]
-            if kind == "seg":           # (H p_b - H p_a: the operation order of g1_map, so the G1 calibration is bit-exact)
+            if kind == "seg":           # (H p_b - H p_a: the old g1_map's operation order, so the G1 calibration is bit-exact)
                 return unit(H @ ds.xpos[ms.body(spec[2]).id] - H @ ds.xpos[ms.body(spec[1]).id])
             if kind == "axis":
                 return H @ ds.xaxis[ms.joint(spec[1]).id]

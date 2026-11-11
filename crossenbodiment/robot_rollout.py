@@ -3,7 +3,8 @@ step 4, unchanged).
 
 robot_z_search.py, robot_z0.py, robot_feasibility_compare.py (and the G1 line: g1_z_search.py, g1_feasibility_compare.py)
 imported these from g1_z0_rollout.py, which pulled model/g1_env.py, model/g1_map.py, model/bfm_align.py and single_z_search.py
-in at import; they import them from here, and g1_z0_rollout.py imports them back.
+in at import; they import them from here. The G1 line (g1_z0_rollout.py included, which imported them back) was archived in
+step 7: the G1 goes through robot_z_search.py / robot_z0.py / robot_feasibility_compare.py --robot g1.
 
   act(model, obs, z, device, batch=16)   the frozen actor's mean action for one observation, computed in a batch of `batch`
                                          identical rows (the GPU's last bits depend on the batch size; the robot rollouts are
@@ -17,7 +18,7 @@ import torch
 
 
 def act(model, obs, z, device, batch=16):
-    """the actor's mean action, computed in a batch of `batch` identical rows as g1_z_search does: the GPU's result
+    """the actor's mean action, computed in a batch of `batch` identical rows as g1_z_search did: the GPU's result
     depends on the batch size in the last bits, and the G1 rollout is chaotic enough for that to show"""
     o = torch.as_tensor(np.repeat(obs[None], batch, 0), dtype=torch.float32, device=device)
     with torch.no_grad():

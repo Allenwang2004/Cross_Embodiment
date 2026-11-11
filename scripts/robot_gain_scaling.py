@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""robot_gain_scaling.py -- scripts/g1_gain_scaling.py for any robot in model/robots.py: per-joint PD gains.
+"""robot_gain_scaling.py -- scripts/g1_gain_scaling.py (archived in OOP refactor step 7) for any robot in model/robots.py:
+per-joint PD gains.
 
   k     per joint group (ROBOTS[name]["groups"], left = right): the static gravity moment of everything downstream of
         the joint about it, on the robot's kinematic targets (scripts/robot_roundtrip.py) against the adult's original
@@ -13,7 +14,10 @@
 damping both scaled so the ratio stays): passive = SMPL passive share x total, replacing the robot's own passive damping
 ("passive_damping" in the json, applied by model/robot_env.py), motor kd = the rest.
 The robot keeps its armature, friction loss and torque limits (and, by default, its passive damping). Writes ROBOTS[name]["gains_json"]
-(or --out). With --robot g1 and the G1's 18 clips this reproduces assets/robots/g1/gains_perjoint.json.
+(or --out). With --robot g1 and the G1's 18 clips in g1_gain_scaling's order (sorted by stem, the json's "clips") this
+reproduces assets/robots/g1/gains_perjoint.json's kp / kd / k bit for bit (tests/test_g1_generic.py); in
+outputs/g1/search_clips.txt's order the fit sums in another order and kp / kd differ in the last bit (<= 3e-16 relative):
+the G1 runs are chaotic enough for that to show, so do not re-write the G1's json without --out.
 usage: uv run python scripts/robot_gain_scaling.py --robot h1 [--clips-file outputs/g1/search_clips.txt] [--out ...]
 """
 import argparse, json, sys

@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""robot_roundtrip.py -- scripts/g1_roundtrip.py for any robot in model/robots.py (model/robot_map.py), many clips at once.
+"""robot_roundtrip.py -- scripts/g1_roundtrip.py (archived in OOP refactor step 7) for any robot in model/robots.py
+(model/robot_map.py), many clips at once. With --robot g1 it writes the same g1.npz / smpl_rt.npz (tests/test_g1_generic.py);
+its summary.json leaves out g1_roundtrip's rt_orient_deg / rt_pos_cm, which nothing reads.
 
 Per clip: SMPL qpos -> robot qpos (smpl_to_robot_qpos, warm-started) -> back to SMPL (robot_to_smpl_qpos), and
   IK residual   per paired robot link (deg, mean / max over frames)

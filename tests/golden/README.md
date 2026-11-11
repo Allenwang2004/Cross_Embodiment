@@ -141,6 +141,12 @@ tests/test_moves.py runs every helper step 4 moved against its 68c95f4 source.
   cmaes + phc / random with --frame-offset 0, --resume without state.npz, LSO --dtw / --steps-scale / --init-pace / mse /
   antithetic / phc / white noise, robot LSO phc --best-from all) were run once with the fa6c5f9 scripts and the new ones
   (20 short cases, outputs/refactor_tests/step6_extra, compared with compare.py's cmp_dirs): identical.
+* Step 7 (the G1-only line retired, user 11/12: the pre-10/20 "mass" gains dropped) archived model/g1_map.py, model/g1_env.py and
+  13 scripts/g1_*.py (archive/README.md); no case ran them (the G1 cases are robot_z_search / robot_lso_search), so the golden
+  cases and metrics.json must stay identical. tests/test_g1_generic.py runs the two archived modules from their 543a303 source
+  against RobotMap("g1") / RobotEnv("g1") (calibration, both map directions incl. joint limits, lowest point, 60 env steps, the
+  stored targets of g1_roundtrip / robot_roundtrip) and re-makes assets/robots/g1/gains_perjoint.json with robot_gain_scaling.py
+  (np.array_equal / ==; CPU, ~15 s).
 * Step 8 (experiment layer: crossenbodiment/experiment.py, reroll.py, results.py, queue.py; eval_metrics.py moved into the
   package, scripts/eval_metrics.py re-exports it) changed no search code; the golden cases and metrics.json must stay identical.
   The drivers it ported are checked three ways:

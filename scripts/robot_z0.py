@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""robot_z0.py -- scripts/g1_z0_rollout.py for any robot in model/robots.py (model/robot_env.py), many clips at once.
+"""robot_z0.py -- scripts/g1_z0_rollout.py (archived in OOP refactor step 7) for any robot in model/robots.py
+(model/robot_env.py), many clips at once.
 
 Per clip one deterministic rollout of the clip's z0 (re-projected onto Motivo's sphere and the actor batched by 16, as
-g1_z_search does), from frame 0 mapped onto the robot at rest, for as many steps as the clip has:
+g1_z_search did), from frame 0 mapped onto the robot at rest, for as many steps as the clip has:
   bfm     1 - mean_t cos(B(obs_t), B(g_t)) against the adult's original clip; read against the clip's kinematic floor
   motion  against the clip mapped onto the robot kinematically: fallen frames, travel, end-point distance, pelvis height
-Writes <out_dir>/z0/<stem>/{rollout.npz, summary.json} and, with --render, a 1080 px video (adult original / robot
-mapped kinematically / robot under z0).
+Writes <out_dir>/z0/<stem>/{rollout.npz, summary.json} (the G1: outputs/g1/z0_perjoint/<stem>, g1_z0_rollout's folder) and,
+with --render, a 1080 px video (adult original / robot mapped kinematically / robot under z0).
 usage: CUDA_VISIBLE_DEVICES=2 MUJOCO_EGL_DEVICE_ID=2 uv run python scripts/robot_z0.py --robot h1 \\
          [--clips-file outputs/robots_clips.txt | --clip task/stem ...] [--render]
 """

@@ -1,5 +1,5 @@
-"""robot_env.py -- model/g1_env.py for any robot in model/robots.py: Meta Motivo's SMPL observations and actions in,
-the robot's physics inside.
+"""robot_env.py -- the G1 env of model/g1_env.py (archived in OOP refactor step 7: archive/model/g1_env.py) for any robot in
+model/robots.py: Meta Motivo's SMPL observations and actions in, the robot's physics inside.
 
 Timing is humenv's (450 Hz physics, 15 substeps per action, implicitfast). Per action:
   action    Motivo's 69 SMPL PD targets, each with the SMPL passive spring folded in (theta_eff = kp theta* /
@@ -12,7 +12,8 @@ Timing is humenv's (450 Hz physics, 15 substeps per action, implicitfast). Per a
             control range).
   obs       the robot state after the 15th and 14th substeps -> RobotMap.robot_to_smpl_qpos -> humenv's observation
             on the adult SMPL body, qvel by finite difference over one substep.
-G1 through this class matches model/g1_env.py with gains="perjoint".
+G1 through this class matches the old G1Env with gains="perjoint" bit for bit (tests/test_g1_generic.py); its other gains,
+"mass" (the first, pre-10/20 version), have no counterpart here: dropped (user, 11/12).
 """
 import json
 from pathlib import Path
@@ -68,7 +69,7 @@ class RobotEnv:
         self.lim = torque_limits(m)
         # torque motors (H1) become position servos: control range = joint range, their control range becomes the
         # actuator force range. Position actuators keep their own ranges and the robot's way of limiting torque
-        # (actuator or joint force range), so the G1 matches model/g1_env.py bit for bit
+        # (actuator or joint force range), so the G1 matches the old model/g1_env.py bit for bit
         motor = np.array([m.actuator_biastype[i] == mujoco.mjtBias.mjBIAS_NONE for i in range(m.nu)])
         m.actuator_gaintype[:] = mujoco.mjtGain.mjGAIN_FIXED
         m.actuator_biastype[:] = mujoco.mjtBias.mjBIAS_AFFINE
@@ -136,7 +137,7 @@ def _worker(conn, name, fill, gains=None):
 
 
 class RobotVecEnv:
-    """n RobotEnvs in their own processes (as model/g1_env.G1VecEnv): reset / step act on all at once and return
+    """n RobotEnvs in their own processes (as the old model/g1_env.G1VecEnv): reset / step act on all at once and return
     (obs, SMPL-equivalent qpos, robot qpos, feasibility: per paired link the IK residual (deg), then the number of
     robot targets at a joint limit)."""
 

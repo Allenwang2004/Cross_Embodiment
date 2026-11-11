@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
-"""robot_z_search.py -- scripts/g1_z_search.py for any robot in model/robots.py (model/robot_env.py RobotVecEnv).
+"""robot_z_search.py -- scripts/g1_z_search.py (archived in OOP refactor step 7) for any robot in model/robots.py
+(model/robot_env.py RobotVecEnv).
 
 Everything below reads "G1" for the robot chosen with --robot; --objective mse is g1mse against that robot's target,
 its hands / feet / head points from ROBOTS[robot]["ee"]. Outputs go to outputs/<robot>/search/<stem>[_mse]_s<seed>
-(the G1's MSE runs keep their _g1mse name). With --robot g1 it reproduces g1_z_search.py.
+(the G1's MSE runs keep their _g1mse name). With --robot g1 it reproduces g1_z_search.py with its per-joint gains
+(--sampling antithetic --frame-offset 0); g1_z_search's --gains mass (the pre-10/20 gains) was dropped (user, 11/12).
 
 ---- g1_z_search.py: single_z_search.py's latent search, on the Unitree G1 driven by an unchanged Meta Motivo.
 
 Same search as single_z_search.py --algo es (--sampling: independent perturbations with LSO's leave-one-out baseline, or
 the antithetic pairs of every search before 11/04; rank-normalised costs, Adam on z, z kept on
 Motivo's sphere, best = best candidate actually rolled out, the mean z rolled out every --eval-every steps), the
-same cost terms, and the same output files. What differs is the body: every rollout runs in model/g1_env.py
-(G1 physics, SMPL observations / actions through model/g1_map.py), 2 * pairs of them in parallel processes, each
+same cost terms, and the same output files. What differs is the body: every rollout runs in model/robot_env.py
+(G1 physics, SMPL observations / actions through model/robot_map.py), 2 * pairs of them in parallel processes, each
 starting from the clip's frame 0 mapped onto the G1 at rest.
 
   cost = bfm + heading_weight * heading + pos_weight * pos + anchor_weight * (|z - anchor| / 16)^2 + ik_weight * ik
@@ -20,7 +22,7 @@ starting from the clip's frame 0 mapped onto the G1 at rest.
          heading  mean_t (1 - cos(heading - reference heading)) / 2, pos mean_t |root xy - reference xy| (m), both on
                   the SMPL-equivalent root (G1 x, y / s) against the adult's clip, as single_z_search computes them
          ik       mean over steps and the 13 paired links of the IK residual (rad) of each action's target pose
-                  (G1Env.last_resid): how far Motivo's commanded SMPL pose is from any pose the G1 can make --
+                  (RobotEnv.last_resid): how far Motivo's commanded SMPL pose is from any pose the G1 can make --
                   missing DoF and joint limits. 0 by default (--ik-weight); also logged: the arms' share and the
                   fraction of G1 targets that sit at a joint limit
 --bfm-zero-vel feeds B the observations with their velocity part (local_body_vel, local_body_ang_vel: obs[214:]) set to

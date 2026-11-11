@@ -105,7 +105,7 @@ def robot_out(robot):
 
 
 def roundtrip(robot, stem):
-    """the task clip mapped onto a robot (scripts/robot_roundtrip.py; the G1's g1_roundtrip.py):
+    """the task clip mapped onto a robot (scripts/robot_roundtrip.py; the G1's first ones by g1_roundtrip.py, archived):
     outputs/<robot>/roundtrip/<stem>/g1.npz for the G1, .../robot.npz otherwise (model/robots.py target_path)"""
     return f"{robot_out(robot)}/roundtrip/{stem}/{'g1.npz' if robot == 'g1' else 'robot.npz'}"
 

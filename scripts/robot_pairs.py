@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """robot_pairs.py -- the SMPL body <-> robot link pairs of model/robots.py as a picture (g1_axes_demo.make_pairs for
-any robot, 1080 px panels).
+any robot, 1080 px panels; scripts/g1_axes_demo.py archived in OOP refactor step 7).
 
 Left the SMPL adult in the calibration pose (arms down, turned to face +x), right the robot in its nominal pose
 (RobotMap.q_nom); every paired segment in its pair's colour with the pair's number on it, everything else grey; below,

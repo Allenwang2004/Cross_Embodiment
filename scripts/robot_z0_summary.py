@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """robot_z0_summary.py -- z0 on several robots side by side, per clip: kinematic floor, bfm under z0, fallen frames,
-end-point distance (scripts/robot_z0.py; the G1's from g1_z0_rollout.py, outputs/g1/z0_perjoint).
+end-point distance (scripts/robot_z0.py; the G1's in outputs/g1/z0_perjoint, first written by g1_z0_rollout.py, archived in
+refactor step 7).
 Writes outputs/z0_compare_robots.json.
 usage: uv run python scripts/robot_z0_summary.py [--robot g1 --robot h1 --robot apollo]
 """
