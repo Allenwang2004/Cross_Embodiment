@@ -1,0 +1,95 @@
+{
+ "clip": "headstand_4",
+ "body": "heavy_arm",
+ "fps": 30,
+ "frames": {
+  "reference_adult": 120,
+  "reference_body": 120,
+  "z0": 120,
+  "best": 120
+ },
+ "search_run": "outputs/user_survey_search/heavy_arm/headstand_4_s0",
+ "side_by_side": {
+  "size": 1080,
+  "camera": {
+   "distance": 3.87,
+   "elevation": -12,
+   "azimuth": 140,
+   "lookat_z": 0.76
+  },
+  "panels": [
+   {
+    "model": "models/adult.xml",
+    "qpos": "reference_adult.npz",
+    "rgba": [
+     0.55,
+     0.57,
+     0.62,
+     1.0
+    ]
+   },
+   {
+    "model": "models/heavy_arm.xml",
+    "qpos": "z0.npz",
+    "rgba": [
+     0.85,
+     0.22,
+     0.2,
+     1.0
+    ]
+   },
+   {
+    "model": "models/heavy_arm.xml",
+    "qpos": "best.npz",
+    "rgba": [
+     0.18,
+     0.42,
+     0.85,
+     1.0
+    ]
+   }
+  ]
+ },
+ "overlay": {
+  "model": "models/heavy_arm.xml",
+  "root": "Pelvis",
+  "flat": true,
+  "camera": {
+   "distance": 4.28,
+   "elevation": -12,
+   "azimuth": 140,
+   "lookat_z": 0.69
+  },
+  "width": 1920,
+  "height": 1080,
+  "layers": [
+   {
+    "qpos": "reference_body.npz",
+    "rgba": [
+     0.55,
+     0.57,
+     0.62,
+     0.35
+    ]
+   },
+   {
+    "qpos": "z0.npz",
+    "rgba": [
+     0.85,
+     0.22,
+     0.2,
+     1.0
+    ]
+   },
+   {
+    "qpos": "best.npz",
+    "rgba": [
+     0.18,
+     0.42,
+     0.85,
+     1.0
+    ]
+   }
+  ]
+ }
+}

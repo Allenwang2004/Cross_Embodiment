@@ -103,3 +103,17 @@ mujoco_Humanoid_motionretargeting/
 /wandb
 
 /amass_data
+
+/.claude
+
+/.vscode
+
+/model
+
+/note
+
+/paper
+
+/tests
+
+/utils

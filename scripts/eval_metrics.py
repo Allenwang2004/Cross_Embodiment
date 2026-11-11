@@ -40,6 +40,40 @@ class Body:
         self.m = mujoco.MjModel.from_xml_path(str(REPO / xml)); self.d = mujoco.MjData(self.m); self.smpl = smpl
         assert self.m.jnt_type[0] == mujoco.mjtJoint.mjJNT_FREE and self.m.body_jntadr[1] == 0, xml
 
+    def hand_floor(self, Q):
+        """(T,) per frame, the smallest distance (m) between the floor and the hands: the collision geoms of the bodies named
+        *wrist* or *hand* (the human's Wrist and Hand, the G1's wrist roll / pitch / yaw links), mj_geomDistance, capped at 0.5 m"""
+        m, d = self.m, self.d
+        if not hasattr(self, "_hands"):
+            fl = [i for i in range(m.ngeom) if m.geom_type[i] == mujoco.mjtGeom.mjGEOM_PLANE]; assert len(fl) == 1, "one floor plane"
+            hb = {b for b in range(m.nbody) if any(k in m.body(b).name.lower() for k in ("wrist", "hand"))}
+            self._floor = fl[0]; self._hands = [g for g in range(m.ngeom) if m.geom_bodyid[g] in hb and (m.geom_contype[g] or m.geom_conaffinity[g])]
+            assert self._hands, "no hand geoms"
+        out = np.empty(len(Q)); ft = np.zeros(6)
+        for t, q in enumerate(Q):
+            d.qpos[:] = q; mujoco.mj_kinematics(m, d)
+            out[t] = min(mujoco.mj_geomDistance(m, d, self._floor, g, 0.5, ft) for g in self._hands)
+        return out
+
+    def part_floor(self, Q):
+        """(names, (T, P)): per frame, each non-foot body's smallest collision-geom distance (m) to the floor, capped at 0.5 m.
+        Feet = bodies named *ankle* or *toe*; the world body is skipped"""
+        m, d = self.m, self.d
+        if not hasattr(self, "_parts"):
+            fl = [i for i in range(m.ngeom) if m.geom_type[i] == mujoco.mjtGeom.mjGEOM_PLANE]; assert len(fl) == 1, "one floor plane"
+            P = {}
+            for g in range(m.ngeom):
+                b = int(m.geom_bodyid[g]); n = m.body(b).name
+                if b and not any(k in n.lower() for k in ("ankle", "toe")) and (m.geom_contype[g] or m.geom_conaffinity[g]):
+                    P.setdefault(n, []).append(g)
+            self._pfloor, self._parts = fl[0], P
+        names = list(self._parts); out = np.empty((len(Q), len(names))); ft = np.zeros(6)
+        for t, q in enumerate(Q):
+            d.qpos[:] = q; mujoco.mj_kinematics(m, d)
+            for j, n in enumerate(names):
+                out[t, j] = min(mujoco.mj_geomDistance(m, d, self._pfloor, g, 0.5, ft) for g in self._parts[n])
+        return names, out
+
     def local(self, Q):
         """(T, B, 3) non-root positions, (T, B + 1, 6) rotations, in each frame's path frame"""
         import humenv.utils as hu

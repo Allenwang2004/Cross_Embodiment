@@ -21,6 +21,19 @@ def full(body, q, qr, ratio):
     return dict(E.tracking_metrics(body, q, qr), ratio=ratio, fall_s=float((q[:T, 2] < 0.5 * qr[:T, 2]).sum() / 30), success=float(not ((pos > 1.5) | (rot > 45)).any()))
 
 
+TOUCH, REF_NEAR, HAND_MOTION_S = 0.01, 0.05, 0.5
+
+
+def hand_fall(body, q, qr):
+    """Fall Time by hand contact, the user's definition of 11/07: seconds with the rollout's hands within TOUCH (1 cm) of the floor.
+    Returns (by_motion, by_frame): by_motion is NaN for a motion whose reference has its hands within REF_NEAR (5 cm; kinematic references
+    hover) for HAND_MOTION_S (0.5 s) or more, i.e. one where the hands are meant to touch the floor; by_frame counts only the frames
+    where the reference's hands are more than 5 cm above the floor. q[t] is compared with qr[t] (pass qr = ref[1:])."""
+    T = min(len(q), len(qr)); h, hr = body.hand_floor(q[:T]), body.hand_floor(qr[:T]); touch = h <= TOUCH
+    hand_motion = (hr <= REF_NEAR).sum() / 30 >= HAND_MOTION_S
+    return (float("nan") if hand_motion else float(touch.sum() / 30)), float((touch & (hr > REF_NEAR)).sum() / 30)
+
+
 def main():
     body = E.Body(E.XML["child"], True); clips = [l.strip() for l in open(SRC / "clips.txt")]; nk = len(KEYS)
     B = {a: np.zeros((len(clips), 5, 64, nk)) for a, _, _ in ALGOS}; C = {a: np.zeros((len(clips), 5, len(G), nk)) for a, _, _ in ALGOS}; Z0 = np.zeros((len(clips), nk))

@@ -1,0 +1,95 @@
+{
+ "clip": "jump-2_7",
+ "body": "g1",
+ "fps": 30,
+ "frames": {
+  "reference_adult": 150,
+  "reference_body": 150,
+  "z0": 150,
+  "best": 150
+ },
+ "search_run": "outputs/user_survey_search/g1_ridge/jump-2_7_s0",
+ "side_by_side": {
+  "size": 1080,
+  "camera": {
+   "distance": 3.87,
+   "elevation": -12,
+   "azimuth": 140,
+   "lookat_z": 0.76
+  },
+  "panels": [
+   {
+    "model": "models/adult.xml",
+    "qpos": "reference_adult.npz",
+    "rgba": [
+     0.55,
+     0.57,
+     0.62,
+     1.0
+    ]
+   },
+   {
+    "model": "models/g1/scene.xml",
+    "qpos": "z0.npz",
+    "rgba": [
+     0.85,
+     0.22,
+     0.2,
+     1.0
+    ]
+   },
+   {
+    "model": "models/g1/scene.xml",
+    "qpos": "best.npz",
+    "rgba": [
+     0.18,
+     0.42,
+     0.85,
+     1.0
+    ]
+   }
+  ]
+ },
+ "overlay": {
+  "model": "models/g1/scene.xml",
+  "root": "pelvis",
+  "flat": false,
+  "camera": {
+   "distance": 3.299843870829202,
+   "elevation": -12,
+   "azimuth": 140,
+   "lookat_z": 0.6999668816910429
+  },
+  "width": 1920,
+  "height": 1080,
+  "layers": [
+   {
+    "qpos": "reference_body.npz",
+    "rgba": [
+     0.55,
+     0.57,
+     0.62,
+     0.35
+    ]
+   },
+   {
+    "qpos": "z0.npz",
+    "rgba": [
+     0.85,
+     0.22,
+     0.2,
+     1.0
+    ]
+   },
+   {
+    "qpos": "best.npz",
+    "rgba": [
+     0.18,
+     0.42,
+     0.85,
+     1.0
+    ]
+   }
+  ]
+ }
+}

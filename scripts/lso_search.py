@@ -89,13 +89,27 @@ def main():
     ap.add_argument("--fall-weight", type=float, default=0.0)
     ap.add_argument("--fall-head", type=float, default=0.8)
     ap.add_argument("--bfm-zero-vel", action="store_true", help="B sees both sides with the velocity part set to 0")
-    ap.add_argument("--objective", choices=("bfm", "mse"), default="bfm")
+    ap.add_argument("--objective", choices=("bfm", "mse", "phc"), default="bfm",
+                    help="phc: the per-step reward is PHC's tracking reward (model/phc_reward.py), BFM-Zero's tracking reward")
+    ap.add_argument("--method", choices=("lso", "ta"), default="lso",
+                    help="lso: BFMTrack's LSO from B(g_t+1); ta: BFM-Zero's trajectory adaptation (dual-loop annealing as DIAL-MPC, "
+                         "softmax average of the samples by whole-rollout cost), from Motivo's ER L=8 sequence, white noise "
+                         "--sigma x exp(-(M - i) / (beta1 M) - (H - h) / (beta2 H)), i counting down from M = --iters, h = 1..H steps")
+    ap.add_argument("--ta-beta1", type=float, default=0.85, help="--method ta: iteration annealing (BFM-Zero)")
+    ap.add_argument("--ta-beta2", type=float, default=0.9, help="--method ta: horizon annealing (BFM-Zero)")
+    ap.add_argument("--ta-temp", type=float, default=0.05, help="--method ta: softmax temperature on the costs z-scored over the samples (DIAL-MPC's example config)")
+    ap.add_argument("--trace", choices=("all", "budgets"), default="all",
+                    help="mu_trace.npz: the mean sequence after every iteration (about 20 MB for 300 steps), or only after 0 and --budgets iterations")
+    ap.add_argument("--budgets", type=int, nargs="*", default=[4, 8, 16, 32, 64],
+                    help="save the rollouts of the best sequence so far (q_best_it<k>) and of the mean sequence (q_mean_it<k>) after k iterations")
     ap.add_argument("--mse-no-xy", action="store_true", help="--objective mse: root term = pelvis height only")
+    ap.add_argument("--init-vel-scale", type=float, default=0.0, help="start at this x the reference's velocity (frames 0 -> 1, as single_z_search.py); 0 = at rest")
+    ap.add_argument("--keep-iters", type=int, nargs="*", default=[], help="also save the mean sequence's rollout after this many iterations (rollouts.npz q_it<k>)")
     ap.add_argument("--device", default="cuda")
     a = ap.parse_args()
     assert not a.antithetic or a.n % 2 == 0, "--antithetic needs an even --n"
     assert a.dtw or a.steps_scale == 1.0, "--steps-scale needs --dtw (the frame-by-frame reward has one frame per step)"
-    assert not (a.dtw and a.objective == "mse"), "--objective mse is frame by frame"
+    assert not (a.dtw and a.objective in ("mse", "phc")), "--objective mse / phc are frame by frame"
     from humenv import make_humenv
     from metamotivo.fb_cpr.huggingface import FBcprModel
     from model import bfm_align, losses
@@ -118,6 +132,10 @@ def main():
     fk = mujoco.MjModel.from_xml_path(str(xml)); nv = fk.nv
     exact = ExactObs(xml, REPO / "assets/robots/adult/robot.xml", **kw)
     pos_div = exact.s if a.pos_unit == "adult" else 1.0
+    phc = None
+    if a.objective == "phc":
+        from model.phc_reward import PHCCost
+        phc = PHCCost(fk, ref[0], ref[1:], scale=pos_div)
     vr, ro = np.zeros(nv), []
     for t in range(T):
         if t:
@@ -141,7 +159,10 @@ def main():
     Bstart = Bstart[np.minimum(np.arange(SR), len(Bstart) - 1)]            # (SR, 256), the last goal held
     Bc_t = torch.as_tensor(Bc, device=a.device)
     unit = lambda x: x / np.linalg.norm(x, axis=-1, keepdims=True)
-    ex0 = exact(ref[0], np.zeros(nv))
+    v0 = np.zeros(nv)
+    if a.init_vel_scale:
+        mujoco.mj_differentiatePos(fk, v0, 1.0 / 30, ref[0], ref[1]); v0 *= a.init_vel_scale
+    ex0 = exact(ref[0], v0)
     import humenv.utils as hu
     dk = mujoco.MjData(fk)
 
@@ -162,7 +183,7 @@ def main():
     def rollout(Z):
         """Z: (n_envs, S, 256) on the unit sphere -> per-step reward (n_envs, S) and qpos (n_envs, S, nq)."""
         zt = torch.as_tensor(16.0 * Z, dtype=torch.float32, device=a.device)
-        env.reset(); env.call("set_physics", qpos=ref[0], qvel=np.zeros(nv))
+        env.reset(); env.call("set_physics", qpos=ref[0], qvel=v0)
         ex = np.repeat(ex0[None], n_envs, 0); qs, obs = [], []
         for t in range(SR):
             u = model._actor(model._normalize(torch.as_tensor(ex, dtype=torch.float32, device=a.device)), zt[:, t],
@@ -201,6 +222,8 @@ def main():
             mf = np.stack([losses.tracking_mse_frames(fk, q[k], ref[1:], root_xy=not a.mse_no_xy, ref_pose=ref_pose)
                            for k in range(n_envs)])
             r = 1 - mf; parts["mse_frames"] = mf.mean(1)
+        if phc is not None:                                                            # every rollout starts at ref[0]
+            r = np.stack([phc.parts(q[k], ref[0])[0] for k in range(n_envs)]); parts["phc"] = 1 - r.mean(1)
         if a.heading_weight or a.pos_weight:
             hd = (1 - np.cos(heading(q) - ref_h[None])) / 2; ps = np.linalg.norm(q[..., :2] - ref_xy[None], axis=-1) / pos_div
             r = r - a.heading_weight * hd - a.pos_weight * ps
@@ -249,21 +272,51 @@ def main():
     for k, v in res.items():
         print(line(k, v), flush=True)
 
-    # ---- LSO -----------------------------------------------------------------------------------------------------
+    # ---- LSO / trajectory adaptation ------------------------------------------------------------------------------
     rng = np.random.default_rng(a.seed)
+    start_key = "B(g_t) (LSO start)" if a.method == "lso" else "ER L=8 (Motivo zero-shot)"
+    if a.method == "ta":
+        assert start_key in base and not a.antithetic and not a.rank, "--method ta: starts from ER L=8; no --antithetic / --rank"
+        mu = base[start_key].copy()
     m, v = np.zeros_like(mu), np.zeros_like(mu); b1, b2 = a.betas
     disc = a.gamma ** np.arange(SR)
     curve, trace = [], [mu.astype(np.float32)]
-    best = dict(cost=res["B(g_t) (LSO start)"]["cost"], z=mu.copy(), it=-1, src="start")
+    best = dict(cost=res[start_key]["cost"], z=mu.copy(), it=-1, src="start", q=q[list(base).index(start_key)].copy())
+    budget_cost = {}
+    ta_h = np.exp(-(SR - np.arange(1, SR + 1)) / (a.ta_beta2 * SR))                   # horizon factor, 1 at the last step
     for it in range(a.iters):
-        if a.antithetic:                                                               # pairs: eps^i, -eps^i
+        if a.method == "ta":
+            sig = a.sigma * np.exp(-(a.iters - (a.iters - it)) / (a.ta_beta1 * a.iters)) * ta_h   # i = M - it counts down from M
+            eps = rng.standard_normal((a.n, SR, 256))
+            Z = np.concatenate([mu[None], unit(mu[None] + sig[None, :, None] * eps)])
+        elif a.antithetic:                                                               # pairs: eps^i, -eps^i
             h = colored_noise(a.beta, (a.n // 2, 256, SR), rng).transpose(0, 2, 1)
             eps = np.concatenate([h, -h])
         else:
             eps = colored_noise(a.beta, (a.n, 256, SR), rng).transpose(0, 2, 1)       # (n, SR, 256), coloured over time
-        Z = np.concatenate([mu[None], unit(mu[None] + a.sigma * eps)])
+        if a.method == "lso":
+            Z = np.concatenate([mu[None], unit(mu[None] + a.sigma * eps)])
         r, q = rollout(Z)
+        if it in a.keep_iters:                                                         # slot 0: the mean after `it` updates
+            keep[f"q_it{it}"] = q[0].astype(np.float32)
+        if it in a.budgets:
+            keep[f"q_mean_it{it}"] = q[0].astype(np.float32)
         costs = 1 - r.sum(1) / S
+        i = 1 + int(np.argmin(costs[1:]))                                              # samples only: slot 0 (the mean) is logged, never the result
+        if costs[i] < best["cost"]:
+            best = dict(cost=float(costs[i]), z=Z[i].copy(), it=it, src="sample", q=q[i].copy())
+        if it + 1 in a.budgets:
+            keep[f"q_best_it{it + 1}"] = best["q"].astype(np.float32); budget_cost[it + 1] = best["cost"]
+        if a.method == "ta":                                                           # softmax over the z-scored costs of the samples
+            c = costs[1:]; zc = (c - c.mean()) / (c.std() + 1e-12); w = np.exp(-(zc - zc.min()) / a.ta_temp); w /= w.sum()
+            mu = unit((w[:, None, None] * Z[1:]).sum(0))
+            row = dict(iter=it, mean_seq_cost=float(costs[0]), mean_seq_bfm=float(rollout.parts["bfm"][0]),
+                       best_sample_cost=float(costs[1:].min()), sample_mean_cost=float(costs[1:].mean()), best_so_far=best["cost"],
+                       mu_move=float(np.linalg.norm(16 * (mu - trace[-1]), axis=1).mean()), sec=time.time() - t0)
+            curve.append(row); trace.append(mu.astype(np.float32))
+            print(f"  iter {it:3d}  mean sequence cost {costs[0]:.4f}  samples best {costs[1:].min():.4f} mean {costs[1:].mean():.4f}"
+                  f"  top weight {w.max():.3f}  [{row['sec'] / 60:.1f} min]", flush=True)
+            continue
         rs = r[1:]
         R = np.stack([np.convolve(x[::-1], disc)[:SR][::-1] for x in rs])              # discounted return-to-go
         if a.rank:                                                                     # centred ranks, per step
@@ -276,9 +329,6 @@ def main():
             g = (A[:, :, None] * eps).mean(0) / a.sigma
         m = b1 * m + (1 - b1) * g; v = b2 * v + (1 - b2) * g * g
         mu = unit(mu + a.lr * (m / (1 - b1 ** (it + 1))) / (np.sqrt(v / (1 - b2 ** (it + 1))) + 1e-8))
-        i = int(np.argmin(costs))
-        if costs[i] < best["cost"]:
-            best = dict(cost=float(costs[i]), z=Z[i].copy(), it=it, src="mean" if i == 0 else "sample")
         row = dict(iter=it, mean_seq_cost=float(costs[0]), mean_seq_bfm=float(rollout.parts["bfm"][0]),
                    best_sample_cost=float(costs[1:].min()), sample_mean_cost=float(costs[1:].mean()), best_so_far=best["cost"],
                    mu_move=float(np.linalg.norm(16 * (mu - trace[-1]), axis=1).mean()), sec=time.time() - t0)
@@ -289,6 +339,8 @@ def main():
               f"  |d mu_t| {row['mu_move']:.3f}{dl}  [{row['sec'] / 60:.1f} min]", flush=True)
     Z = np.repeat(mu[None], n_envs, 0); r, q = rollout(Z)                              # the final mean sequence
     res["LSO final mean"] = dict(**terms(r, 0), **report(q[0])); keep["q_LSO"] = q[0].astype(np.float32)
+    if a.iters in a.budgets:
+        keep[f"q_mean_it{a.iters}"] = q[0].astype(np.float32)
     if "path" in rollout.parts:
         keep["path_LSO"] = rollout.parts["path"][0]
     Zb = np.repeat(best["z"][None], n_envs, 0); rb, qb = rollout(Zb)
@@ -299,14 +351,18 @@ def main():
     env.close()
     with open(out / "curve.csv", "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=list(curve[0])); w.writeheader(); w.writerows(curve)
-    np.savez_compressed(out / "mu_trace.npz", mu=np.stack(trace), best=best["z"].astype(np.float32))
+    its = list(range(len(trace))) if a.trace == "all" else [0] + [k for k in a.budgets if k < len(trace)]
+    np.savez_compressed(out / "mu_trace.npz", mu=np.stack([trace[k] for k in its]), mu_iters=np.array(its), best=best["z"].astype(np.float32))
     np.savez_compressed(out / "rollouts.npz", ref=ref.astype(np.float32), **keep)
     (out / "summary.json").write_text(json.dumps(dict(ref=a.ref, body=a.body, frames=T, n=a.n, iters=a.iters, sigma=a.sigma,
                                                       lr=a.lr, gamma=a.gamma, beta=a.beta, seed=a.seed, heading_weight=a.heading_weight,
                                                       pos_weight=a.pos_weight, pos_unit=a.pos_unit, pos_div=pos_div, antithetic=a.antithetic, rank=a.rank, floor_friction=a.floor_friction,
-                                                      steps_scale=a.steps_scale, init_pace=a.init_pace, dtw=a.dtw,
+                                                      steps_scale=a.steps_scale, init_pace=a.init_pace, dtw=a.dtw, init_vel_scale=a.init_vel_scale,
                                                       fall_weight=a.fall_weight, fall_head=a.fall_head,
-                                                      bfm_zero_vel=a.bfm_zero_vel, objective=a.objective, mse_no_xy=a.mse_no_xy, results=res,
+                                                      bfm_zero_vel=a.bfm_zero_vel, objective=a.objective, mse_no_xy=a.mse_no_xy,
+                                                      method=a.method, ta_beta1=a.ta_beta1, ta_beta2=a.ta_beta2, ta_temp=a.ta_temp, betas=list(a.betas),
+                                                      budgets=a.budgets, best_cost_at=budget_cost, best_it=best["it"], best_src=best["src"],
+                                                      sample_rollouts=a.iters * a.n, results=res,
                                                       minutes=(time.time() - t0) / 60), indent=1))
     print("\n" + "\n".join(line(k, v) for k, v in res.items()))
     print(f"-> {out}  ({(time.time() - t0) / 60:.1f} min)")

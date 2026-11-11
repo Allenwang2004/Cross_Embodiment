@@ -117,6 +117,7 @@ OBJECTIVES = {
     "bfm": (1.0, 0.0),      # the "align" slot is the BFM latent loss, see score()
     "mse": (1.0, 0.0),      # cost = losses.tracking_mse (pose + ee + root + heading MSE); L_align logged only
     "dtw": (1.0, 0.0),      # cost = 1 - time-aligned B similarity (model/dtw.py: slower allowed) + aligned heading
+    "phc": (1.0, 0.0),      # cost = 1 - mean_t PHC tracking reward (model/phc_reward.py; BFM-Zero's trajectory adaptation)
 }
 
 
@@ -145,7 +146,7 @@ def rank_normalize(f: np.ndarray) -> np.ndarray:
 
 @torch.no_grad()
 def rollout(model, env, z_env, steps, device, obs_mul, init_qpos=None, nv=None,
-            return_obs=False, exact=None, act_out=None, exact_in_env=False, init_qvel=None):
+            return_obs=False, exact=None, act_out=None, exact_in_env=False, init_qvel=None, qvel_out=None):
     """Deterministic rollout, one z per slot. Returns qpos (n_envs, T, nq),
     and with return_obs also the RESCALED proprio of the state after each
     step, (n_envs, T, 358), index-aligned with qpos -- what B() scores.
@@ -169,6 +170,7 @@ def rollout(model, env, z_env, steps, device, obs_mul, init_qpos=None, nv=None,
     init_qvel: the start velocity instead of 0 (--init-vel-scale).
 
     act_out (list): if given, each step's actions (n_envs, n_act) are appended to it.
+    qvel_out (list): if given, each step's qvel (n_envs, nv) after the step is appended to it (--eval-save-qvel).
     """
     obs, _ = env.reset()
     if init_qpos is not None:
@@ -190,6 +192,8 @@ def rollout(model, env, z_env, steps, device, obs_mul, init_qpos=None, nv=None,
             act_out.append(mu.cpu().numpy())
         obs, _, _, _, info = env.step(mu.cpu().numpy())
         hist.append(info["qpos"].copy())
+        if qvel_out is not None:
+            qvel_out.append(np.asarray(info["qvel"]).copy())
         if exact is not None:
             ex_obs = (info["exact_proprio"].copy() if exact_in_env else
                       np.stack([exact(q, v) for q, v in zip(info["qpos"], info["qvel"])]))
@@ -262,9 +266,10 @@ def main():
                    help="default assets/robots_torque/<body>/robot_torque_full.xml "
                         "-- condition C of scripts/loss_test.py, the best of the "
                         "four and the one training uses")
-    p.add_argument("--obs-scale", default="auto", choices=["auto", "none", "exact"],
-                   help="auto: raw obs x fixed per-feature multiplier; none: raw; exact: the adult-equivalent "
-                        "observation by reverse retargeting (model/exact_obs.py), for the actor and for B")
+    p.add_argument("--obs-scale", default="auto", type=lambda s: s if s in ("auto", "none", "exact") or float(s) > 0 else None,
+                   help="auto: raw obs x fixed per-feature multiplier (per-body length ratios); none: raw; exact: the "
+                        "adult-equivalent observation by reverse retargeting (model/exact_obs.py), for the actor and for B; "
+                        "a positive number r: every length feature / r (ONE uniform ratio, model/obs_scale.py's ablation)")
     p.add_argument("--obs-scale-ref", default="assets/robots/adult/robot.xml")
     p.add_argument("--phys-weights", default="balanced",
                    choices=["balanced", "equal", "default"],
@@ -296,6 +301,8 @@ def main():
                    help="no search: score every latent in this (N, 256) .npy with the run's exact cost (padded to "
                         "batches of 2 * pairs rollouts) and write <out>/eval.csv (index, cost, bfm, head, pos, "
                         "anchor_dist) plus <out>/eval_base.json (the z0 terms), then exit")
+    p.add_argument("--eval-save-qvel", action="store_true",
+                   help="with --eval-z: also write <out>/eval_qvel.npz (qvel (N, T, nv) after each step; for rewards that need velocities)")
     p.add_argument("--eval-save-qpos", action="store_true",
                    help="with --eval-z: also write <out>/eval_qpos.npz (qpos (N, T, nq)) of every scored latent")
     p.add_argument("--eval-save-act", action="store_true",
@@ -318,6 +325,10 @@ def main():
     p.add_argument("--init-vel-scale", type=float, default=None,
                    help="--init reference: start moving at this x the reference's velocity (frames 0 -> 1, 30 Hz) "
                         "instead of at rest, e.g. 0.7 = the reference played at 0.7x speed")
+    p.add_argument("--frame-offset", type=int, default=1,
+                   help="the state after step t is scored against reference frame t + this. 1: the rollout starts at frame 0, so "
+                        "after step t it should be at frame t + 1, as in scripts/lso_search.py. 0 reproduces every run before this "
+                        "flag existed, which scored each state one frame late")
     p.add_argument("--init-ref", default=None,
                    help="with --init reference: take frame 0 from this .npz instead of --ref (e.g. track the adult's "
                         "own walk while starting from the body's feasible pose)")
@@ -376,6 +387,7 @@ def main():
 
     z0 = project_z(np.load(z0_path).reshape(-1).astype(np.float64))
     ref = np.load(ref_path)["qpos"]
+    goal = ref[args.frame_offset:]                 # goal[t]: what the state after step t is scored against
     lam_a, lam_p = OBJECTIVES[args.objective]
 
     cfg = ESConfig(device=args.device)
@@ -393,6 +405,9 @@ def main():
     elif args.objective == "bfm":
         print("objective bfm: cost = 1 - mean_t cos(B(s_t), B(g_t))  (BFMTrack Eq. 3, "
               "B fed the same rescaled obs as the actor); L_align / L_phys logged only")
+    elif args.objective == "phc":
+        print("objective phc: cost = 1 - mean_t PHC tracking reward (Luo et al. 2023 Eq. 2 as PHC's code computes it: "
+              "body positions, rotations, velocities, angular velocities; model/phc_reward.py); L_align / L_phys logged only")
     else:
         print(f"objective {args.objective}: cost = {lam_a} * L_align + {lam_p} * L_phys "
               f"(L_phys weights={cfg.phys_weights}, L_align discount={cfg.align_discount})")
@@ -465,10 +480,17 @@ def main():
                 ro[:, VEL] = 0
             Bg = bfm_align.embed(model, ro, args.device)
 
+    if Bg is not None:
+        Bg = Bg[args.frame_offset:]
     glob_w = (args.heading_weight, args.pos_weight)
     pos_div = exact.s if args.pos_unit == "adult" and exact is not None else 1.0
     if args.pos_weight:
         print(f"position term: metres / {pos_div:.6f} ({args.pos_unit if exact is not None else 'body, no s without --obs-scale exact'})")
+    phc = None
+    if args.objective == "phc":
+        from model.phc_reward import PHCCost
+        phc = PHCCost(fk, ref[max(args.frame_offset - 1, 0)], goal, scale=pos_div)
+        print(f"phc: lengths / {pos_div:.6f} ({args.pos_unit if exact is not None else 'body'} metres), {fk.nbody - 1} bodies")
     anchor = None
     if args.anchor_weight:
         if not args.anchor:
@@ -485,10 +507,10 @@ def main():
             h[i] = hu.calc_heading(hu.remove_base_rot(dk.xquat[1][None].copy(), "smpl"))[0]
         return h.reshape(qs.shape[:-1]), qs[..., :2]
 
-    ref_h, ref_xy = root_heading_xy(ref)
+    ref_h, ref_xy = root_heading_xy(goal)
 
     def tmse(qi):
-        return losses.tracking_mse(fk, qi, ref, root_xy=not args.mse_no_xy)[0]
+        return losses.tracking_mse(fk, qi, goal, root_xy=not args.mse_no_xy)[0]
 
     DTW_KEYS = ("dtw", "done", "pace", "head_al", "fallen")
 
@@ -500,7 +522,7 @@ def main():
         return d
 
     def global_terms(q):
-        T = min(q.shape[1], len(ref))
+        T = min(q.shape[1], len(goal))
         h, xy = root_heading_xy(q[:, :T])
         head = ((1 - np.cos(h - ref_h[None, :T])) / 2).mean(1)
         pos = np.linalg.norm(xy - ref_xy[None, :T], axis=-1).mean(1) / pos_div
@@ -511,15 +533,17 @@ def main():
         cost is the objective; L_align / L_phys are always the joint-space
         terms, so a bfm run's summary stays comparable with the others."""
         zt = torch.as_tensor(zs, dtype=torch.float32, device=args.device)
-        acts = []
+        acts, vels = [], ([] if args.eval_save_qvel else None)
         q, o = rollout(model, env, zt, args.steps, args.device, obs_mul, init_qpos=init_qpos, nv=fk.nv,
-                       return_obs=True, exact=exact, act_out=acts, exact_in_env=exact is not None, init_qvel=init_qvel)
+                       return_obs=True, exact=exact, act_out=acts, exact_in_env=exact is not None, init_qvel=init_qvel, qvel_out=vels)
         extra["act"] = np.stack(acts, axis=1)
-        if Bg is not None:
-            # bfm only logs L_align / L_phys / tracking_mse: logged() computes them for the slots kept
+        if vels is not None:
+            extra["qvel"] = np.stack(vels, axis=1)
+        if Bg is not None or phc is not None:
+            # bfm / phc only log L_align / L_phys / tracking_mse: logged() computes them for the slots kept
             cost = align = phys = extra["mse"] = np.full(len(zs), np.nan)
         else:
-            cost, align, phys = compute_batch_cost(fk, cfg, q, [ref] * len(zs))
+            cost, align, phys = compute_batch_cost(fk, cfg, q, [goal] * len(zs))
             extra["mse"] = np.array([tmse(qi) for qi in q])
         bfm = np.full(len(zs), np.nan, dtype=np.float32)
         if Bg is not None:
@@ -537,6 +561,8 @@ def main():
             cost = bfm
         if args.objective == "mse":
             cost = extra["mse"].astype(np.float32)
+        if phc is not None:                            # rollouts start at init_qpos (or wherever humenv put frame 0)
+            cost = phc(q, init_qpos if init_qpos is not None else q[0, 0])
         extra["head"], extra["pos"] = global_terms(q)
         if args.objective == "dtw":                    # heading along the alignment; pos stays frame by frame
             h_all, _ = root_heading_xy(q); P = extra["path"]
@@ -561,9 +587,9 @@ def main():
     def logged(i, q, align, phys):
         """(L_align, L_phys, tracking_mse) of slot i of the last score() -- computed here for that one rollout
         when the objective did not need them for every slot"""
-        if Bg is None:
+        if Bg is None and phc is None:
             return float(align[i]), float(phys[i]), float(extra["mse"][i])
-        _, a1, p1 = compute_batch_cost(fk, cfg, q[i][None], [ref])
+        _, a1, p1 = compute_batch_cost(fk, cfg, q[i][None], [goal])
         return float(a1[0]), float(p1[0]), float(tmse(q[i]))
 
     # --- where we start, and the floor we are aiming at ----------------------
@@ -572,13 +598,15 @@ def main():
     base = dict(cost=float(c0[0]), align=la, phys=lp, bfm=float(f0[0]),
                 head=float(extra["head"][0]), pos=float(extra["pos"][0]), mse=lm, **dext(0, False))
     base_path = extra["path"][0].copy() if "path" in extra else None
-    _, ra, rp = compute_batch_cost(fk, cfg, ref[None, :args.steps], [ref])
+    _, ra, rp = compute_batch_cost(fk, cfg, goal[None, :args.steps], [goal])
     floor = dict(cost=float(lam_a * ra[0] + lam_p * rp[0]),
                  align=float(ra[0]), phys=float(rp[0]), bfm=0.0 if Bg is not None else float("nan"))
     if Bg is not None:
         # the kinematic reference against itself, through obs_from_qpos on both
         # sides -- exactly 0 by construction, so the floor is 0
         floor["cost"] = 0.0
+    if phc is not None:                                # the reference against itself, from its own frame 0: 0
+        floor["cost"] = float(phc(goal[None, :args.steps], ref[max(args.frame_offset - 1, 0)])[0])
     print(f"  origin_z : cost {base['cost']:.4f}  L_align {base['align']:.4f}  "
           f"L_phys {base['phys']:.4f}")
     print(f"  reference: cost {floor['cost']:.4f}  L_align {floor['align']:.4f}  "
@@ -586,12 +614,14 @@ def main():
 
     if args.eval_z:
         Z = np.load(args.eval_z).reshape(-1, z0.size).astype(np.float64)
-        rows, qs, acts = [], [], []
+        rows, qs, acts, vels = [], [], [], []
         for i in range(0, len(Z), n_envs):
             chunk = Z[i:i + n_envs]
             pad = np.concatenate([chunk, np.repeat(z0[None], n_envs - len(chunk), axis=0)])
             c, _, _, f, qq = score(pad)
             qs.append(np.asarray(qq)[:len(chunk)]); acts.append(extra["act"][:len(chunk)])
+            if args.eval_save_qvel:
+                vels.append(extra["qvel"][:len(chunk)])
             for k in range(len(chunk)):
                 rows.append((i + k, float(c[k]), float(f[k]), float(extra["head"][k]), float(extra["pos"][k]),
                              float(extra["anchor_dist"][k]))
@@ -604,6 +634,8 @@ def main():
             np.savez_compressed(out_dir / "eval_qpos.npz", qpos=np.concatenate(qs).astype(np.float32))
         if args.eval_save_act:
             np.savez_compressed(out_dir / "eval_act.npz", act=np.concatenate(acts).astype(np.float32))
+        if args.eval_save_qvel:
+            np.savez_compressed(out_dir / "eval_qvel.npz", qvel=np.concatenate(vels).astype(np.float32))
         print(f"eval: {len(rows)} latents scored -> {out_dir / 'eval.csv'}")
         return
 
@@ -782,7 +814,7 @@ def main():
         "evals": n_gens * n_envs, "generations": n_gens, "pairs": args.pairs,
         "sigma": args.sigma, "lr": args.lr, "steps": args.steps, "algo": args.algo, "fitness": args.fitness, "sampling": args.sampling, "floor_friction": args.floor_friction,
         "path_len_deg": round(path_len, 1), "net_deg": round(ang(z0, z), 1),
-        "obs_scale": args.obs_scale, "seed": args.seed, "init": args.init, "init_ref": args.init_ref,
+        "obs_scale": args.obs_scale, "seed": args.seed, "init": args.init, "init_ref": args.init_ref, "frame_offset": args.frame_offset,
         "align_discount": args.discount, "heading_weight": args.heading_weight, "pos_weight": args.pos_weight,
         "pos_unit": args.pos_unit if exact is not None else "body", "pos_div": pos_div,
         "anchor": args.anchor, "anchor_weight": args.anchor_weight,
