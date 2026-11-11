@@ -71,8 +71,11 @@ sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
 from crossenbodiment.geometry import project_z, rank_normalize, ang_pair   # noqa: E402  single_z_search re-exported it (refactor step 4)
 from crossenbodiment.geometry import robot_yaw, smpl_heading       # noqa: E402
 from crossenbodiment.robot_rollout import motion   # noqa: E402  g1_z0_rollout's (refactor step 4)
+from crossenbodiment.obs import RawObs                             # noqa: E402  the simulation layer (refactor step 5)
+from crossenbodiment.policy import MotivoPolicy                     # noqa: E402
+from crossenbodiment.rollout import BatchRollout                    # noqa: E402
+from crossenbodiment.sim import RobotSim                            # noqa: E402
 from model import bfm_align                                         # noqa: E402
-from model.robot_env import RobotVecEnv                             # noqa: E402
 from model.robot_map import RobotMap                                # noqa: E402
 from model.robots import ROBOTS, out_dir, target_path               # noqa: E402
 
@@ -178,22 +181,21 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     n_envs = 2 * a.pairs; n_gens = max(a.evals // n_envs, 1); n_eps = a.pairs if a.sampling == "antithetic" else n_envs
 
-    vec = RobotVecEnv(a.robot, n_envs, fill=a.fill, gains=a.gains)                                    # spawn the workers before CUDA is touched
+    sim = RobotSim(a.robot, n_envs, fill=a.fill, gains=a.gains)                                       # spawn the workers before CUDA is touched
     rm = RobotMap(a.robot, fill=a.fill)
     n_link, n_jnt = len(rm.pairs) - 1, len(rm.g_jnt)
     ARM = [i for i, (b, _) in enumerate(rm.pairs[1:]) if b.split("_")[-1] in ("Shoulder", "Elbow", "Hand")]
     from humenv import make_humenv
-    from metamotivo.fb_cpr.huggingface import FBcprModel
     ref = np.load(REPO / f"data/origin_motion/{a.clip}.npz")["qpos"][a.start_frame:]
     T = len(ref) - a.frame_offset                 # steps
     z0 = project_z(np.load(REPO / f"data/origin_z/{a.clip}.npy").reshape(-1).astype(np.float64))
     anchor = project_z(np.load(a.anchor).reshape(-1).astype(np.float64)) if a.anchor else z0
-    model = FBcprModel.from_pretrained("facebook/metamotivo-M-1").to(a.device)
+    policy = MotivoPolicy.load(device=a.device, eval_mode=False); model = policy.model     # this script never called eval()
     adult, _ = make_humenv(num_envs=1, task=None, xml=str(REPO / "assets/robots/adult/robot.xml"), state_init="Default")
     fk = adult.unwrapped.model; dk = mujoco.MjData(fk)
     VEL = slice(214, 358)                         # humenv proprio: local_body_vel + local_body_ang_vel
     Og = bfm_align.obs_from_qpos(adult, ref)
-    Bg_plain = bfm_align.embed(model, Og, a.device)[a.frame_offset:]
+    Bg_plain = policy.embed(Og)[a.frame_offset:]
     if a.bfm_zero_vel:
         Og = Og.copy(); Og[:, VEL] = 0
     Bg = bfm_align.embed(model, Og, a.device)[a.frame_offset:]
@@ -256,17 +258,13 @@ def main():
         return smpl_heading(fk, qs, dk, batched=True), qs[..., :2]     # humenv's heading, one batched calc_heading
     ref_h, ref_xy = heading_xy(ref[a.frame_offset:])
 
+    # 2 * pairs robots from ref[0] mapped onto the robot (at rest, or moving: --init-vel reference), T steps, one latent each
+    batch = BatchRollout(policy, sim, RawObs(), n_envs, T, record=("obs", "qpos_smpl", "qpos", "fz"))
+
     @torch.no_grad()
     def score(zs):
-        zt = torch.as_tensor(zs, dtype=torch.float32, device=a.device)
-        obs, _, qg_start, _ = vec.reset((ref[0], ref[1]) if a.init_vel == "reference" else ref[0])
-        O, QS, QG, FZ = [], [], [], []
-        for _ in range(T):
-            o = torch.as_tensor(obs, dtype=torch.float32, device=a.device)
-            u = model._actor(model._normalize(o), zt, model.cfg.actor_std).mean.cpu().numpy()
-            obs, qs, qg, fz = vec.step(u)
-            O.append(obs); QS.append(qs); QG.append(qg); FZ.append(fz)
-        O, QS, QG, FZ = (np.stack(x, axis=1) for x in (O, QS, QG, FZ))
+        ro = batch.run(zs, init_qpos=ref[0], init_next=ref[1] if a.init_vel == "reference" else None)
+        O, QS, QG, FZ, qg_start = ro.obs, ro.qpos_smpl, ro.qpos, ro.fz, ro.start.qpos
         ik = FZ[:, :, :n_link].mean((1, 2)); ik_arm = FZ[:, :, ARM].mean((1, 2)); atlim = FZ[:, :, n_link].mean(1) / n_jnt
         n_, T_, D_ = O.shape                       # = bfm_align.batch_bfm_align, keeping the embeddings for dtw
         Of = O.astype(np.float32).reshape(n_ * T_, D_)
@@ -312,7 +310,7 @@ def main():
           f"sigma {a.sigma}, lr {a.lr}, heading {a.heading_weight}, pos {a.pos_weight}, anchor {a.anchor_weight}, "
           f"ik {a.ik_weight}", flush=True)
     t0 = time.time()
-    r0 = score(np.repeat(z0[None], n_envs, axis=0))
+    r0 = score(batch.copies(z0, n_envs))
     spread = float(np.abs(r0["qg"] - r0["qg"][:1]).max())
     base = pick(r0, 0, z0, -1, "origin_z")
     al = (lambda b: f"  dtw {b['dtw']:.4f} done {b['done']:.2f} heading_al {b['head_al']:.4f}") if a.objective == "dtw" else (lambda b: "")
@@ -323,7 +321,7 @@ def main():
     if a.eval_z:                                           # no search: roll out the given latents with this run's cost
         Z = np.load(a.eval_z).reshape(-1, z0.size).astype(np.float64); rows, Q = [], []
         for i0 in range(0, len(Z), n_envs):
-            chunk = Z[i0:i0 + n_envs]; r = score(np.concatenate([chunk, np.repeat(z0[None], n_envs - len(chunk), axis=0)]))
+            chunk = Z[i0:i0 + n_envs]; r = score(batch.padded(chunk, z0, n_envs))          # padded with z0
             Q.append(r["qg"][:len(chunk)])
             rows += [(i0 + k, *(float(r[x][k]) for x in ("cost", "bfm", "head", "pos", "anchor_dist", "ik", "mse"))) for k in range(len(chunk))]
         with open(out / "eval.csv", "w") as fh:
@@ -332,7 +330,7 @@ def main():
         (out / "eval_base.json").write_text(json.dumps({k: base[k] for k in ("cost", "bfm", "head", "pos", "ik", "mse")}))
         if a.eval_save_qpos:
             np.savez_compressed(out / "eval_qpos.npz", qpos=np.concatenate(Q).astype(np.float32))
-        vec.close(); print(f"eval: {len(rows)} latents scored -> {out / 'eval.csv'}"); return
+        sim.close(); print(f"eval: {len(rows)} latents scored -> {out / 'eval.csv'}"); return
 
     rng = np.random.default_rng(a.seed)
     z = z0.copy(); m = np.zeros_like(z); v = np.zeros_like(z); b1, b2, eps_adam = 0.9, 0.999, 1e-8
@@ -413,7 +411,7 @@ def main():
                    path_len_deg=round(path_len, 2), net_deg=round(ang_pair(z0, z), 2),
                    sigma=float(cma_es.sigma) if cma_es is not None else float(cem_sigma.mean()) if a.algo == "cem" else a.sigma)
         if a.eval_every and (gen % a.eval_every == 0 or gen == n_gens - 1):
-            rm = score(np.repeat(z[None], n_envs, axis=0))
+            rm = score(batch.copies(z, n_envs))
             row["mean_z_cost"] = float(rm["cost"][0])
             if rm["cost"][0] < best["cost"]:
                 best = pick(rm, 0, z, gen, "mean_z")
@@ -421,7 +419,7 @@ def main():
                   f"pos {best['pos']:.2f}, ik {best['ik']:.2f} deg)  gen_best {r['cost'].min():.4f}  mean_z {rm['cost'][0]:.4f}  "
                   f"|z-z0| {np.linalg.norm(z - z0):.2f}  [{(time.time() - t0) / 60:.1f} min]", flush=True)
         curve.append(row); trace_mean.append(z.copy()); trace_best.append(best["z"].copy())
-    vec.close()
+    sim.close()
 
     np.save(out / "best_z.npy", best["z"].astype(np.float32).reshape(1, -1))
     # everything --resume needs to continue this search exactly

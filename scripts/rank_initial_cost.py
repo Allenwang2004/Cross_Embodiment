@@ -37,34 +37,27 @@ import numpy as np
 import torch
 
 from single_z_search import device_arg, project_z
+from crossenbodiment.obs import multiplier_or_raw     # noqa: E402  the simulation layer (refactor step 5)
+from crossenbodiment.policy import MotivoPolicy       # noqa: E402
+from crossenbodiment.rollout import BatchRollout      # noqa: E402
+from crossenbodiment.sim import HumenvSim             # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 def set_physics_per_slot(env, qpos_list, nv):
     """AsyncVectorEnv.call broadcasts one argument to every worker; this sends
-    each worker its own qpos over the same pipe protocol."""
-    for pipe, q in zip(env.parent_pipes, qpos_list):
-        pipe.send(("_call", ("set_physics", (), {"qpos": q, "qvel": np.zeros(nv)})))
-    for pipe in env.parent_pipes:
-        _, ok = pipe.recv()
-        assert ok
+    each worker its own qpos over the same pipe protocol (crossenbodiment.sim.HumenvSim.set_physics_per_slot since
+    OOP refactor step 5)."""
+    HumenvSim(env).set_physics_per_slot(qpos_list, [np.zeros(nv) for _ in qpos_list])
 
 
-@torch.no_grad()
 def rollout_multi(model, env, z_env, steps, device, obs_mul, init_qpos_list, nv):
-    """like single_z_search.rollout(return_obs=True) but with a per-slot start pose."""
-    env.reset()
-    set_physics_per_slot(env, init_qpos_list, nv)
-    obs = {"proprio": np.stack([o["proprio"] for o in env.call("get_obs")])}
-    obs_hist = []
-    for _ in range(steps):
-        proprio = obs["proprio"] if obs_mul is None else obs["proprio"] * obs_mul
-        obs_t = torch.as_tensor(proprio, dtype=torch.float32, device=device)
-        mu = model._actor(model._normalize(obs_t), z_env, model.cfg.actor_std).mean
-        obs, _, _, _, _ = env.step(mu.cpu().numpy())
-        obs_hist.append(obs["proprio"] if obs_mul is None else obs["proprio"] * obs_mul)
-    return np.stack(obs_hist, axis=1).astype(np.float32)
+    """like single_z_search.rollout(return_obs=True) but with a per-slot start pose (each slot at rest): the observations
+    (raw x obs_mul, float32) after every step. Since OOP refactor step 5 through crossenbodiment.rollout.BatchRollout."""
+    batch = BatchRollout(MotivoPolicy(model, device), HumenvSim(env), multiplier_or_raw(obs_mul), z_env.shape[0], steps,
+                         record=("obs",), nv=nv)
+    return batch.run(z_env, init_qpos=init_qpos_list, per_slot=True).obs.astype(np.float32)
 
 
 def main():

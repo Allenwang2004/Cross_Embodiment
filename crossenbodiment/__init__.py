@@ -20,6 +20,14 @@ Step 4 moves library code out of scripts (the old modules import it back; tests/
   draw             frame_label (rollout_z_trace.label) and the explanation-panel helpers of g1_axes_demo.py
   multibody_study  the 10/10 multi-body correction experiment's layout (multibody_corr.py)
   paths            + the clip lists configs/clips/*.txt (read_clips)
-Importing the package imports nothing heavy (no torch, mujoco or humenv); align_cost (model.losses -> mujoco) and robot_rollout
-(torch) import them when they are imported.
+Step 5 adds the simulation layer, the one rollout loop every search and evaluation script uses:
+  policy    MotivoPolicy: the frozen FBcprModel on its device; latents() (float64 -> float32 tensor), act() (the actor's
+            mean action), embed() (B of observations)
+  obs       ObsMapper strategies RawObs / MultiplierObs / ExactObs (in the env workers or the main process) and the scripts'
+            selection rules (single_z_obs = single_z_search --obs-scale; lso_scale_kw = lso_search --scale as it is)
+  sim       HumenvSim (humenv's async vector env) and RobotSim (model/robot_env.RobotVecEnv): reset / step -> SimStep
+  rollout   BatchRollout: a fixed number of slots, run(Z) for one latent per slot (n, 256) or a sequence (n, T, 256),
+            recording qpos / qvel / actions / obs / SMPL qpos / IK residuals; the batch compositions (copies, padded, with_mean)
+Importing the package imports nothing heavy (no torch, mujoco or humenv); align_cost (model.losses -> mujoco), robot_rollout
+and policy (torch) import them when they are imported.
 """

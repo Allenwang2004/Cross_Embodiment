@@ -27,7 +27,7 @@ Writes <out>/{curve.csv, summary.json, mu_trace.npz, rollouts.npz}.
 usage: CUDA_VISIBLE_DEVICES=2 uv run python scripts/lso_search.py --ref amass_data/amass_retargeting_motion/ACCAD/<clip>.npz \
            --out outputs/lso/<clip> [--n 128 --iters 24 --sigma 0.0125 --lr 0.00625 --gamma 0.97 --beta 1]
 """
-import argparse, csv, functools, json, sys, time
+import argparse, csv, json, sys, time
 from pathlib import Path
 import mujoco
 import numpy as np
@@ -58,7 +58,9 @@ def main():
     ap.add_argument("--ref", required=True, help="reference qpos .npz on the body (frame 0 is the start pose)")
     ap.add_argument("--body", default="child")
     ap.add_argument("--xml", default=None)
-    ap.add_argument("--scale", type=float, default=None, help="ExactObs root scale (default: ExactObs's child value)")
+    # !!! --scale defaults to ExactObs's CHILD value 0.611036 for ANY body (crossenbodiment/obs.py lso_scale_kw); kept for
+    # !!! bit-identity of old commands. Other bodies must pass it (crossenbodiment.obs.registry_scale(body, clip) gives it)
+    ap.add_argument("--scale", type=float, default=None, help="ExactObs root scale (default: ExactObs's child value, for any body)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--n", type=int, default=128)
     ap.add_argument("--iters", type=int, default=24)
@@ -111,27 +113,25 @@ def main():
     assert not a.antithetic or a.n % 2 == 0, "--antithetic needs an even --n"
     assert a.dtw or a.steps_scale == 1.0, "--steps-scale needs --dtw (the frame-by-frame reward has one frame per step)"
     assert not (a.dtw and a.objective in ("mse", "phc")), "--objective mse / phc are frame by frame"
-    from humenv import make_humenv
-    from metamotivo.fb_cpr.huggingface import FBcprModel
+    from crossenbodiment.obs import ExactObs, lso_scale_kw                  # the simulation layer (refactor step 5)
+    from crossenbodiment.policy import MotivoPolicy
+    from crossenbodiment.rollout import BatchRollout
+    from crossenbodiment.sim import HumenvSim
     from model import bfm_align, losses
-    from model.exact_obs import ExactObs, ExactObsWrapper
 
     out = Path(a.out); out.mkdir(parents=True, exist_ok=True)
     xml = Path(a.xml) if a.xml else REPO / "assets/robots_torque" / a.body / "robot_torque_full.xml"
     ref = np.load(REPO / a.ref)["qpos"]; T = len(ref); S = T - 1          # S control steps: g_1 .. g_T-1 are the goals
     SR = int(round(a.steps_scale * S))                                     # control steps rolled out
-    kw = {} if a.scale is None else {"scale": a.scale}
-    n_envs = a.n + 1
+    kw = lso_scale_kw(a.scale)                                             # None: ExactObs's default (the child's s), any body
+    n_envs = a.n + 1                                                       # slot 0: the mean sequence, then a.n samples
+    # ExactObs computed in the env workers (ExactObsWrapper), after FloorFrictionWrapper when given;
     # max_episode_steps: humenv's TimeLimit (300 steps by default) would auto-reset clips longer than 10 s mid-rollout
-    wrappers = [functools.partial(ExactObsWrapper, child_xml=str(xml), adult_xml=str(REPO / "assets/robots/adult/robot.xml"), **kw)]
-    if a.floor_friction is not None:
-        from model.friction import FloorFrictionWrapper
-        wrappers = [functools.partial(FloorFrictionWrapper, mu=a.floor_friction)] + wrappers
-    env, _ = make_humenv(num_envs=n_envs, vectorization_mode="async", task=None, xml=str(xml), state_init="Default",
-                         max_episode_steps=SR + 1, wrappers=wrappers)
-    model = FBcprModel.from_pretrained("facebook/metamotivo-M-1").to(a.device); model.eval()
+    mapper = ExactObs(xml, REPO / "assets/robots/adult/robot.xml", **kw)
+    sim = HumenvSim.make(xml, n_envs, wrappers=mapper.wrappers(), floor_friction=a.floor_friction, max_episode_steps=SR + 1)
+    policy = MotivoPolicy.load(device=a.device); model = policy.model     # facebook/metamotivo-M-1, eval()
     fk = mujoco.MjModel.from_xml_path(str(xml)); nv = fk.nv
-    exact = ExactObs(xml, REPO / "assets/robots/adult/robot.xml", **kw)
+    exact = mapper.build()
     pos_div = exact.s if a.pos_unit == "adult" else 1.0
     phc = None
     if a.objective == "phc":
@@ -142,7 +142,7 @@ def main():
         if t:
             mujoco.mj_differentiatePos(fk, vr, bfm_align.DEFAULT_DT, ref[t - 1], ref[t])
         ro.append(exact(ref[t], vr))
-    Bg = bfm_align.embed(model, np.stack(ro), a.device)[1:]                 # (S, 256): goal of step t is frame t+1
+    Bg = policy.embed(np.stack(ro))[1:]                                     # (S, 256): goal of step t is frame t+1
     Bstart = Bg
     VEL = slice(214, 358)                    # humenv proprio: local_body_vel + local_body_ang_vel
     Bc = Bg                                  # the reference side of the cost
@@ -163,7 +163,9 @@ def main():
     v0 = np.zeros(nv)
     if a.init_vel_scale:
         mujoco.mj_differentiatePos(fk, v0, 1.0 / 30, ref[0], ref[1]); v0 *= a.init_vel_scale
-    ex0 = exact(ref[0], v0)
+    # one rollout of n_envs latent sequences from ref[0] moving at v0, no get_obs after set_physics (the start observation
+    # is ExactObs(ref[0], v0)); 16 * Z on the unit sphere -> float32
+    batch = BatchRollout(policy, sim, mapper, n_envs, SR, z_scale=16.0, fetch_start_obs=False, record=("qpos", "obs"))
     dk = mujoco.MjData(fk)
 
     def heading(q):
@@ -178,19 +180,12 @@ def main():
     @torch.no_grad()
     def rollout(Z):
         """Z: (n_envs, S, 256) on the unit sphere -> per-step reward (n_envs, S) and qpos (n_envs, S, nq)."""
-        zt = torch.as_tensor(16.0 * Z, dtype=torch.float32, device=a.device)
-        env.reset(); env.call("set_physics", qpos=ref[0], qvel=v0)
-        ex = np.repeat(ex0[None], n_envs, 0); qs, obs = [], []
-        for t in range(SR):
-            u = model._actor(model._normalize(torch.as_tensor(ex, dtype=torch.float32, device=a.device)), zt[:, t],
-                             model.cfg.actor_std).mean.cpu().numpy()
-            _, _, _, _, info = env.step(u)
-            qs.append(info["qpos"].copy()); ex = info["exact_proprio"].copy(); obs.append(ex)
-        O = torch.as_tensor(np.stack(obs, 1), dtype=torch.float32, device=a.device)
+        ro_ = batch.run(Z, init_qpos=ref[0], init_qvel=v0)
+        O = torch.as_tensor(ro_.obs, dtype=torch.float32, device=a.device)
         if a.bfm_zero_vel:
             O[..., VEL] = 0
-        Bs = model.backward_map(O.reshape(-1, O.shape[-1])).reshape(n_envs, SR, -1)
-        q = np.stack(qs, 1)
+        Bs = policy.backward_map(O.reshape(-1, O.shape[-1])).reshape(n_envs, SR, -1)
+        q = ro_.qpos
         if a.dtw:
             from model import dtw
             Sm = dtw.cosine_matrix(Bs.cpu().numpy().astype(np.float64), Bc.astype(np.float64))
@@ -257,7 +252,7 @@ def main():
     hold = np.minimum(np.arange(SR), S - 1)
     for L in a.er_windows:
         base[f"ER L={L} (Motivo zero-shot)"] = unit(np.stack([Bg[t:t + L].mean(0) for t in range(S)]).astype(np.float64))[hold]
-    Z = np.repeat(mu[None], n_envs, 0)
+    Z = batch.copies(mu, n_envs)
     for i, z in enumerate(base.values()):
         Z[i] = z
     t0 = time.time(); r, q = rollout(Z)
@@ -284,14 +279,14 @@ def main():
         if a.method == "ta":
             sig = a.sigma * np.exp(-(a.iters - (a.iters - it)) / (a.ta_beta1 * a.iters)) * ta_h   # i = M - it counts down from M
             eps = rng.standard_normal((a.n, SR, 256))
-            Z = np.concatenate([mu[None], unit(mu[None] + sig[None, :, None] * eps)])
+            Z = batch.with_mean(mu, unit(mu[None] + sig[None, :, None] * eps))
         elif a.antithetic:                                                               # pairs: eps^i, -eps^i
             h = colored_noise(a.beta, (a.n // 2, 256, SR), rng).transpose(0, 2, 1)
             eps = np.concatenate([h, -h])
         else:
             eps = colored_noise(a.beta, (a.n, 256, SR), rng).transpose(0, 2, 1)       # (n, SR, 256), coloured over time
         if a.method == "lso":
-            Z = np.concatenate([mu[None], unit(mu[None] + a.sigma * eps)])
+            Z = batch.with_mean(mu, unit(mu[None] + a.sigma * eps))
         r, q = rollout(Z)
         if it in a.keep_iters:                                                         # slot 0: the mean after `it` updates
             keep[f"q_it{it}"] = q[0].astype(np.float32)
@@ -333,18 +328,18 @@ def main():
                                                     f"fallen {rollout.parts['fallen'][bi]:.3f}" if "dtw" in rollout.parts else "")
         print(f"  iter {it:3d}  mean sequence cost {costs[0]:.4f} (bfm {rollout.parts['bfm'][0]:.4f})  samples best {costs[1:].min():.4f} mean {costs[1:].mean():.4f}"
               f"  |d mu_t| {row['mu_move']:.3f}{dl}  [{row['sec'] / 60:.1f} min]", flush=True)
-    Z = np.repeat(mu[None], n_envs, 0); r, q = rollout(Z)                              # the final mean sequence
+    Z = batch.copies(mu, n_envs); r, q = rollout(Z)                                    # the final mean sequence
     res["LSO final mean"] = dict(**terms(r, 0), **report(q[0])); keep["q_LSO"] = q[0].astype(np.float32)
     if a.iters in a.budgets:
         keep[f"q_mean_it{a.iters}"] = q[0].astype(np.float32)
     if "path" in rollout.parts:
         keep["path_LSO"] = rollout.parts["path"][0]
-    Zb = np.repeat(best["z"][None], n_envs, 0); rb, qb = rollout(Zb)
+    Zb = batch.copies(best["z"], n_envs); rb, qb = rollout(Zb)
     res["LSO best (re-rolled)"] = dict(**terms(rb, 0), it=best["it"], src=best["src"], **report(qb[0]))
     keep["q_LSO_best"] = qb[0].astype(np.float32)
     if "path" in rollout.parts:
         keep["path_LSO_best"] = rollout.parts["path"][0]
-    env.close()
+    sim.close()
     with open(out / "curve.csv", "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=list(curve[0])); w.writeheader(); w.writerows(curve)
     its = list(range(len(trace))) if a.trace == "all" else [0] + [k for k in a.budgets if k < len(trace)]

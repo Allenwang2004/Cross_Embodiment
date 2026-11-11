@@ -126,3 +126,7 @@ tests/test_moves.py runs every helper step 4 moved against its 68c95f4 source.
 * `/tests` is in `.gitignore`: new files under tests/golden need `git add -f`.
 * Runs may append to the tracked `MUJOCO_LOG.TXT` at the repository root; never stage it.
 * The baseline was made while about 8 other searches ran on the machine (CPU idle 15-28 %); timings above are from that run.
+* Step 5 (simulation layer: crossenbodiment/policy.py, obs.py, sim.py, rollout.py) replaced the rollout loops the cases run;
+  tests/test_rollout.py also runs every replaced loop from its 37ed139 source (single_z_search.rollout in its four modes,
+  lso_search's / robot_z_search's / robot_lso_search's loops, child_reward_eval.rollout, rank_initial_cost.rollout_multi,
+  test_exact_obs's loop) against BatchRollout on 20-step, 4-slot rollouts of the child and the G1 (np.array_equal; ~20 s on GPU 2).

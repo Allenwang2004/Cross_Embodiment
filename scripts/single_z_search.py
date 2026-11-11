@@ -88,7 +88,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import functools
 import json
 import os
 import sys
@@ -126,14 +125,14 @@ OBJECTIVES = {
 from crossenbodiment.geometry import ang_pair, project_z, rank_normalize, smpl_heading  # noqa: E402,F401
 
 
-@torch.no_grad()
 def rollout(model, env, z_env, steps, device, obs_mul, init_qpos=None, nv=None,
             return_obs=False, exact=None, act_out=None, exact_in_env=False, init_qvel=None, qvel_out=None):
     """Deterministic rollout, one z per slot. Returns qpos (n_envs, T, nq),
     and with return_obs also the RESCALED proprio of the state after each
     step, (n_envs, T, 358), index-aligned with qpos -- what B() scores.
-    Same body as scripts/loss_test.py:rollout, kept separate rather than
-    imported so this script does not drag in loss_test's argument surface.
+
+    Since OOP refactor step 5 a thin wrapper of crossenbodiment.rollout.BatchRollout (the loop every rollout script shares),
+    kept with its signature for rollout_z_trace.py and batch_z_search.py; main() uses BatchRollout directly.
 
     init_qpos overrides humenv's Default reset with a pose -- here the
     reference's own first frame, so the rollout and the trajectory it is scored
@@ -154,37 +153,22 @@ def rollout(model, env, z_env, steps, device, obs_mul, init_qpos=None, nv=None,
     act_out (list): if given, each step's actions (n_envs, n_act) are appended to it.
     qvel_out (list): if given, each step's qvel (n_envs, nv) after the step is appended to it (--eval-save-qvel).
     """
-    obs, _ = env.reset()
-    if init_qpos is not None:
-        env.call("set_physics", qpos=init_qpos, qvel=np.zeros(nv) if init_qvel is None else init_qvel)
-        obs = {"proprio": np.stack([o["proprio"] for o in env.call("get_obs")])}
-    hist, obs_hist = [], []
-    if exact is not None:
-        if init_qpos is None:
-            raise SystemExit("--obs-scale exact needs --init reference")
-        ex_obs = np.repeat(exact(init_qpos, np.zeros(nv) if init_qvel is None else init_qvel)[None], z_env.shape[0], 0)
-    for _ in range(steps):
-        if exact is not None:
-            proprio = ex_obs
-        else:
-            proprio = obs["proprio"] if obs_mul is None else obs["proprio"] * obs_mul
-        obs_t = torch.as_tensor(proprio, dtype=torch.float32, device=device)
-        mu = model._actor(model._normalize(obs_t), z_env, model.cfg.actor_std).mean
-        if act_out is not None:
-            act_out.append(mu.cpu().numpy())
-        obs, _, _, _, info = env.step(mu.cpu().numpy())
-        hist.append(info["qpos"].copy())
-        if qvel_out is not None:
-            qvel_out.append(np.asarray(info["qvel"]).copy())
-        if exact is not None:
-            ex_obs = (info["exact_proprio"].copy() if exact_in_env else
-                      np.stack([exact(q, v) for q, v in zip(info["qpos"], info["qvel"])]))
-        if return_obs:
-            obs_hist.append(ex_obs if exact is not None else
-                            (obs["proprio"] if obs_mul is None else obs["proprio"] * obs_mul))
+    from crossenbodiment.obs import ExactObs, multiplier_or_raw
+    from crossenbodiment.policy import MotivoPolicy
+    from crossenbodiment.rollout import BatchRollout
+    from crossenbodiment.sim import HumenvSim
+    mapper = ExactObs.wrap(exact, in_env=exact_in_env) if exact is not None else multiplier_or_raw(obs_mul)
+    record = ("qpos",) + (("obs",) if return_obs else ()) + (("act",) if act_out is not None else ()) \
+        + (("qvel",) if qvel_out is not None else ())
+    batch = BatchRollout(MotivoPolicy(model, device), HumenvSim(env), mapper, z_env.shape[0], steps, record=record, nv=nv)
+    ro = batch.run(z_env, init_qpos=init_qpos, init_qvel=init_qvel)
+    if act_out is not None:
+        act_out.extend(np.moveaxis(ro.act, 1, 0))
+    if qvel_out is not None:
+        qvel_out.extend(np.moveaxis(ro.qvel, 1, 0))
     if return_obs:
-        return np.stack(hist, axis=1), np.stack(obs_hist, axis=1).astype(np.float32)
-    return np.stack(hist, axis=1)
+        return ro.qpos, ro.obs.astype(np.float32)
+    return ro.qpos
 
 
 def device_arg(s: str) -> str:
@@ -344,10 +328,12 @@ def main():
     args = p.parse_args()
 
     from humenv import make_humenv
-    from metamotivo.fb_cpr.huggingface import FBcprModel
 
-    from model.obs_scale import build_obs_multiplier
     from crossenbodiment.align_cost import AlignCostConfig, compute_batch_cost   # out of model/simple (refactor step 4)
+    from crossenbodiment.obs import ExactObs, MultiplierObs, single_z_obs      # the simulation layer (refactor step 5)
+    from crossenbodiment.policy import MotivoPolicy
+    from crossenbodiment.rollout import BatchRollout
+    from crossenbodiment.sim import HumenvSim
     from model import losses
 
     task, stem = args.clip.split("/")
@@ -398,37 +384,26 @@ def main():
                                   if args.init == "reference" else
                                   " (humenv standing reset)"))
 
-    model = FBcprModel.from_pretrained(args.metamotivo).to(args.device)
-    model.eval()
-    kw, wrappers = None, None
-    if args.obs_scale == "exact":
-        from model.exact_obs import ExactObs, ExactObsWrapper
-        kw = {}
-        if args.body != "child":
-            # every body's retarget copies the joints and scales root x, y by its own s (constant to 1e-16),
-            # so read s off this clip against the adult's; the child keeps ExactObs's measured default
-            a = np.load(data_root / "origin_motion" / task / f"{stem}.npz")["qpos"][:, :2]
-            n = min(len(a), len(ref)); m = np.abs(a[:n]) > 1e-3
-            kw["scale"] = float(np.median(ref[:n, :2][m] / a[:n][m]))
-            print(f"exact obs: root scale {kw['scale']:.6f} (from the reference vs the adult motion)")
-        # each env worker computes its own slot's obs right after its physics step (was ~46% of a step when
-        # the main process did all slots in turn)
-        wrappers = [functools.partial(ExactObsWrapper, child_xml=str(xml),
-                                      adult_xml=str(REPO_ROOT / args.obs_scale_ref), **kw)]
-    if args.floor_friction is not None:       # a slippery / sticky floor in every worker (model/friction.py)
-        from model.friction import FloorFrictionWrapper
-        wrappers = [functools.partial(FloorFrictionWrapper, mu=args.floor_friction)] + (wrappers or [])
+    policy = MotivoPolicy.load(args.metamotivo, args.device)          # FBcprModel.from_pretrained(...).to(device); .eval()
+    model = policy.model
+    # --obs-scale: exact = the adult-equivalent observation; every body's retarget copies the joints and scales root x, y
+    # by its own s (constant to 1e-16), so a body other than the child reads s off this clip against the adult's
+    # (bodies.clip_ratio); the child keeps ExactObs's measured default. auto / <r> / none: raw obs x the multiplier / raw.
+    mapper = single_z_obs(args.obs_scale, args.body, xml, ref_path, data_root / "origin_motion" / task / f"{stem}.npz",
+                          REPO_ROOT / args.obs_scale_ref, parts=cfg.obs_scale_parts)
+    if isinstance(mapper, ExactObs) and "scale" in mapper.kw:
+        print(f"exact obs: root scale {mapper.kw['scale']:.6f} (from the reference vs the adult motion)")
+    # ExactObs: each env worker computes its own slot's obs right after its physics step (was ~46% of a step when
+    # the main process did all slots in turn); --floor-friction: a slippery / sticky floor in every worker (model/friction.py)
+    if args.floor_friction is not None:
         print(f"floor friction {args.floor_friction} (the floor wins every contact)")
-    env, _ = make_humenv(num_envs=n_envs, vectorization_mode="async", task=None, max_episode_steps=max(args.steps, 300),
-                        xml=str(xml), state_init="Default", wrappers=wrappers)
+    sim = HumenvSim.make(xml, n_envs, wrappers=mapper.wrappers(), floor_friction=args.floor_friction,
+                         max_episode_steps=max(args.steps, 300))
     fk = mujoco.MjModel.from_xml_path(str(xml))
-    exact = None
-    if kw is not None:
-        exact, obs_mul = ExactObs(xml, REPO_ROOT / args.obs_scale_ref, **kw), None
-    else:
-        obs_mul = build_obs_multiplier(xml, REPO_ROOT / args.obs_scale_ref,
-                                       mode=args.obs_scale, parts=cfg.obs_scale_parts,
-                                       verbose=False)
+    exact = mapper.build() if isinstance(mapper, ExactObs) else None
+    obs_mul = mapper.mul if isinstance(mapper, MultiplierObs) else None
+    batch = BatchRollout(policy, sim, mapper, n_envs, args.steps, nv=fk.nv,
+                         record=("qpos", "obs", "act") + (("qvel",) if args.eval_save_qvel else ()))
 
     init_qpos = ((np.load(args.init_ref)["qpos"][0] if args.init_ref else ref[0])
                  if args.init == "reference" else None)
@@ -508,13 +483,11 @@ def main():
         """zs: (n, 256) -> (cost, L_align, L_phys, bfm, qpos). One batched rollout.
         cost is the objective; L_align / L_phys are always the joint-space
         terms, so a bfm run's summary stays comparable with the others."""
-        zt = torch.as_tensor(zs, dtype=torch.float32, device=args.device)
-        acts, vels = [], ([] if args.eval_save_qvel else None)
-        q, o = rollout(model, env, zt, args.steps, args.device, obs_mul, init_qpos=init_qpos, nv=fk.nv,
-                       return_obs=True, exact=exact, act_out=acts, exact_in_env=exact is not None, init_qvel=init_qvel, qvel_out=vels)
-        extra["act"] = np.stack(acts, axis=1)
-        if vels is not None:
-            extra["qvel"] = np.stack(vels, axis=1)
+        rr = batch.run(zs, init_qpos=init_qpos, init_qvel=init_qvel)     # zs float64 -> float32 on the device
+        q, o = rr.qpos, rr.obs.astype(np.float32)
+        extra["act"] = rr.act
+        if args.eval_save_qvel:
+            extra["qvel"] = rr.qvel
         if Bg is not None or phc is not None:
             # bfm / phc only log L_align / L_phys / tracking_mse: logged() computes them for the slots kept
             cost = align = phys = extra["mse"] = np.full(len(zs), np.nan)
@@ -569,7 +542,7 @@ def main():
         return float(a1[0]), float(p1[0]), float(tmse(q[i]))
 
     # --- where we start, and the floor we are aiming at ----------------------
-    c0, a0, p0, f0, q0 = score(np.repeat(z0[None], n_envs, axis=0))
+    c0, a0, p0, f0, q0 = score(batch.copies(z0, n_envs))
     la, lp, lm = logged(0, q0, a0, p0)
     base = dict(cost=float(c0[0]), align=la, phys=lp, bfm=float(f0[0]),
                 head=float(extra["head"][0]), pos=float(extra["pos"][0]), mse=lm, **dext(0, False))
@@ -593,7 +566,7 @@ def main():
         rows, qs, acts, vels = [], [], [], []
         for i in range(0, len(Z), n_envs):
             chunk = Z[i:i + n_envs]
-            pad = np.concatenate([chunk, np.repeat(z0[None], n_envs - len(chunk), axis=0)])
+            pad = batch.padded(chunk, z0, n_envs)          # padded to 2 * pairs slots with z0
             c, _, _, f, qq = score(pad)
             qs.append(np.asarray(qq)[:len(chunk)]); acts.append(extra["act"][:len(chunk)])
             if args.eval_save_qvel:
@@ -620,7 +593,7 @@ def main():
     z_start = z0.copy()
     if args.z_start:
         z_start = project_z(np.load(args.z_start).reshape(-1).astype(np.float64))
-        cs, ca, cp, cf, cq = score(np.repeat(z_start[None], n_envs, axis=0))
+        cs, ca, cp, cf, cq = score(batch.copies(z_start, n_envs))
         la, lp, lm = logged(0, cq, ca, cp)
         start_best = dict(cost=float(cs[0]), align=la, phys=lp, bfm=float(cf[0]),
                           head=float(extra["head"][0]), pos=float(extra["pos"][0]), mse=lm, **dext(0),
@@ -732,7 +705,7 @@ def main():
         # The iterate itself, not just its samples -- one extra rollout, and it
         # is the only way to see whether the mean is tracking the population.
         if args.eval_every and (gen % args.eval_every == 0 or gen == n_gens - 1):
-            mc, ma, mp, mf, mq = score(np.repeat(z[None], n_envs, axis=0))
+            mc, ma, mp, mf, mq = score(batch.copies(z, n_envs))
             row["mean_z_cost"] = float(mc[0])
             if mc[0] < best["cost"]:
                 la, lp, lm = logged(0, mq, ma, mp)
@@ -751,7 +724,7 @@ def main():
         trace_mean.append(z.copy())
         trace_best.append(best["z"].copy())
 
-    env.close()
+    sim.close()
     if Bg is not None:
         env1.close()
 

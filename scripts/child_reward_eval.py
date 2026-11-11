@@ -33,6 +33,10 @@ REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
 from model.exact_obs import ExactObs, ExactObsWrapper, ADULT_XML       # noqa: E402
 from crossenbodiment.survey import CLIPS, run_of   # noqa: E402  survey_body_videos' (refactor step 4)
+from crossenbodiment.obs import ExactObs as ExactObsMapper, RawObs   # noqa: E402  the simulation layer (refactor step 5)
+from crossenbodiment.policy import MotivoPolicy                      # noqa: E402
+from crossenbodiment.rollout import BatchRollout                     # noqa: E402
+from crossenbodiment.sim import HumenvSim                            # noqa: E402
 
 OUT = REPO / "outputs/reward/child"
 CHILD_XML = REPO / "assets/robots_torque/child/robot_torque_full.xml"
@@ -50,27 +54,17 @@ def reward_of(task):
     raise SystemExit(f"no humenv reward for {task}")
 
 
-@torch.no_grad()
 def rollout(model, env, zs, init, steps, nv, exact=None, qvel0=None):
     """single_z_search.rollout (deterministic actor mean, start at rest from init), also returning qvel and actions.
-    qvel0: start with this velocity instead of at rest."""
+    qvel0: start with this velocity instead of at rest. exact: the main-process ExactObs of an env whose workers compute it
+    (ExactObsWrapper); the start observation is then exact(init, v0), and get_obs is fetched only without it. Since OOP
+    refactor step 5 through crossenbodiment.rollout.BatchRollout (device "cuda", as before)."""
     v0 = np.zeros(nv) if qvel0 is None else np.asarray(qvel0, dtype=np.float64)
-    env.reset()
-    env.call("set_physics", qpos=init, qvel=v0)
-    if exact is not None:
-        obs = np.repeat(exact(init, v0)[None], len(zs), 0)
-    else:
-        obs = np.stack([o["proprio"] for o in env.call("get_obs")])
-    zt = torch.as_tensor(np.asarray(zs), dtype=torch.float32, device="cuda")
-    Q, V, A = [], [], []
-    for _ in range(steps):
-        mu = model._actor(model._normalize(torch.as_tensor(obs, dtype=torch.float32, device="cuda")), zt,
-                          model.cfg.actor_std).mean
-        a = mu.cpu().numpy()
-        o, _, _, _, info = env.step(a)
-        Q.append(info["qpos"].copy()); V.append(info["qvel"].copy()); A.append(a)
-        obs = info["exact_proprio"].copy() if exact is not None else o["proprio"]
-    return np.stack(Q, 1), np.stack(V, 1), np.stack(A, 1)
+    mapper = ExactObsMapper.wrap(exact) if exact is not None else RawObs()
+    batch = BatchRollout(MotivoPolicy(model, "cuda"), HumenvSim(env), mapper, len(zs), steps, fetch_start_obs=exact is None,
+                         record=("qpos", "qvel", "act"))
+    ro = batch.run(np.asarray(zs), init_qpos=init, init_qvel=v0)
+    return ro.qpos, ro.qvel, ro.act
 
 
 def main():
