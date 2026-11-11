@@ -107,7 +107,7 @@ import torch
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
-# (lambda_align, lambda_phys) per objective -- fed straight into ESConfig so the
+# (lambda_align, lambda_phys) per objective -- fed straight into AlignCostConfig so the
 # cost compute_batch_cost returns IS the objective, with no second definition of
 # it living in this file.
 OBJECTIVES = {
@@ -347,8 +347,7 @@ def main():
     from metamotivo.fb_cpr.huggingface import FBcprModel
 
     from model.obs_scale import build_obs_multiplier
-    from model.simple.config import ESConfig
-    from model.simple.train import compute_batch_cost
+    from crossenbodiment.align_cost import AlignCostConfig, compute_batch_cost   # out of model/simple (refactor step 4)
     from model import losses
 
     task, stem = args.clip.split("/")
@@ -372,7 +371,7 @@ def main():
     goal = ref[args.frame_offset:]                 # goal[t]: what the state after step t is scored against
     lam_a, lam_p = OBJECTIVES[args.objective]
 
-    cfg = ESConfig(device=args.device)
+    cfg = AlignCostConfig()
     cfg.lambda_align, cfg.lambda_phys = lam_a, lam_p
     cfg.phys_weights = args.phys_weights
     cfg.phys_fall_ref = not args.no_fall_ref

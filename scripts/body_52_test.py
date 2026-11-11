@@ -33,7 +33,8 @@ import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
 from crossenbodiment.metrics import MetricSuite, metric_body, world_positions   # noqa: E402
-OUT = REPO / "outputs/body_52"; CLIPS = tuple((REPO / "outputs/child_52/clips.txt").read_text().split())
+from crossenbodiment.paths import CHILD_52_TASK, read_clips   # noqa: E402  configs/clips/child_52_task.txt = outputs/child_52/clips.txt (refactor step 4)
+OUT = REPO / "outputs/body_52"; CLIPS = tuple(read_clips(CHILD_52_TASK))
 SEEDS = (0,); G = (4, 8, 16, 32, 64, 128); GENS = G[-1]; EVALS = 16 * GENS; KEYS = ("fall_s", "success", "mpjpe", "mmpjpe", "mpjae", "drift")
 BODIES = dict(payload=dict(label="adult_heavyRWristHand_x80", xml="assets/robots/adult_heavyRWristHand_x80/robot.xml", ref="data/origin_motion/{c}.npz",
                            kpkd="heavy_arm_kp1_kd1"),

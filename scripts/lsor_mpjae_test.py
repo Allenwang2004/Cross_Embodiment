@@ -92,7 +92,8 @@ def main():
     for a, b in (("lsor", "w0.01"), ("w0.01", "w0.02"), ("w0.02", "w0.05"), ("w0.05", "w0.1"), ("w0.1", "w0.2"), ("w0.2", "w0.3"), ("w0.3", "w0.5"), ("w0.5", "lsor_ours"), ("lsor_ours", "w2"), ("lsor", "head"), ("lsor", "pos")):
         x, y = motion(a, "mpjae"), motion(b, "mpjae"); tests[f"{a} -> {b}"] = dict(higher=int((y > x).sum()), of=len(x), diff=float((y - x).mean()))
     print("MPJAE, per motion (mean of seeds):", json.dumps(tests))
-    all52 = [l.strip() for l in open(REPO / "outputs/child_52/clips.txt")]
+    from crossenbodiment.paths import CHILD_52_TASK, read_clips   # configs/clips/child_52_task.txt = outputs/child_52/clips.txt (refactor step 4)
+    all52 = read_clips(CHILD_52_TASK)
     with Pool(24) as p:
         dv = p.map(drift_vs_mpjae, all52)
     dd = np.array([x["lsor"][0] - x["lsor_ours"][0] for x in dv]); da = np.array([x["lsor_ours"][1] - x["lsor"][1] for x in dv]); rho = spearmanr(dd, da)

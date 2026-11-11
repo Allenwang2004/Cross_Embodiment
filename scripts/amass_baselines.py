@@ -25,9 +25,9 @@ import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
 from crossenbodiment.bodies import BODIES
-from crossenbodiment.paths import CHILD_XML_REL
+from crossenbodiment.paths import AMASS_LOCOMOTION_5S, CHILD_XML_REL, read_clips
 from crossenbodiment.metrics import MetricSuite, metric_body, world_positions
-OUT = REPO / "outputs/amass_baselines"; CLIPS = [l.strip() for l in open(OUT / "clips.txt")]
+OUT = REPO / "outputs/amass_baselines"; CLIPS = read_clips(AMASS_LOCOMOTION_5S)   # = outputs/amass_baselines/clips.txt (refactor step 4)
 BODY = dict(child=dict(ref="amass_data/amass_retargeting_motion/ACCAD/{c}.npz", iters=64, G=(4, 8, 16, 32, 64), xml=CHILD_XML_REL),
             tall=dict(label="len1.4_wid0.8", ref="data/len1.4_wid0.8/amass_retargeting_motion/ACCAD/{c}.npz", iters=64, G=(4, 8, 16, 32, 64),
                       xml="assets/robots_torque/len1.4_wid0.8/robot_torque_full.xml"))

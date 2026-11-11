@@ -24,7 +24,7 @@ from scipy.spatial.transform import Rotation
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
 from model.robot_map import RobotMap, SMPL_XML, SMPL_SIDES, _quat, _rotvec   # noqa: E402
-from survey_body_videos import CLIPS                                          # noqa: E402
+from crossenbodiment.survey import CLIPS   # noqa: E402  survey_body_videos' (refactor step 4)
 
 OUT = REPO / "outputs/map_error"
 ROBOTS = [("g1", "G1", "#2a78d6"), ("h1", "H1", "#eb6834"), ("apollo", "Apollo", "#1baf7a")]   # dataviz categorical 1-3

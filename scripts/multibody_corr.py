@@ -30,28 +30,10 @@ import numpy as np
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 from crossenbodiment.geometry import sphere16   # noqa: E402  16 z / |z| (refactor step 3)
-OUT = REPO / "outputs/multibody_corr"
-LOG = REPO / "outputs/train_logs/multibody_corr"
-ADULT = "m2c_t000"
-GRID = [["gl0500a0550", "ax0m_t1000", "gl0500a1400"],
-        ["gl0750a0550", "ax0m_t500", "gl0750a1400"],
-        ["ax1m_t1000", ADULT, "ax1p_t1000"],
-        ["gl1250a0550", "ax0p_t500", "gl1250a1400"],
-        ["gl1500a0550", "ax0p_t1000", "gl1500a1400"]]
-AXIS = ["ax2m_t1000", "ax3m_t1000", "ax4m_t1000", "ax5m_t1000", "ax6m_t1000", "ax7m_t1000"]
-NAMED = ["child", "teen", "petite", "tall_slim", "long_limbed", "short_limbed", "athletic", "elderly",
-         "pear_shaped", "giant", "short_stocky"]
-GROUPS = {**{b: "grid" for row in GRID for b in row}, **{b: "axis" for b in AXIS}, **{b: "named" for b in NAMED}}
-BODIES = list(GROUPS)
-BETA_KEYS = ["leg_scale", "arm_scale", "torso_scale", "head_scale", "leg_girth", "arm_girth", "torso_girth", "head_girth"]
-SEEDS = [0, 1]
-GENS, PAIRS = 64, 8
-N_RANDOM = 16
-
-
-def beta(body):
-    p = json.load(open(REPO / f"assets/robots/{body}/parameter.json"))
-    return [float(p[k]) for k in BETA_KEYS]
+# the experiment's layout (bodies, seeds, budgets, analysis-E arms, folders) and its path helpers live in
+# crossenbodiment/multibody_study.py since refactor step 4 (unchanged); imported back
+from crossenbodiment.multibody_study import (ADULT, AXIS, BETA_KEYS, BODIES, E_ARMS, E_K, E_TEST, GENS, GRID, GROUPS,  # noqa: E402,F401
+                                             LOG, N_RANDOM, NAMED, OUT, PAIRS, SEEDS, beta, cell_dir, clips, ref_path)
 
 
 def choose_clips():
@@ -63,18 +45,6 @@ def choose_clips():
         k1 = rng.choice([k for k in range(10) if k != k0])
         clips += [c, f"{kind}/{kind}_{k1}"]
     return clips
-
-
-def clips():
-    return [l.strip() for l in open(OUT / "clips.txt") if l.strip()]
-
-
-def ref_path(body, clip):
-    return REPO / f"data/{body}/retargeting_motion/{clip}.npz"
-
-
-def cell_dir(body, clip, seed):
-    return OUT / "search" / body / f"{clip.split('/')[1]}_s{seed}"
 
 
 def plan(args):
@@ -189,11 +159,6 @@ def transfer(args):
     jobs.sort(key=lambda j: -j[0])
     print(f"transfer: {len(jobs)} (target, clip) jobs x {len(Zs)} latents")
     run_jobs([(o, c) for _, o, c in jobs], args, "eval.csv")
-
-
-E_TEST = ["child", "giant", "short_stocky", "gl0500a0550", "gl1500a1400", "gl0500a1400", "ax2m_t1000", "ax4m_t1000"]
-E_ARMS = ["multi_same", "multi_loco", "child524", "rand8"]
-E_K = 8
 
 
 def _corr(b, c, s):

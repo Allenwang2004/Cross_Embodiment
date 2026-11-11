@@ -32,7 +32,7 @@ import torch
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
 from model.exact_obs import ExactObs, ExactObsWrapper, ADULT_XML       # noqa: E402
-from survey_body_videos import CLIPS, run_of                            # noqa: E402
+from crossenbodiment.survey import CLIPS, run_of   # noqa: E402  survey_body_videos' (refactor step 4)
 
 OUT = REPO / "outputs/reward/child"
 CHILD_XML = REPO / "assets/robots_torque/child/robot_torque_full.xml"
@@ -208,7 +208,7 @@ def explore(threshold=50.0):
     candidates (to ~1e-5: z_trace is float32). Each step's 16 are rolled out as one batch, as in the search. Writes outputs/reward/child/return_explore.json."""
     from humenv import make_humenv
     from metamotivo.fb_cpr.huggingface import FBcprModel
-    from single_z_search import project_z
+    from crossenbodiment.geometry import project_z   # single_z_search re-exported it (refactor step 4)
     curve_res = json.loads((OUT / "return_curve.json").read_text())
     keep = [s for s in CLIPS if curve_res[s]["adult_z0"] > threshold]
     model = FBcprModel.from_pretrained("facebook/metamotivo-M-1").to("cuda")

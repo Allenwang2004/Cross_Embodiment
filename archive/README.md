@@ -22,6 +22,7 @@ history of a removed route). Two files archived together import each other only 
 | scripts/child_52_mean_z.py | rollouts of every run's mean z after 4..64 generations | done: outputs stay in outputs/child_52_mean_z (read by child_52_means.py); no references |
 | scripts/child_52_sd.py | mean +- sd figure from outputs/child_52_curves/per_run.npz | one-off figure; no references |
 | scripts/child_52_aligned.py | Comparison A re-scored with q[t] against ref[t + 1] | superseded: that alignment is built into the Task-page metrics (eval_metrics.py, tests/golden); no references |
+| scripts/child_52_means.py | Comparison A by means: per_run.npz / means.json / convergence_metrics_mean.png in outputs/child_52_curves (archived in step 4) | done: its outputs stay in outputs/child_52_curves (per_run.npz read by child_52_cmaes.py); its inputs' makers (child_52_curves.py, child_52_mean_z.py) are archived; its `full` / `KEYS` / `hand_fall` moved to crossenbodiment/metrics.py (legacy_metrics / LEGACY_KEYS / body_hand_fall), which the 5 drivers and tests/golden/metrics_golden.py import now; no other references |
 
 ## Abandoned adapter-training line
 
@@ -112,8 +113,17 @@ history of a removed route). Two files archived together import each other only 
 
 model/bodies.py (imported by strength_rollout.py and write_body_splits.py), write_body_splits.py (docs/new_body.md Step 1 tells
 the reader to run it), build_dataset.py (writes the manifest model/dataset.py and model/simple read; new_body.md describes it;
-retire with model/simple after step 4), rollout_z_on_body.py (single_z_search.py's docstring renders results with it),
+kept with model/simple, see below), rollout_z_on_body.py (single_z_search.py's docstring renders results with it),
 select_clips.py (writes top_clips.json, read by package_survey_picks.py), strobe_figures/replay.py (part of the self-contained
 strobe_figures bundle, listed in its README), scripts/survey_replay.py (package_survey.py copies it into the survey),
 model/networks.py (removing its unused heads is a code edit, not a move); g1_overlay.py, g1_amass_video.py and the rest of the
-G1 line (step 7), model/simple and child_52_means.py (step 4), export_strobe_blender.py (step 10).
+G1 line (step 7), export_strobe_blender.py (step 10).
+
+Step 4 (2026-11-11) moved `compute_batch_cost` and the settings single_z_search.py read from model/simple into
+crossenbodiment/align_cost.py (model/simple/train.py re-exports it; rollout_z_trace.py, rank_initial_cost.py and score_z_matrix.py
+use the package too), but model/simple, model/dataset.py, model/networks.py and scripts/build_dataset.py stay: still live are
+scripts/dump_heldout_clips.py (KEEP list: model.dataset and model.simple.train_es.clip_index), scripts/test_exact_obs.py
+(model.dataset, model.simple.train make_body_ctx, train_es.set_init_qpos, and unpickling checkpoints' TrainConfig / ESConfig),
+scripts/batch_z_search.py (model.dataset, ESConfig; retired in step 6) and the launchers scripts/run_b500_subspace.sh,
+run_balanced500_global_anchor.sh, run_headstand_global_anchor.sh (`python -m model.simple.train_es`); model/simple/train.py
+imports model/networks.py; build_dataset.py writes the manifest model/dataset.py reads.

@@ -13,7 +13,8 @@ Inputs (tests/golden/inputs/, frozen by `make-inputs`; see tests/golden/README.m
   metrics_tall_summaries.json   those two runs' summary.json (scripts/tall_body_52.py one() reads them)
 What is computed, per rollout (functions called as they are, module globals set where they read them):
   eval_metrics.metrics, eval_metrics.tracking_metrics                    every body (child, payload, tall: SMPL heading; g1: yaw)
-  child_52_means.full (ratio 1), child_52_means.hand_fall                child
+  child_52_means.full (ratio 1), child_52_means.hand_fall                child (output keys kept; since step 4 computed by
+                                                                         crossenbodiment.metrics legacy_metrics / body_hand_fall)
   success_definitions.tests, fall_definitions.falls                      child (their globals body, S set as their clip() does)
   loes_noanchor.stats                                                    child (s 0.611036), payload (1), g1 (its CONF s)
   body_52_test.stats                                                     payload (global body = the payload body)
@@ -88,7 +89,7 @@ def main(label):
     sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
     import mujoco
     import eval_metrics as E
-    import child_52_means as CM
+    from crossenbodiment import metrics as CM   # child_52_means.full / hand_fall (archived in step 4) live here
     import success_definitions as SD
     import fall_definitions as FD
     import loes_noanchor as LN
@@ -135,8 +136,8 @@ def main(label):
                 if name in s_of:
                     m["loes_noanchor.stats"] = LN.stats(body, q, r1, Pw, Dr, s_of[name])
                 if name == "child":
-                    m["child_52_means.full"] = CM.full(body, q, r1, 1.0)
-                    m["child_52_means.hand_fall"] = CM.hand_fall(body, q, r1)
+                    m["child_52_means.full"] = CM.legacy_metrics(body, q, r1, 1.0)
+                    m["child_52_means.hand_fall"] = CM.body_hand_fall(body, q, r1)
                     m["success_definitions.tests"] = SD.tests(q, r1, Rsd)
                     m["fall_definitions.falls"] = FD.falls(q, r1, Rfd)
                 if name == "payload":

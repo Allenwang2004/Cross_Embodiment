@@ -36,12 +36,13 @@ import mujoco
 import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
+from crossenbodiment.paths import CHILD_52_TASK, read_clips   # noqa: E402  configs/clips/child_52_task.txt = outputs/child_52/clips.txt (refactor step 4)
 from crossenbodiment.bodies import BODIES
 from crossenbodiment.metrics import MetricSuite, metric_body, world_positions
 SET = sys.argv[sys.argv.index("--set") + 1] if "--set" in sys.argv else "small"
 CONF = {"small": dict(out="outputs/g1_small", clips=("headstand/headstand_4", "rotate-x--5-0.8/rotate-x--5-0.8_4", "move-ego-0-2/move-ego-0-2_1"),
                       seeds=(0, 1, 2), G=(4, 8, 16, 32, 64)),
-        "52": dict(out="outputs/g1_52", clips=tuple((REPO / "outputs/child_52/clips.txt").read_text().split()), seeds=(0,), G=(4, 8, 16, 32, 64, 128))}[SET]
+        "52": dict(out="outputs/g1_52", clips=tuple(read_clips(CHILD_52_TASK)), seeds=(0,), G=(4, 8, 16, 32, 64, 128))}[SET]
 OUT_REL = CONF["out"]; OUT = REPO / OUT_REL; ROLL = OUT / "rollouts"; S = BODIES.scale("g1")              # RobotMap("g1").s
 CLIPS = CONF["clips"]
 SEEDS = CONF["seeds"]; G = CONF["G"]; KEYS = ("fall_s", "success", "mpjpe", "mmpjpe", "mpjae", "drift")

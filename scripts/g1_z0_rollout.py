@@ -24,31 +24,12 @@ sys.path.insert(0, str(REPO))
 from model.g1_env import G1Env, G1_SCENE   # noqa: E402
 from model import bfm_align             # noqa: E402
 sys.path.insert(0, str(REPO / "scripts"))
-from single_z_search import project_z   # noqa: E402
+from crossenbodiment.geometry import project_z   # noqa: E402  single_z_search re-exported it (refactor step 4)
 
 
-def act(model, obs, z, device, batch=16):
-    """the actor's mean action, computed in a batch of `batch` identical rows as g1_z_search does: the GPU's result
-    depends on the batch size in the last bits, and the G1 rollout is chaotic enough for that to show"""
-    o = torch.as_tensor(np.repeat(obs[None], batch, 0), dtype=torch.float32, device=device)
-    with torch.no_grad():
-        return model._actor(model._normalize(o), z.expand(batch, -1), model.cfg.actor_std).mean[0].cpu().numpy()
-
-
-def g1_up_z(quat_wxyz):
-    """World-z component of the G1 pelvis's up axis, its local +Z (model.bodies.up_z is the SMPL asset's, local +Y)."""
-    w, x, y, z = np.asarray(quat_wxyz, dtype=float)
-    return float(1.0 - 2.0 * (x * x + y * y))
-
-
-def motion(q, ref):
-    T = min(len(q), len(ref)); q, ref = q[:T], ref[:T]
-    u = np.array([g1_up_z(x) for x in q[:, 3:7]]); ur = np.array([g1_up_z(x) for x in ref[:, 3:7]])
-    down = (u < ur - 0.8) | (q[:, 2] < 0.5 * ref[:, 2])
-    return dict(fallen=int(down.sum()), first_fall=int(np.argmax(down)) if down.any() else None,
-                travel=float(np.linalg.norm(q[-1, :2] - q[0, :2])), ref_travel=float(np.linalg.norm(ref[-1, :2] - ref[0, :2])),
-                end_xy=float(np.linalg.norm(q[-1, :2] - ref[-1, :2])),
-                pelvis=float(q[:, 2].mean()), ref_pelvis=float(ref[:, 2].mean()))
+# act, g1_up_z and motion live in crossenbodiment/robot_rollout.py (refactor step 4, unchanged); imported here so this
+# script and `from g1_z0_rollout import act, motion` keep working
+from crossenbodiment.robot_rollout import act, g1_up_z, motion   # noqa: E402,F401
 
 
 def main():

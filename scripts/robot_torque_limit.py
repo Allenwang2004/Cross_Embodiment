@@ -22,7 +22,7 @@ REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
 from model.robot_env import N_SUB, RobotEnv          # noqa: E402
 from model.robots import ROBOTS                      # noqa: E402
-from single_z_search import project_z                # noqa: E402
+from crossenbodiment.geometry import project_z   # noqa: E402  single_z_search re-exported it (refactor step 4)
 
 OUT = REPO / "outputs/torque_limit"
 

@@ -27,7 +27,8 @@ REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sy
 from crossenbodiment.bodies import BODIES
 from crossenbodiment.paths import CHILD_XML_REL
 from crossenbodiment.metrics import MetricSuite, metric_body, world_positions
-CLIPS = [l.strip() for l in open(REPO / "outputs/child_52/clips.txt")]
+from crossenbodiment.paths import CHILD_52_TASK, read_clips   # noqa: E402  configs/clips/child_52_task.txt = outputs/child_52/clips.txt (refactor step 4)
+CLIPS = read_clips(CHILD_52_TASK)
 ORDER = sorted(CLIPS, key=lambda c: -len(np.load(REPO / f"data/origin_motion/{c}.npz")["qpos"]))
 
 

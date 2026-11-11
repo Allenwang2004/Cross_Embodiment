@@ -117,7 +117,8 @@ def plot_grid(D, x, key, ylab):
 
 
 def main():
-    clips = [l.strip() for l in open(REPO / "outputs/child_52/clips.txt")]; OUT.mkdir(exist_ok=True)
+    from crossenbodiment.paths import CHILD_52_TASK, read_clips   # configs/clips/child_52_task.txt = outputs/child_52/clips.txt (refactor step 4)
+    clips = read_clips(CHILD_52_TASK); OUT.mkdir(exist_ok=True)
     with Pool(8) as p:
         res = p.map(one, clips, chunksize=1)
     D = {st: dict(cost=c, reward=r, z0=z) for st, c, r, z, _ in res}; chk = {k: max(x[4].get(k, 0) for x in res) for k in ("loes_reward_vs_best_npz", "cem_reroll_vs_curve", "ourcost_z0")}

@@ -34,7 +34,7 @@ from crossenbodiment.methods import COMMON, METHODS, RUNS  # noqa: E402
 
 WALK = "move-ego-0-2/move-ego-0-2_1"                     # every body has its reference (outputs/walk_bodies)
 AMASS = "Male2Walking__B9_-__Walk_turn_left_90"          # the golden AMASS case's clip
-CLIPS = (REPO / "outputs/child_52/clips.txt").read_text().split()
+CLIPS = paths.read_clips(paths.CHILD_52_TASK)              # = outputs/child_52/clips.txt (tests/test_moves.py)
 
 
 def out(rel):
@@ -230,8 +230,7 @@ def _runs(folder, key, pattern):
     if pattern.startswith("<body>"):                                  # outputs/walk_bodies/<body>_<key>_s0
         names = [f"{b}_{key}_s0" for b in BODIES.names()]
     elif pattern.startswith("<clip>"):                                # outputs/amass_baselines/<body>/<clip>_<key>_s0
-        clips = out("outputs/amass_baselines/clips.txt")
-        names = [f"{c}_{key}_s0" for c in clips.read_text().split()] if clips.exists() else []
+        names = [f"{c}_{key}_s0" for c in paths.read_clips(paths.AMASS_LOCOMOTION_5S)]   # = outputs/amass_baselines/clips.txt
     elif not key:                                                     # outputs/kpkd/<body>_<cond>/<stem>_s<seed>
         names = [f"{stem(c)}_s0" for c in CLIPS]
     else:

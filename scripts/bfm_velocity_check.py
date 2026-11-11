@@ -25,7 +25,6 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib import font_manager
 import numpy as np
-from scipy.spatial.transform import Rotation, Slerp
 from scipy.stats import spearmanr
 
 REPO = Path(__file__).resolve().parent.parent
@@ -45,13 +44,8 @@ def unit(B):
     return B / (np.linalg.norm(B, axis=-1, keepdims=True) + 1e-12)
 
 
-def resample(q, r):
-    """the clip played at r times its speed, 30 Hz: frame i is the original's frame i * r."""
-    f = np.arange(0, len(q) - 1 + 1e-9, r); k = np.minimum(np.floor(f).astype(int), len(q) - 2); w = (f - k)[:, None]
-    out = q[k] * (1 - w) + q[k + 1] * w
-    rot = Rotation.from_quat(q[:, [4, 5, 6, 3]])                        # qpos quaternion is w, x, y, z
-    out[:, 3:7] = Slerp(np.arange(len(q)), rot)(f).as_quat()[:, [3, 0, 1, 2]]
-    return out
+# resample lives in crossenbodiment/retiming.py (refactor step 4, unchanged); imported here for main() and old importers
+from crossenbodiment.retiming import resample                          # noqa: E402,F401
 
 
 def main():

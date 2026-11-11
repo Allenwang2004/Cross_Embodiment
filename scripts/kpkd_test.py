@@ -71,7 +71,7 @@ def ref_of(b, c):
 
 def one(job):
     import eval_metrics as E
-    from child_52_means import full, KEYS
+    from crossenbodiment.metrics import LEGACY_KEYS as KEYS, legacy_metrics as full   # child_52_means' (refactor step 4)
     b, name, c, s = job
     if b not in body:
         body[b] = metric_body(E.XML["g1"] if b == "g1" else BODY[b]["xml"], b != "g1")
@@ -83,7 +83,7 @@ def one(job):
 
 
 def analyse():
-    from child_52_means import KEYS
+    from crossenbodiment.metrics import LEGACY_KEYS as KEYS   # child_52_means.KEYS (refactor step 4)
     done = lambda b: all((OUT / f"{b}_{n}/{c.split('/')[1]}_s{s}/summary.json").exists() for n, _, _ in COND for c in CLIPS for s in SEEDS)
     BODIES = [b for b in BODY if done(b)]; print("bodies finished:", BODIES, flush=True)
     jobs = [(b, n, c, s) for b in BODIES for n, _, _ in COND for c in CLIPS for s in SEEDS]
@@ -146,7 +146,7 @@ def summary():
 
 def hand_one(job):
     import eval_metrics as E
-    from child_52_means import hand_fall
+    from crossenbodiment.metrics import body_hand_fall as hand_fall   # child_52_means.hand_fall (refactor step 4)
     b, name, c, s = job
     if b not in body:
         body[b] = metric_body(E.XML["g1"] if b == "g1" else BODY[b]["xml"], b != "g1")
@@ -155,7 +155,7 @@ def hand_one(job):
 
 
 def handfall():
-    """handfall --drop <stem> ...: Fall Time by hand contact (child_52_means.hand_fall), frozen and LOES, by motion (NaN for motions whose
+    """handfall --drop <stem> ...: Fall Time by hand contact (crossenbodiment.metrics.body_hand_fall), frozen and LOES, by motion (NaN for motions whose
     reference puts the hands on the floor) and by frame -> means_handfall_without_<stems>.json"""
     drop = sys.argv[sys.argv.index("--drop") + 1:] if "--drop" in sys.argv else []
     clips = [c for c in CLIPS if c.split("/")[1] not in drop]

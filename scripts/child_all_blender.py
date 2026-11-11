@@ -58,7 +58,8 @@ def window(d):
 
 
 def export():
-    clips = [l.strip().split("/")[1] for l in open(REPO / "outputs/child_52/clips.txt")]
+    from crossenbodiment.paths import CHILD_52_TASK, read_clips   # configs/clips/child_52_task.txt = outputs/child_52/clips.txt (refactor step 4)
+    clips = [c.split("/")[1] for c in read_clips(CHILD_52_TASK)]
     F.OUT = OUT; F.CEM = {f"child_{c}": f"outputs/child_52_cem_phc/{c}_cem_s0" for c in clips}; plan = {}
     F.EX = []
     for c in clips:                                                       # trajectories first: the window depends on them

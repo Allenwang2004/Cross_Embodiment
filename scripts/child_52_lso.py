@@ -12,7 +12,7 @@ with LOES and the single-latent baselines (outputs/child_52_rerun, outputs/child
 5 seeds, 64 iterations x 16 rollouts (+ one logged rollout of the mean, never the result), the reference velocity at the
 start, the state after step t scored against reference frame t + 1.
   commands  "<out dir> <command>" per search, into outputs/child_52_lso/<stem>_<method>_s<seed>
-  analyse   metrics (scripts/eval_metrics.py via child_52_means.full) of the saved rollouts: the best sequence so far
+  analyse   metrics (scripts/eval_metrics.py via crossenbodiment.metrics.legacy_metrics, child_52_means.full until step 4) of the saved rollouts: the best sequence so far
             (q_best_it<k>) and the mean sequence (q_mean_it<k>) after 4, 8, 16, 32, 64 iterations, and native tracking.
             Writes per_run.npz and means.json (by budget; LOES, frozen z0 and native tracking against each method).
             Checks: settings; 1,024 sample rollouts; the result is never the logged mean; the re-rolled best matches the
@@ -37,7 +37,8 @@ body = None
 
 
 def clips():
-    return [l.strip() for l in open(SRC / "clips.txt")]
+    from crossenbodiment.paths import CHILD_52_TASK, read_clips   # configs/clips/child_52_task.txt = outputs/child_52/clips.txt (refactor step 4)
+    return read_clips(CHILD_52_TASK)
 
 
 def commands():
@@ -52,7 +53,7 @@ def commands():
 def clip(c):
     global body
     import eval_metrics as E
-    from child_52_means import full, KEYS
+    from crossenbodiment.metrics import LEGACY_KEYS as KEYS, legacy_metrics as full   # child_52_means' (refactor step 4)
     body = body or metric_body(E.XML["child"], True); stem = c.split("/")[1]
     ref = np.load(REPO / f"data/child/retargeting_motion/{c}.npz")["qpos"].astype(np.float64)[1:]
     met = lambda q, ratio: [full(body, q.astype(np.float64), ref, ratio)[k] for k in KEYS]
@@ -72,7 +73,7 @@ def clip(c):
 
 
 def analyse():
-    from child_52_means import KEYS
+    from crossenbodiment.metrics import LEGACY_KEYS as KEYS   # child_52_means.KEYS (refactor step 4)
     cl = clips()
     with Pool(24) as p:
         res = p.map(clip, cl)

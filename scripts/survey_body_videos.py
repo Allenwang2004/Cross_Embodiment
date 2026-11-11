@@ -12,31 +12,25 @@ Cameras: the child's (2.8 m / 0.55 m panels, 3.1 m / 0.5 m overlay) scaled by st
 Contact sheets and specs go to outputs/survey_preview/.
 usage: uv run python scripts/survey_body_videos.py <child|fat|tall|heavy_arm|limit_leg> [stem ...] [--only side_by_side|overlay]
 """
-import argparse, json, os, subprocess
+import argparse, json, os, subprocess, sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+# the survey's data (clips, bodies, runs) and colours live in the package since refactor step 4 (crossenbodiment/survey.py,
+# configs/survey.yaml, configs/clips/user_survey.txt, crossenbodiment/palette.py); imported back so this script and
+# `from survey_body_videos import ...` keep working. REPO stays the main tree's absolute path, as before (renders and the
+# run lookup use it); the package is found from this file.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from crossenbodiment import survey as _survey                                                    # noqa: E402
+from crossenbodiment.palette import BLUE, GREY, RED                                              # noqa: E402,F401
+from crossenbodiment.survey import ADULT, ADULT_H, BODY, CLIPS, SUFFIXES                         # noqa: E402,F401
+
 REPO = Path("/home/allen19/crossenbodiment"); PREV = REPO / "outputs/survey_preview"
-CLIPS = ["move-ego-0-2_2", "move-ego-0-4_8", "crawl-0.4-2-d_8", "rotate-x-5-0.8_9", "rotate-x--5-0.8_4", "rotate-y-5-0.8_7",
-         "rotate-z--5-0.8_6", "jump-2_6", "jump-2_7", "headstand_4", "crouch-0_8"]
-ADULT, ADULT_H = "assets/robots/adult/robot.xml", 1.74
-BODY = {"child": dict(xml="assets/robots_torque/child/robot_torque_full.xml", ref="data/child/retargeting_motion", h=1.26),
-        "fat": dict(xml="assets/robots_torque/fat/robot_torque_full.xml", ref="data/fat/retargeting_motion", h=1.74),
-        "tall": dict(xml="assets/robots_torque/tall/robot_torque_full.xml", ref="data/tall/retargeting_motion", h=2.07),
-        "heavy_arm": dict(xml="assets/robots/adult_heavyRWristHand_x80/robot.xml", ref="data/origin_motion", h=1.74,
-                          clips={"move-ego-0-2_2": "move-ego-0-2_4"}),
-        "limit_leg": dict(xml="assets/robots/adult_lockRleg_bent_lim/robot.xml", ref="data/origin_motion", h=1.74)}
-GREY, RED, BLUE = [0.55, 0.57, 0.62, 1.0], [0.85, 0.22, 0.20, 1.0], [0.18, 0.42, 0.85, 1.0]   # robot_overlay.COLORS, grey opaque
-SUFFIXES = ("_s0", "_g512_s0", "_sig015_s0", "_sig015_cont_s1", "_sig015_cont2_s2", "_sig015_s1", "_sig015_s2", "_sig015_s3")
 ENV = {**os.environ, "MUJOCO_GL": "egl", "MUJOCO_EGL_DEVICE_ID": "2", "CUDA_VISIBLE_DEVICES": "2"}
 
 
 def run_of(name, stem):
-    if name == "child":
-        return {"rotate-x--5-0.8_4": "outputs/user_survey_search/rotate-x--5-0.8_4_g256_s0"}.get(stem, f"outputs/c540_bfmglobal_a03/{stem}")
-    runs = [f"outputs/user_survey_search/{name}/{stem}{suf}" for suf in SUFFIXES
-            if (REPO / f"outputs/user_survey_search/{name}/{stem}{suf}/summary.json").exists()]
-    return min(runs, key=lambda d: json.loads((REPO / d / "summary.json").read_text())["best"]["cost"])
+    return _survey.run_of(name, stem, root=REPO)
 
 
 def render(name, stem, only):

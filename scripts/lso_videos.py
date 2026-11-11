@@ -13,8 +13,9 @@ from pathlib import Path
 import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(REPO / "scripts"))
-from survey_body_videos import ADULT, ADULT_H, BLUE, GREY, RED   # noqa: E402
+sys.path.insert(0, str(REPO))
+from crossenbodiment.survey import ADULT, ADULT_H   # noqa: E402  survey_body_videos' (refactor step 4)
+from crossenbodiment.palette import BLUE, GREY, RED   # noqa: E402  survey_body_videos' (refactor step 4)
 
 
 def main():

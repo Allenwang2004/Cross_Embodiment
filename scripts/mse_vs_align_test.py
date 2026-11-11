@@ -75,23 +75,8 @@ def run(args):
           f"{sum(p.returncode != 0 for p in procs)} failed) ===", flush=True)
 
 
-def metrics(fk, q, ref, losses, kin):
-    T = min(len(q), len(ref)); q, ref = q[:T], ref[:T]
-    names = [fk.body(i).name for i in range(1, fk.nbody)]
-    pa, qa = kin.batch_forward_pose(fk, q, names)
-    pb, qb = kin.batch_forward_pose(fk, ref, names)
-    ha, hb = losses.root_heading(qa[kin.ROOT_BODY]), losses.root_heading(qb[kin.ROOT_BODY])
-
-    def local(p, h):
-        c, s = np.cos(h), np.sin(h)
-        return np.stack([c * p[:, 0] + s * p[:, 1], -s * p[:, 0] + c * p[:, 1], p[:, 2]], -1)
-
-    r = kin.ROOT_BODY
-    loc = np.mean([np.linalg.norm(local(pa[n] - pa[r], ha) - local(pb[n] - pb[r], hb), axis=-1).mean() for n in names])
-    glob = np.mean([np.linalg.norm(pa[n] - pb[n], axis=-1).mean() for n in names])
-    dq = (q[:, 7:] - ref[:, 7:] + np.pi) % (2 * np.pi) - np.pi
-    return dict(joint_deg=float(np.degrees(np.abs(dq)).mean()), mpjpe_loc=100 * float(loc), mpjpe_glob=100 * float(glob),
-                head_deg=float(np.degrees(np.abs(np.angle(np.exp(1j * (ha - hb))))).mean()))
+# metrics lives in crossenbodiment/metrics.py as pose_similarity since refactor step 4 (unchanged); imported back for report()
+from crossenbodiment.metrics import pose_similarity as metrics   # noqa: E402,F401
 
 
 def report(args):

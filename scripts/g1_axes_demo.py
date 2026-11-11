@@ -38,15 +38,12 @@ from PIL import Image, ImageDraw, ImageFont
 
 REPO = Path(__file__).resolve().parent.parent
 OUT = REPO / "outputs/g1/explain"
-FONT = str(Path.home() / ".local/share/fonts/NotoSansCJKtc-Regular.otf")
+# px, font, cam, project, label, hcat (and FONT, S, K) live in crossenbodiment/draw.py since refactor step 4 (unchanged): robot_pairs.py
+# uses them too. px reads draw.K, which this script never changes.
+sys.path.insert(0, str(REPO))
+from crossenbodiment.draw import FONT, K, S, cam, font, hcat, label, project, px   # noqa: E402,F401
 COL = {"pitch": (0.85, 0.2, 0.2, 1), "roll": (0.2, 0.65, 0.25, 1), "yaw": (0.2, 0.4, 0.9, 1)}
 XYZ = [(210, 25, 25), (20, 150, 50), (25, 70, 220)]
-S = 720                    # panel size (px); every pixel size below scales with K
-K = S / 420
-
-
-def px(v):
-    return int(round(v * K))
 
 
 def save_mp4(path, frames, fps=30):
@@ -55,16 +52,6 @@ def save_mp4(path, frames, fps=30):
     H, W = H + H % 2, W + W % 2
     frames = [np.pad(f, ((H - f.shape[0], 0), (0, W - f.shape[1]), (0, 0)), constant_values=255) for f in frames]
     imageio.mimsave(path, frames, fps=fps, macro_block_size=1)
-
-
-def cam(az, lookat, dist=2.3, el=-8):
-    c = mujoco.MjvCamera(); c.type = mujoco.mjtCamera.mjCAMERA_FREE
-    c.azimuth, c.elevation, c.distance = az, el, dist; c.lookat[:] = lookat
-    return c
-
-
-def font(size):
-    return ImageFont.truetype(FONT, px(size))
 
 
 def render(m, d, r, c, axes=()):
@@ -76,19 +63,6 @@ def render(m, d, r, c, axes=()):
         mujoco.mjv_initGeom(g, mujoco.mjtGeom.mjGEOM_ARROW, np.zeros(3), np.zeros(3), np.zeros(9), np.array(rgba, np.float32))
         mujoco.mjv_connector(g, mujoco.mjtGeom.mjGEOM_ARROW, 0.018, p - 0.35 * a, p + 0.35 * a)
     return r.render().copy()
-
-
-def project(r, pts, W, H):
-    """world points -> pixel (u, v) through the renderer's current camera (pinhole, symmetric frustum)."""
-    c = r.scene.camera[0]
-    f, up = np.array(c.forward), np.array(c.up); right = np.cross(f, up)
-    k = c.frustum_near / c.frustum_top
-    out = []
-    for p in pts:
-        v = np.asarray(p) - np.array(c.pos)
-        z = v @ f
-        out.append((W / 2 + (v @ right) / z * k * H / 2, H / 2 - (v @ up) / z * k * H / 2))
-    return out
 
 
 def arrow2d(dr, a, b, col, w, text=None, fnt=None):
@@ -126,35 +100,6 @@ def triad(m, d, r, c, body, length, names, W, H):
         arrow2d(dr, t0, q, col, px(5), t, f)
     dr.ellipse([t0[0] - px(5), t0[1] - px(5), t0[0] + px(5), t0[1] + px(5)], fill=(30, 30, 30))
     return np.array(im)
-
-
-def label(img, lines, size=22):
-    """The panel under a white title band (the words never sit on the robot); lines wider than the panel wrap."""
-    W = img.shape[1]; probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
-    rows = []
-    for i, t in enumerate(lines):
-        s = size if i == 0 else size - 6; f = font(s); cur = ""
-        for w in t.split(" "):
-            nxt = (cur + " " + w).strip()
-            if cur and probe.textlength(nxt, font=f) > W - px(20):
-                rows.append((cur, s)); cur = w
-            else:
-                cur = nxt
-        rows.append((cur, s))
-    band = px(10 + sum(s + 6 for _, s in rows))
-    im = Image.new("RGB", (W, img.shape[0] + band), (255, 255, 255))
-    im.paste(Image.fromarray(img), (0, band)); dr = ImageDraw.Draw(im)
-    y = px(6)
-    for t, s in rows:
-        dr.text((px(10), y), t, fill=(20, 20, 20), font=font(s)); y += px(s + 6)
-    dr.line([(W - 1, 0), (W - 1, im.height)], fill=(200, 200, 200), width=max(1, px(1)))
-    return np.array(im)
-
-
-def hcat(panels):
-    """Panels side by side; a shorter title band is padded white on top so the renders line up."""
-    H = max(p.shape[0] for p in panels)
-    return np.concatenate([np.pad(p, ((H - p.shape[0], 0), (0, 0), (0, 0)), constant_values=255) for p in panels], 1)
 
 
 def see_through(m, alpha=0.45):

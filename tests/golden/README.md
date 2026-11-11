@@ -109,6 +109,9 @@ Step 3 (done) kept the calls as they are: the functions called here now delegate
 crossenbodiment/geometry.py (MetricSuite.task_page and the named definitions); tests/test_metrics.py covers the drivers this file
 does not run (loes_weight_test, lsor_mpjae_test, amass_baselines.one, kpkd_test.phc_one / contact_one) against their a997a23 code.
 Not covered: `amass_baselines.one` (its `stats` closure is `tall_body_52.one`'s without the PHC reward).
+Step 4 archived scripts/child_52_means.py: its `full` / `hand_fall` are crossenbodiment.metrics `legacy_metrics` /
+`body_hand_fall` now, which metrics_golden.py calls under the old output keys (`child_52_means.full`, `child_52_means.hand_fall`);
+tests/test_moves.py runs every helper step 4 moved against its 68c95f4 source.
 
 ## Inputs (tests/golden/inputs, 2.9 MB, in git)
 

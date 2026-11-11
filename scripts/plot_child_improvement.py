@@ -66,7 +66,8 @@ def phc_data():
     f = LOES / "phc_reward.json"
     if not f.exists():
         from multiprocessing import Pool
-        clips = [l.strip() for l in open(REPO / "outputs/child_52/clips.txt")]
+        import sys; sys.path.insert(0, str(REPO)); from crossenbodiment.paths import CHILD_52_TASK, read_clips   # configs/clips/child_52_task.txt = outputs/child_52/clips.txt (refactor step 4)
+        clips = read_clips(CHILD_52_TASK)
         with Pool(16) as p:
             f.write_text(json.dumps(dict(p.map(phc_one, clips)), indent=1))
     return json.load(open(f))

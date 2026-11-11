@@ -27,7 +27,8 @@ body = None; S = None
 
 
 def clips():
-    return [l.strip() for l in open(REPO / "outputs/child_52/clips.txt")]
+    from crossenbodiment.paths import CHILD_52_TASK, read_clips   # configs/clips/child_52_task.txt = outputs/child_52/clips.txt (refactor step 4)
+    return read_clips(CHILD_52_TASK)
 
 
 def world(Q):

@@ -26,8 +26,8 @@ sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
 from model.g1_env import G1VecEnv, G1_SCENE   # noqa: E402
 from model.g1_map import G1Map, PAIRS          # noqa: E402
 from model import bfm_align                    # noqa: E402
-from g1_z0_rollout import motion               # noqa: E402
-from single_z_search import project_z           # noqa: E402
+from crossenbodiment.robot_rollout import motion   # noqa: E402  g1_z0_rollout's (refactor step 4)
+from crossenbodiment.geometry import project_z   # noqa: E402  single_z_search re-exported it (refactor step 4)
 
 ARM = [i for i, (b, _) in enumerate(PAIRS[1:]) if b.split("_")[-1] in ("Shoulder", "Elbow", "Hand")]
 

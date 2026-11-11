@@ -55,7 +55,8 @@ def one(c):
 
 
 def main():
-    clips = [l.strip() for l in open(REPO / "outputs/child_52/clips.txt")]
+    from crossenbodiment.paths import CHILD_52_TASK, read_clips   # configs/clips/child_52_task.txt = outputs/child_52/clips.txt (refactor step 4)
+    clips = read_clips(CHILD_52_TASK)
     with Pool(12) as p:
         res = p.map(one, clips, chunksize=1)
     names = dict(z0="Frozen z0", native="Native tracking", lso="LSO (BFMTrack)", lsor_w005="LSOR (ours)", ta="Trajectory Adaptation", es="LOES (ours)")

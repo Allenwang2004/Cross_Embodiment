@@ -27,7 +27,7 @@ import numpy as np
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO))
 from crossenbodiment.geometry import sphere16   # noqa: E402  16 z / |z| (refactor step 3)
 from crossenbodiment.bodies import BODIES
-from crossenbodiment.paths import ADULT_XML_REL, CHILD_XML_REL, MOTIVO_CKPT
+from crossenbodiment.paths import ADULT_XML_REL, CHILD_52_TASK, CHILD_XML_REL, MOTIVO_CKPT, read_clips
 OUT = REPO / "outputs/obs_canon_52"; XML = CHILD_XML_REL; ADULT = ADULT_XML_REL
 S = BODIES.scale("child")
 SETTINGS = dict(raw="none", perbody="auto", uniform=str(S), exact="exact")
@@ -35,7 +35,7 @@ NAMES = dict(raw="raw", perbody="per-body multiplier", uniform="uniform multipli
 
 
 def clips():
-    return [l.strip() for l in open(REPO / "outputs/child_52/clips.txt")]
+    return read_clips(CHILD_52_TASK)   # configs/clips/child_52_task.txt = outputs/child_52/clips.txt (refactor step 4)
 
 
 def family(stem):

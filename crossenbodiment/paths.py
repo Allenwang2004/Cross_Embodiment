@@ -40,6 +40,14 @@ OUTPUTS = REPO / OUTPUTS_REL
 # ---------------------------------------------------------------- the frozen policy
 MOTIVO_CKPT = "facebook/metamotivo-M-1"                                  # FBcprModel.from_pretrained id (HF_HUB_OFFLINE=1)
 
+# ---------------------------------------------------------------- clip lists (configs/clips/<name>.txt, one clip per line)
+# Refactor step 4: the drivers read these instead of the experiment folders' clips.txt; each is a byte-identical copy of the
+# file it replaces (tests/test_moves.py compares them with the main tree's).
+CLIPS_REL = "configs/clips"
+CHILD_52_TASK = "child_52_task"             # the 52 task motions of Comparison A and the Task page (outputs/child_52/clips.txt)
+AMASS_LOCOMOTION_5S = "amass_locomotion_5s"  # the 68 ACCAD clips with >= 5 s of locomotion (outputs/amass_baselines/clips.txt)
+USER_SURVEY = "user_survey"                  # the 11 stems of the user survey's videos (scripts/survey_body_videos.py CLIPS)
+
 
 def origin_motion(clip):
     """the adult's task clip: data/origin_motion/<task>/<stem>.npz"""
@@ -90,6 +98,19 @@ def roundtrip(robot, stem):
     """the task clip mapped onto a robot (scripts/robot_roundtrip.py; the G1's g1_roundtrip.py):
     outputs/<robot>/roundtrip/<stem>/g1.npz for the G1, .../robot.npz otherwise (model/robots.py target_path)"""
     return f"{robot_out(robot)}/roundtrip/{stem}/{'g1.npz' if robot == 'g1' else 'robot.npz'}"
+
+
+def clips_file(name):
+    """configs/clips/<name>.txt (CHILD_52_TASK, AMASS_LOCOMOTION_5S, USER_SURVEY)"""
+    return f"{CLIPS_REL}/{name}.txt"
+
+
+def read_clips(name):
+    """the clips of configs/clips/<name>.txt, in file order: one per line, stripped, blank lines skipped. On these files this is
+    exactly what the drivers' own readers gave (`[l.strip() for l in open(f)]`, `f.read_text().split()`, the same with
+    `if l.strip()`): every line is one clip name without spaces, and the file ends in one newline."""
+    with open(REPO / clips_file(name)) as f:
+        return [l.strip() for l in f if l.strip()]
 
 
 def stem(clip):

@@ -87,17 +87,9 @@ def logspaced(count, n):
     return sorted(out)
 
 
-def label(frame, text, sub=None):
-    """Burn the checkpoint's identity into its own panel -- a grid of otherwise
-    identical humanoids is unreadable without it, and a legend outside the
-    video cannot survive being clipped into a gif or a slide."""
-    im = Image.fromarray(frame)
-    d = ImageDraw.Draw(im)
-    d.rectangle([0, 0, im.width, 26], fill=(252, 252, 251))
-    d.text((6, 6), text, fill=(11, 11, 11))
-    if sub:
-        d.text((6, 30), sub, fill=(82, 81, 78))
-    return np.asarray(im)
+# label (the title band burnt into each panel) lives in crossenbodiment/draw.py as frame_label since refactor step 4 (unchanged);
+# imported back for main() and `from rollout_z_trace import label`
+from crossenbodiment.draw import frame_label as label   # noqa: E402,F401
 
 
 def main():
@@ -140,8 +132,7 @@ def main():
     from metamotivo.fb_cpr.huggingface import FBcprModel
 
     from model.obs_scale import build_obs_multiplier
-    from model.simple.config import ESConfig
-    from model.simple.train import compute_batch_cost
+    from crossenbodiment.align_cost import AlignCostConfig, compute_batch_cost   # out of model/simple (refactor step 4)
     from single_z_search import rollout
 
     trace_path = Path(args.trace)
@@ -192,7 +183,7 @@ def main():
     lam_a, lam_p = summary.get("lambda_align", 1.0), summary.get("lambda_phys", 1.0)
     obj_name = {"align": "L_align", "phys": "L_phys", "bfm": "1-cos(B)", "mse": "MSE"}.get(objective, "sum")
 
-    cfg = ESConfig(device=args.device)
+    cfg = AlignCostConfig()
     cfg.phys_weights = summary["phys_weights"]
     cfg.phys_fall_ref = summary["phys_fall_ref"]
     cfg.lambda_align = cfg.lambda_phys = 1.0
@@ -230,7 +221,7 @@ def main():
 
     # the new cost and the similarity measures neither cost optimises directly (mse_vs_align_test.py)
     from model import losses, kinematics as kin
-    from mse_vs_align_test import metrics as sim_metrics
+    from crossenbodiment.metrics import pose_similarity as sim_metrics   # mse_vs_align_test.metrics (refactor step 4)
     mses = [losses.tracking_mse(fk, qpos[i].astype(np.float64), ref)[0] for i in range(n)]
     sims = [sim_metrics(fk, qpos[i].astype(np.float64), ref.astype(np.float64), losses, kin) for i in range(n)]
     aw = summary.get("anchor_weight") or 0.0

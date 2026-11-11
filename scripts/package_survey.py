@@ -21,7 +21,7 @@ import numpy as np
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
 from model.robots import ROBOTS, target_path                     # noqa: E402
-from survey_body_videos import ADULT, BODY, CLIPS, run_of         # noqa: E402
+from crossenbodiment.survey import ADULT, BODY, CLIPS, run_of   # noqa: E402  survey_body_videos' (refactor step 4)
 
 TOP = REPO / "outputs/user_survey"; PREV = REPO / "outputs/survey_preview"
 GHOST, RED, BLUE = [0.55, 0.57, 0.62, 0.35], [0.85, 0.22, 0.20, 1.0], [0.18, 0.42, 0.85, 1.0]

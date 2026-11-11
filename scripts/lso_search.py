@@ -150,7 +150,7 @@ def main():
         ro0 = np.stack(ro); ro0[:, VEL] = 0
         Bc = bfm_align.embed(model, ro0, a.device)[1:]
     if a.init_pace != 1.0:                       # goal latents of the reference played at init_pace x speed
-        from bfm_velocity_check import resample
+        from crossenbodiment.retiming import resample   # bfm_velocity_check's (refactor step 4)
         rs, vr, ro2 = resample(ref.astype(np.float64), a.init_pace), np.zeros(nv), []
         for t in range(len(rs)):
             if t:

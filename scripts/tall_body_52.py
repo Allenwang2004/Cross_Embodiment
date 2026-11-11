@@ -31,7 +31,8 @@ import numpy as np
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
 from crossenbodiment.metrics import MetricSuite, metric_body, world_positions   # noqa: E402
 B = "len1.4_wid0.8"; XML = f"assets/robots_torque/{B}/robot_torque_full.xml"; OUT = REPO / "outputs/tall_body_52"
-CLIPS = [l.strip() for l in open(REPO / "outputs/child_52/clips.txt")]
+from crossenbodiment.paths import CHILD_52_TASK, read_clips   # noqa: E402  configs/clips/child_52_task.txt = outputs/child_52/clips.txt (refactor step 4)
+CLIPS = read_clips(CHILD_52_TASK)
 KEYS = ("mpjpe", "mmpjpe", "mpjae", "fall_s", "success", "phc", "drift")
 
 

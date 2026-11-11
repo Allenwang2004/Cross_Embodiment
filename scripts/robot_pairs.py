@@ -19,12 +19,12 @@ from PIL import Image, ImageDraw
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
-import g1_axes_demo as gad                              # noqa: E402
+from crossenbodiment import draw as gad                 # noqa: E402  g1_axes_demo's px / font / cam / project / label / hcat (refactor step 4)
 from model.robot_map import RobotMap, CALIB_POSE, SMPL_XML   # noqa: E402
 from model.robots import ROBOTS, out_dir, target_path   # noqa: E402
 
 W = 1080
-gad.K = W / 1.25 / 420                                  # make_pairs' proportions (panel = 1.25 S) at 1080 px
+gad.K = W / 1.25 / 420                                  # make_pairs' proportions (panel = 1.25 S) at 1080 px (crossenbodiment.draw's px scale)
 KINDS = {"Pelvis": ("pelvis", (0.95, 0.55, 0.1)), "Chest": ("chest / torso", (0.95, 0.8, 0.2)),
          "Hip": ("thigh", (0.1, 0.65, 0.65)), "Knee": ("shank", (0.2, 0.7, 0.3)), "Ankle": ("foot", (0.6, 0.8, 0.1)),
          "Shoulder": ("upper arm", (0.45, 0.35, 0.85)), "Elbow": ("forearm", (0.8, 0.3, 0.75)),

@@ -55,7 +55,8 @@ model/            shared code
   networks.py       LatentAdapter (z0 + MLP), SubspaceAdapter (correction in a k-d subspace)
   dataset.py        manifest reader;  bodies.py: the 11-body roster and its split
   simple/train_es.py  ES training of an adapter (the main trainer); config.py; train.py (shared helpers
-                      make_body_ctx / compute_batch_cost; its PPO trainer is legacy)
+                      make_body_ctx / compute_batch_cost; its PPO trainer is legacy). compute_batch_cost itself
+                      lives in crossenbodiment/align_cost.py since the 11/11 refactor (single_z_search.py uses it there)
 scripts/          search, labels, training launchers, evaluation, analyses — indexed in docs/workflow.md
 docs/             workflow.md (this pipeline); new_body.md (adding a body); research_journey.md and
                   morphology_latent_report.md (reports up to 2026-09-30, in Chinese)

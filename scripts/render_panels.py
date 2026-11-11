@@ -47,7 +47,10 @@ import mujoco
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-from rollout_z_trace import label
+REPO_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))   # the repository root, appended as rollout_z_trace did
+if REPO_DIR not in sys.path:
+    sys.path.append(REPO_DIR)
+from crossenbodiment.draw import frame_label as label   # noqa: E402  rollout_z_trace.label (refactor step 4)
 
 REPO = Path(__file__).resolve().parent.parent
 FONT = Path.home() / ".local/share/fonts/NotoSansCJKtc-Regular.otf"

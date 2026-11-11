@@ -37,9 +37,9 @@ import torch
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
-from single_z_search import project_z, rank_normalize, ang_pair   # noqa: E402  (crossenbodiment.geometry's, re-exported there)
+from crossenbodiment.geometry import project_z, rank_normalize, ang_pair   # noqa: E402  single_z_search re-exported it (refactor step 4)
 from crossenbodiment.geometry import robot_yaw, smpl_heading       # noqa: E402
-from g1_z0_rollout import motion                                    # noqa: E402
+from crossenbodiment.robot_rollout import motion   # noqa: E402  g1_z0_rollout's (refactor step 4)
 from model import bfm_align                                         # noqa: E402
 from model.g1_env import G1VecEnv, G1_XML                           # noqa: E402
 from model.g1_map import PAIRS                                      # noqa: E402
