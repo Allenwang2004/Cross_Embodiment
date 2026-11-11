@@ -29,7 +29,8 @@ sys.path.insert(1, str(REPO))
 from crossenbodiment.geometry import root_yaw as yaw                      # noqa: E402  root quaternion yaw (refactor step 3)
 
 OUT = REPO / "outputs/strobe_task52_blender"; S = REPO / "outputs/user_survey"; AZ = 125.0; THREADS = int(os.environ.get("STROBE_THREADS", 32))
-MODEL = dict(payload=S / "models/heavy_arm.xml", limit_leg=S / "models/limit_leg.xml", g1=S / "models/g1/scene.xml", child=S / "models/child.xml")
+MODEL = dict(payload=S / "models/heavy_arm.xml", limit_leg=S / "models/limit_leg.xml", g1=S / "models/g1/scene.xml", child=S / "models/child.xml",
+             tall=REPO / "assets/robots_torque/len1.4_wid0.8/robot_torque_full.xml")      # tall: the tall, thin body of the new teaser (11/12)
 EX = [  # name, body, clip, trajectory source (a survey-format clip folder, or "child_52"), frames (start, end, step), view, extra
     ("payload_move-ego-0-2-raisearms-h-m_1", "payload", "move-ego-0-2-raisearms-h-m_1", "outputs/payload_all52/trajectories", (120, 170, 10), "fixed", {}),   # z0 fully down (pelvis and head below half the reference's) at frames 118-177
     ("payload_rotate-y-5-0.8_7", "payload", "rotate-y-5-0.8_7", "outputs/user_survey/heavy_arm/trajectories", (150, 192, 7), "fixed", dict(align=True)),   # the original strobe folder's window (strobe_figures); z0 falls mid-motion (pelvis below half 185-195), LOES stays up. Not one of the 52 task motions: the older user-survey search
@@ -47,6 +48,27 @@ EX = [  # name, body, clip, trajectory source (a survey-format clip folder, or "
     # user, 11/11: headstand with seed 2 of both ours and BFM-Zero (the one seed where ours is closer on most frames: 77 of 119), frames
     # chosen as above (BFM-Zero 5.5 cm, ours 3.6 cm on them; seed 0, the figure's, has no frames where ours is closer)
     ("child_headstand_4_s2", "child", "headstand_4", "child_52_s2", None, "fixed", dict(frames=[22, 41, 56, 72, 83, 111])),
+    # user, 11/12: the tall, thin body (len1.4_wid0.8, outputs/tall_body_52, seed 0, 1,024 rollouts), the one motion where z0 touches down,
+    # BFM-Zero touches down too and fails PHC's test, and ours passes. Frames (>= 120, >= 14 apart): BFM-Zero's drawn-pose error minus
+    # ours largest (z0 31.4, BFM-Zero 15.7, ours 8.2 cm on them). One world view side-on to the reference's path (heading 46.7 deg).
+    ("tall_move-ego-low-0-2_9", "tall", "move-ego-low-0-2_9", "tall_body_52", None, "fixed",
+     dict(frames=[120, 163, 187, 263, 277, 294], az=136.7, H=3.0, dx=0.8)),
+    # user, 11/12: the tall body's rotate-z-5-0.8_9 (z0 down 2.9 s, BFM-Zero 1.2 s, ours 1.3 s; all three fail PHC's test). Frames as above
+    # (BFM-Zero minus ours largest, >= 14 apart): z0 65.7, BFM-Zero 58.6, ours 46.5 cm. View side-on to the reference's path (-116.2 deg).
+    ("tall_rotate-z-5-0.8_9", "tall", "rotate-z-5-0.8_9", "tall_body_52", None, "fixed",
+     dict(frames=[82, 122, 163, 193, 207, 226], az=-26.2, H=3.0, dx=1.0)),
+    # the same motion at frames where z0 is down (a non-foot body within 1 cm of the floor while the reference's is clear) and both
+    # BFM-Zero and ours are up (user, 11/12: "挑出 z0 跌倒的那幾個 frame"; z0 is down in bursts about every 36 frames, 88 frames in all)
+    ("tall_rotate-z-5-0.8_9_z0down", "tall", "rotate-z-5-0.8_9", "tall_body_52", None, "fixed",
+     dict(frames=[99, 135, 162, 202, 245, 281], az=-26.2, H=3.6, dx=1.2)),
+    # user, 11/12: the best sample of each gain test (seed 0, 1,024 rollouts; the bodies' kp lowered, kd unchanged; drawn with the body's
+    # normal model: gains do not change the kinematics). Child headstand_4 at kp x0.85 (outputs/child_kpkd_headstand): z0 and BFM-Zero
+    # collapse, LOES holds the headstand (drawn-pose error over the clip z0 21.3, BFM-Zero 20.5, LOES 6.6 cm); frames every 15 from 40.
+    ("child_headstand_4_kp0.85", "child", "headstand_4", "kpkd:child_kpkd_headstand/kp0.85_kd1.0", None, "fixed", dict(frames=[40, 55, 70, 85, 100, 115])),
+    # tall body move-ego-180-4_9 at kp x0.6 (outputs/tall_kpkd_180): z0 down 3.5 s, BFM-Zero 7.6 s, LOES 1.9 s; frames where BFM-Zero minus
+    # LOES is largest (>= 14 apart; z0 87.0, BFM-Zero 128.4, LOES 39.9 cm); view side-on to the reference's path (-162.6 deg).
+    ("tall_move-ego-180-4_9_kp0.6", "tall", "move-ego-180-4_9", "kpkd:tall_kpkd_180/kp0.6_kd1.0", None, "fixed",
+     dict(frames=[119, 133, 147, 220, 234, 248], az=-72.6, H=3.0, dx=1.2)),
 ]
 FILES = (("adult", "reference_adult.npz"), ("z0", "z0.npz"), ("cem", "cem.npz"), ("zstar", "best.npz"))
 # CEM (BFM-Zero): BFM-Zero's tracking reward (PHC), seed 0, 2,048 rollouts (the child's: 1,024, as its LOES) (user, 11/10: add CEM to the figures).
@@ -56,7 +78,10 @@ CEM = {"payload_move-ego-0-2-raisearms-h-m_1": "outputs/body_52/payload/move-ego
        "g1_rotate-z--5-0.8_6": "outputs/g1_52/rotate-z--5-0.8_6_cem_s0", "g1_jump-2_3": "outputs/g1_52/jump-2_3_cem_s0",
        "limit_leg_move-ego-low-90-2_9": "outputs/body_52/limit_leg/move-ego-low-90-2_9_cem_s0", "limit_leg_move-ego-0-2_2": "outputs/user_survey_search/limit_leg/move-ego-0-2_2_cem_g128_s0",
        "child_headstand_4": "outputs/child_52_cem_phc/headstand_4_cem_s0", "child_move-ego-0-4_9": "outputs/child_52_cem_phc/move-ego-0-4_9_cem_s0",
-       "child_move-ego-90-4_5": "outputs/child_52_cem_phc/move-ego-90-4_5_cem_s0", "child_headstand_4_s2": "outputs/child_52_cem_phc/headstand_4_cem_s2"}
+       "child_move-ego-90-4_5": "outputs/child_52_cem_phc/move-ego-90-4_5_cem_s0", "child_headstand_4_s2": "outputs/child_52_cem_phc/headstand_4_cem_s2",
+       "tall_move-ego-low-0-2_9": "outputs/tall_body_52/move-ego-low-0-2_9_cem_s0", "tall_rotate-z-5-0.8_9": "outputs/tall_body_52/rotate-z-5-0.8_9_cem_s0",
+       "tall_rotate-z-5-0.8_9_z0down": "outputs/tall_body_52/rotate-z-5-0.8_9_cem_s0",
+       "child_headstand_4_kp0.85": "outputs/child_kpkd_headstand/kp0.85_kd1.0/cem_s0", "tall_move-ego-180-4_9_kp0.6": "outputs/tall_kpkd_180/kp0.6_kd1.0/cem_s0"}
 
 
 def add_cem(name):
@@ -68,15 +93,18 @@ def add_cem(name):
 
 def trajectories(name, body, clip, src):
     d = OUT / "trajectories" / name; d.mkdir(parents=True, exist_ok=True)
-    if src not in ("child_52", "c540") and not src.startswith(("body_52/", "child_52_s")):
+    if src not in ("child_52", "c540", "tall_body_52") and not src.startswith(("body_52/", "child_52_s", "kpkd:")):
         for f in ("reference_adult.npz", "reference_body.npz", "z0.npz", "best.npz", "video.json"):
             if (REPO / src / clip / f).exists():
                 shutil.copy(REPO / src / clip / f, d / f)
         return d
-    t = clip.rsplit("_", 1)[0]; target = {"payload": "data/origin_motion", "limit_leg": "data/adult_lockRleg_bent_lim/retargeting_motion"}.get(body, "data/child/retargeting_motion")
+    t = clip.rsplit("_", 1)[0]; target = {"payload": "data/origin_motion", "limit_leg": "data/adult_lockRleg_bent_lim/retargeting_motion",
+              "tall": "data/len1.4_wid0.8/retargeting_motion"}.get(body, "data/child/retargeting_motion")
     q = dict(reference_adult=np.load(glob.glob(str(REPO / f"data/origin_motion/{t}/{clip}.npz"))[0])["qpos"][1:],
              reference_body=np.load(REPO / f"{target}/{t}/{clip}.npz")["qpos"][1:]); n = len(q["reference_body"])
     run = REPO / {"child_52": f"outputs/child_52_rerun/{clip}_es_s0", "c540": f"outputs/c540_bfmglobal_a03/{clip}"}.get(src, f"outputs/{src}/{clip}_es_s0")
+    if src.startswith("kpkd:"):                                        # kpkd:<folder>: a gain-variant test (user, 11/12), z0 and LOES in <folder>/es_s0
+        run = REPO / "outputs" / src[len("kpkd:"):] / "es_s0"
     if src.startswith("child_52_s"):                                   # child_52_s<k>: the child 52-motion run of seed k
         run = REPO / f"outputs/child_52_rerun/{clip}_es_s{src[len('child_52_s'):]}"   # c540: the older child search behind the survey's child videos; body_52/<body>: the 52-motion runs
     q.update(z0=np.load(run / "origin_z.npz")["qpos"][:n], best=np.load(run / "best.npz")["qpos"][:n])
