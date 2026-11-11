@@ -29,6 +29,9 @@ step, reporting after each step and stopping only when a check fails or a decisi
    type changes because they are symlinks here), `data`, `amass_data`, `.venv`, `outputs`. Never push. Never touch other branches.
 7. If a golden check fails and the cause cannot be found and fixed within the step, STOP: revert the step's uncommitted changes and
    report what differs and why.
+8. Waiting for a background job: wait on its pid (`while kill -0 $PID 2>/dev/null; do sleep 30; done`) or on a file it writes when it
+   ends. Never `pgrep -f '<text>'` where <text> also appears in your own waiting command: it matches itself and never ends
+   (this stalled step 2 for 3 hours).
 
 ## Steps (in order)
 
