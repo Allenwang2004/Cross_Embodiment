@@ -68,7 +68,8 @@ import torch
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
-from single_z_search import project_z, rank_normalize, ang_pair   # noqa: E402
+from single_z_search import project_z, rank_normalize, ang_pair   # noqa: E402  (crossenbodiment.geometry's, re-exported there)
+from crossenbodiment.geometry import robot_yaw, smpl_heading       # noqa: E402
 from g1_z0_rollout import motion                                    # noqa: E402
 from model import bfm_align                                         # noqa: E402
 from model.robot_env import RobotVecEnv                             # noqa: E402
@@ -182,7 +183,6 @@ def main():
     n_link, n_jnt = len(rm.pairs) - 1, len(rm.g_jnt)
     ARM = [i for i, (b, _) in enumerate(rm.pairs[1:]) if b.split("_")[-1] in ("Shoulder", "Elbow", "Hand")]
     from humenv import make_humenv
-    import humenv.utils as hu
     from metamotivo.fb_cpr.huggingface import FBcprModel
     ref = np.load(REPO / f"data/origin_motion/{a.clip}.npz")["qpos"][a.start_frame:]
     T = len(ref) - a.frame_offset                 # steps
@@ -231,7 +231,7 @@ def main():
         E = np.empty((len(flat), n_ee, 3))
         for i, qq in enumerate(flat):
             gd.qpos[:] = qq; mujoco.mj_kinematics(mg, gd)
-            pel = gd.xpos[root].copy(); R = gd.xmat[root].reshape(3, 3); h = np.arctan2(R[1, 0], R[0, 0])
+            pel = gd.xpos[root].copy(); h = robot_yaw(gd.xmat[root])
             d = np.stack([ee_pos(*e) for e in ee]) - pel
             c, sn = np.cos(h), np.sin(h)
             E[i] = np.stack([c * d[:, 0] + sn * d[:, 1], -sn * d[:, 0] + c * d[:, 1], d[:, 2]], -1); P[i], H[i] = pel, h
@@ -252,13 +252,8 @@ def main():
                 + (((P[..., 2:] - ref_P[None, :, 2:]) if a.mse_no_xy else (P - ref_P[None])) ** 2).sum(-1).mean(1)
                 + (1 - np.cos(H - ref_H[None])).mean(1))
 
-    base_rot = hu.quat_conjugate(np.array([[0.5, 0.5, 0.5, 0.5]]))     # hu.remove_base_rot's, SMPL
-
     def heading_xy(qs):
-        flat = qs.reshape(-1, qs.shape[-1]); r = np.empty((len(flat), 4))
-        for i, qq in enumerate(flat):
-            dk.qpos[:] = qq; mujoco.mj_kinematics(fk, dk); r[i] = dk.xquat[1]
-        return hu.calc_heading(hu.quat_mul(r, np.repeat(base_rot, len(r), axis=0))).reshape(qs.shape[:-1]), qs[..., :2]     # hu.remove_base_rot works on one quat only
+        return smpl_heading(fk, qs, dk, batched=True), qs[..., :2]     # humenv's heading, one batched calc_heading
     ref_h, ref_xy = heading_xy(ref[a.frame_offset:])
 
     @torch.no_grad()

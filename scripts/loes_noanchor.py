@@ -26,6 +26,7 @@ import numpy as np
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts")); OUT = "outputs/noanchor"
 from crossenbodiment.bodies import BODIES
 from crossenbodiment.paths import CHILD_XML_REL
+from crossenbodiment.metrics import MetricSuite, metric_body, world_positions
 CLIPS = [l.strip() for l in open(REPO / "outputs/child_52/clips.txt")]
 ORDER = sorted(CLIPS, key=lambda c: -len(np.load(REPO / f"data/origin_motion/{c}.npz")["qpos"]))
 
@@ -116,7 +117,7 @@ def body_of(b):
     if b not in _B:
         sys.argv = [sys.argv[0], "--set", "52"]
         import body_52_test as Bt
-        _B[b] = (E.Body(E.XML["child"], True) if b == "child" else E.Body(E.XML["g1"], False) if b == "g1" else E.Body(str(REP / Bt.BODIES[b]["xml"]), True))
+        _B[b] = (metric_body(E.XML["child"], True) if b == "child" else metric_body(E.XML["g1"], False) if b == "g1" else metric_body(str(REP / Bt.BODIES[b]["xml"]), True))
     return _B[b]
 
 
@@ -128,24 +129,15 @@ def ref_of(b, c):
 
 
 def stats(body, q, ref, Pw, Dr, s):
-    """body_52_test.py / g1_small_test.py's stats (the Task page's metrics), with the success threshold 0.5 m x the root scale s"""
-    import eval_metrics as E
-    import mujoco
-    q = q.astype(np.float64); T = min(len(q), len(ref)); q, r = q[:T], ref[:T]; P = np.empty((T, body.m.nbody - 1, 3))
-    for t in range(T):
-        body.d.qpos[:] = q[t]; mujoco.mj_kinematics(body.m, body.d); P[t] = body.d.xpos[1:]
-    gw = np.linalg.norm(P - Pw[:T], axis=-1).mean(1); _, D = body.part_floor(q); tm = E.tracking_metrics(body, q, r)
-    return [float(((D <= 0.01) & (Dr[:T] > 0.05)).any(1).sum() / 30), float(not (gw > 0.5 * s).any()), tm["mpjpe"], tm["mmpjpe"], tm["mpjae"],
-            float(np.linalg.norm(q[:, :2] - r[:, :2], axis=1).mean())]
+    """body_52_test.py / g1_small_test.py's stats (the Task page's metrics), with the success threshold 0.5 m x the root scale s:
+    [fall_s, success, mpjpe, mmpjpe, mpjae, drift (the body's metres)] (crossenbodiment.metrics.MetricSuite.task_page)"""
+    return MetricSuite.task_page(body, s).reference(ref, Pw, Dr).values(q)
 
 
 def clip_job(job):
     import csv, json
-    import mujoco
     b, c = job; body = body_of(b); ref = ref_of(b, c); s_ = CONF[b]["s"]; st = st_(c); G = CONF[b]["G"]
-    Pw = np.empty((len(ref), body.m.nbody - 1, 3))
-    for t, q in enumerate(ref):
-        body.d.qpos[:] = q; mujoco.mj_kinematics(body.m, body.d); Pw[t] = body.d.xpos[1:]
+    Pw = world_positions(body.m, body.d, ref)
     _, Dr = body.part_floor(ref); f = lambda q: stats(body, q, ref, Pw, Dr, s_)
     old_dir = {"child": REP / "outputs/child_52_rerun", "g1": REP / "outputs/g1_52"}.get(b, REP / "outputs/body_52" / b)
     d = REP / OUT / b / "rollouts" / st; ix = json.load(open(d / "index.json"))["map"]; Q = np.load(d / "eval_qpos.npz")["qpos"]

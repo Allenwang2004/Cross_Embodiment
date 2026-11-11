@@ -18,6 +18,7 @@ import mujoco
 import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
+from crossenbodiment.metrics import contact_fall_time, height_fall, metric_body   # noqa: E402
 OUT = REPO / "outputs/fall_definitions"; RERUN = REPO / "outputs/child_52_rerun"; CEMP = REPO / "outputs/child_52_cem_phc"; LSO = REPO / "outputs/child_52_lso"
 # --loes-dir outputs/noanchor/child (user 11/11): LOES ("es") from LOES without the anchor term, everything else unchanged;
 # the result goes to task_motions_noanchor.json next to the anchored one
@@ -38,17 +39,18 @@ def falls(q, ref, R):
     d = mujoco.MjData(body.m); hid = body.m.body("Head").id; hz = np.empty(T)
     for t in range(T):
         d.qpos[:] = q[t]; mujoco.mj_kinematics(body.m, d); hz[t] = d.xpos[hid][2]
-    touch = D <= TOUCH; clear = Dr > NEAR; ht = touch[:, hand].any(1)
+    touch = D <= TOUCH; ht = touch[:, hand].any(1)
     hand_motion = (Dr[:, hand].min(1) <= NEAR).sum() / 30 >= 0.5
-    return dict(height=float((q[:, 2] < 0.5 * ref[:T, 2]).sum() / 30), hand_mot=float("nan") if hand_motion else float(ht.sum() / 30),
-                hand_frm=float((ht & (Dr[:, hand].min(1) > NEAR)).sum() / 30), contact=float((touch & clear).any(1).sum() / 30),
+    # height (legacy) and contact (the Task page's Fall Time): crossenbodiment.metrics
+    return dict(height=height_fall(q, ref[:T]), hand_mot=float("nan") if hand_motion else float(ht.sum() / 30),
+                hand_frm=float((ht & (Dr[:, hand].min(1) > NEAR)).sum() / 30), contact=contact_fall_time(D, Dr, TOUCH, NEAR),
                 head=float((hz < 0.5 * hr).sum() / 30))
 
 
 def clip(c):
     global body
     import eval_metrics as E
-    body = body or E.Body(E.XML["child"], True); stem = c.split("/")[1]
+    body = body or metric_body(E.XML["child"], True); stem = c.split("/")[1]
     ref = np.load(REPO / f"data/child/retargeting_motion/{c}.npz")["qpos"].astype(np.float64)[1:]
     names, Dr = body.part_floor(ref); d = mujoco.MjData(body.m); hid = body.m.body("Head").id; hr = np.empty(len(ref))
     for t in range(len(ref)):

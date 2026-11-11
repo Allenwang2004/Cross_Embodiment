@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
+from crossenbodiment.geometry import sphere16   # noqa: E402  16 z / |z| (refactor step 3)
 import eval_metrics as E                                                  # noqa: E402
 INK, MUTED, GRID, SURF = "#1f1e1c", "#6b6a64", "#e4e3de", "#fcfcfb"
 ALGOS = [("es", "ES (ours)", "#2a78d6"), ("cem", "CEM", "#eb6834"), ("random", "Random search", "#1baf7a")]
@@ -22,7 +23,7 @@ def main():
         for r in runs:
             cur = list(csv.DictReader(open(f"{r}/curve.csv"))); C.append([float(x["best_so_far"]) for x in cur]); s = json.load(open(f"{r}/summary.json"))
             task = s["clip"].split("/")[0]; ref = np.load(REPO / f"data/child/retargeting_motion/{task}/{stem}.npz")["qpos"].astype(np.float64); m = E.metrics(body, np.load(f"{r}/best.npz")["qpos"].astype(np.float64), ref)
-            z = np.load(f"{r}/best_z.npy").reshape(-1); z0 = np.load(REPO / f"data/origin_z/{s['clip']}.npy").reshape(-1); z0 = 16 * z0 / np.linalg.norm(z0)
+            z = np.load(f"{r}/best_z.npy").reshape(-1); z0 = np.load(REPO / f"data/origin_z/{s['clip']}.npy").reshape(-1); z0 = sphere16(z0)
             rows.append(dict(seed=s["seed"], z0_cost=s["origin_z"]["cost"], best_cost=s["best"]["cost"], bfm=s["best"]["bfm"], head=s["best"]["head"], pos=s["best"]["pos"], best_gen=s["best"]["gen"], dist_z0=float(np.linalg.norm(z - z0)), success=m["success"], mpjpe=m["mpjpe"], mpjae=m["mpjae"], fall_s=m["fall_s"]))
         C = np.array(C); x = (np.arange(C.shape[1]) + 1) * 16; med = np.median(C, 0)
         ax.fill_between(x, C.min(0), C.max(0), color=col, alpha=0.14, lw=0, zorder=2); ax.plot(x, med, color=col, lw=2, zorder=3, label=label)

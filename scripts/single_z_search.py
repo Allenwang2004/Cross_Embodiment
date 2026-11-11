@@ -121,27 +121,9 @@ OBJECTIVES = {
 }
 
 
-def ang_pair(a, b):
-    import numpy as _np
-    return float(_np.degrees(_np.arccos(_np.clip(
-        a @ b / (_np.linalg.norm(a) * _np.linalg.norm(b)), -1, 1))))
-
-
-def project_z(z: np.ndarray) -> np.ndarray:
-    """metamotivo's project_z: onto the sphere of radius sqrt(dim). Works on a
-    single vector or a batch."""
-    a = np.atleast_2d(z)
-    r = np.sqrt(a.shape[-1])
-    out = a * (r / np.maximum(np.linalg.norm(a, axis=-1, keepdims=True), 1e-12))
-    return out.reshape(z.shape)
-
-
-def rank_normalize(f: np.ndarray) -> np.ndarray:
-    """Centred ranks in [-0.5, 0.5] -- train_es.py:rank_normalize. Strips the
-    cost's units and its tail, so one catastrophic rollout sets a direction but
-    not the step size."""
-    order = np.argsort(np.argsort(f))
-    return order / max(len(f) - 1, 1) - 0.5
+# ang_pair, project_z (metamotivo's |z| = 16 projection) and rank_normalize live in crossenbodiment/geometry.py (refactor step 3);
+# imported here so `from single_z_search import project_z, rank_normalize, ang_pair` keeps working
+from crossenbodiment.geometry import ang_pair, project_z, rank_normalize, smpl_heading  # noqa: E402,F401
 
 
 @torch.no_grad()
@@ -500,12 +482,7 @@ def main():
 
     def root_heading_xy(qs):
         """(..., T, nq) qpos -> heading (..., T) in radians and root xy (..., T, 2)."""
-        import humenv.utils as hu
-        flat = qs.reshape(-1, qs.shape[-1]); dk = mujoco.MjData(fk); h = np.empty(len(flat))
-        for i, qq in enumerate(flat):
-            dk.qpos[:] = qq; mujoco.mj_kinematics(fk, dk)
-            h[i] = hu.calc_heading(hu.remove_base_rot(dk.xquat[1][None].copy(), "smpl"))[0]
-        return h.reshape(qs.shape[:-1]), qs[..., :2]
+        return smpl_heading(fk, qs), qs[..., :2]           # humenv's heading, frame by frame (crossenbodiment.geometry)
 
     ref_h, ref_xy = root_heading_xy(goal)
 
@@ -675,8 +652,7 @@ def main():
                                           {"popsize": n_envs, "seed": args.seed + 1, "verbose": -9})
     path_len = 0.0   # cumulative angle the mean has travelled, deg; vs the net angle = directness
 
-    def ang(a, b):
-        return float(np.degrees(np.arccos(np.clip(a @ b / (np.linalg.norm(a) * np.linalg.norm(b)), -1, 1))))
+    ang = ang_pair
 
     best = dict(cost=base["cost"], align=base["align"], phys=base["phys"], bfm=base["bfm"],
                 head=base["head"], pos=base["pos"], mse=base["mse"],

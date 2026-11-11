@@ -105,6 +105,9 @@ summary.json files and `sec` in all 7 curve.csv files that have it.
 `drift_success_child.one` and `tall_body_52.one` (their module folders `RR`, `LS`, `SEEDS`, `OUT` pointed at folders rebuilt from
 the inputs). Every function gets q[t] against ref[t + 1]. When step 3 moves these functions, point the calls in `main()` at the new
 code and keep the output keys; `compare.py baseline <label>` then proves the numbers are the same.
+Step 3 (done) kept the calls as they are: the functions called here now delegate to crossenbodiment/metrics.py and
+crossenbodiment/geometry.py (MetricSuite.task_page and the named definitions); tests/test_metrics.py covers the drivers this file
+does not run (loes_weight_test, lsor_mpjae_test, amass_baselines.one, kpkd_test.phc_one / contact_one) against their a997a23 code.
 Not covered: `amass_baselines.one` (its `stats` closure is `tall_body_52.one`'s without the PHC reward).
 
 ## Inputs (tests/golden/inputs, 2.9 MB, in git)

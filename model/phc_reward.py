@@ -13,15 +13,10 @@ BFM-Zero's few-shot objective also subtracts 0.02 x auxiliary penalties designed
 import mujoco
 import numpy as np
 
+from crossenbodiment.geometry import quat_mul as qmul   # Hamilton product of (..., 4) wxyz quaternions (refactor step 3)
+
 K = dict(pos=100.0, rot=10.0, vel=0.1, ang=0.1)
 W = dict(pos=0.5, rot=0.3, vel=0.1, ang=0.1)
-
-
-def qmul(a, b):
-    """Hamilton product of (..., 4) wxyz quaternions"""
-    aw, ax, ay, az = np.moveaxis(a, -1, 0); bw, bx, by, bz = np.moveaxis(b, -1, 0)
-    return np.stack([aw * bw - ax * bx - ay * by - az * bz, aw * bx + ax * bw + ay * bz - az * by,
-                     aw * by - ax * bz + ay * bw + az * bx, aw * bz + ax * by - ay * bx + az * bw], -1)
 
 
 def qconj(a):

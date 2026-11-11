@@ -62,6 +62,7 @@ import torch
 from PIL import Image, ImageDraw
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+from crossenbodiment.geometry import sphere16   # noqa: E402  16 z / |z| (refactor step 3)
 
 
 def logspaced(count, n):
@@ -235,7 +236,7 @@ def main():
     aw = summary.get("anchor_weight") or 0.0
     anc = np.load(REPO_ROOT / summary["anchor"]).reshape(-1) if aw else None
     if anc is not None:
-        anc = 16 * anc / np.linalg.norm(anc)
+        anc = sphere16(anc)
 
     _, aligns, physes = compute_batch_cost(fk, cfg, qpos, [ref] * n)
     bfm_cost = None
@@ -266,7 +267,7 @@ def main():
                               else float(mses[i]) if objective == "mse"
                               else float(lam_a * aligns[i] + lam_p * physes[i]),
                          mse=float(mses[i]), **sims[i],
-                         anchor_term=float(aw * (np.linalg.norm(16 * sel_z[i] / np.linalg.norm(sel_z[i]) - anc) / 16) ** 2)
+                         anchor_term=float(aw * (np.linalg.norm(sphere16(sel_z[i]) - anc) / 16) ** 2)
                          if anc is not None else 0.0,
                          cos_z0=float(cos_z0[i]),
                          travel=float(np.linalg.norm(q[-1, :2] - q[0, :2])),

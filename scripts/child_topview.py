@@ -10,7 +10,7 @@ heading error = mean |facing - reference facing| (deg), over the clip.
 Order and numbering: as outputs/child_all52/index.md / overview_<k>.jpg (CEM's MPJPE minus LOES's, largest first), 9 a page.
 Out: outputs/child_all52/{topview_<k>.jpg, topview_all.jpg, topview.md}.
 usage: uv run python scripts/child_topview.py"""
-import re
+import re, sys
 from pathlib import Path
 import numpy as np
 import matplotlib
@@ -18,14 +18,11 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 REPO = Path(__file__).resolve().parent.parent; OUT = REPO / "outputs/child_all52"; T = OUT / "trajectories"
+sys.path.insert(0, str(REPO))
+from crossenbodiment.geometry import facing                    # noqa: E402  root yaw - 90 deg (refactor step 3)
 LINES = (("reference_body", "Reference", "#1a1a1a", "-", 2.0), ("z0", r"$z_0$", "#8c8b87", "--", 1.4),
          ("cem", "BFM-Zero", "#1baf7a", "-", 1.6), ("best", "Ours", "#2a78d6", "-", 1.6))
 EVERY = 60                                                     # facing arrows every 2 s (30 fps)
-
-
-def facing(q):
-    w, x, y, z = q[:, 3], q[:, 4], q[:, 5], q[:, 6]
-    return np.arctan2(2 * (x * y + w * z), 1 - 2 * (y * y + z * z)) - np.pi / 2
 
 
 def order():

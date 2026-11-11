@@ -20,7 +20,8 @@ import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
 from crossenbodiment.bodies import BODIES
-from crossenbodiment.paths import CHILD_XML
+from crossenbodiment.geometry import facing as _facing
+from crossenbodiment.metrics import MetricSuite, metric_body
 RR, LS = REPO / "outputs/child_52_rerun", REPO / "outputs/child_52_lso"; S = BODIES.scale("child"); SEEDS = range(5)
 # --loes-dir outputs/noanchor/child (user 11/11): LOES from the runs without the anchor term -> outputs/drift_success_child_noanchor.json
 RL = REPO / sys.argv[sys.argv.index("--loes-dir") + 1] if "--loes-dir" in sys.argv else None; SUFFIX = "_noanchor" if "--loes-dir" in sys.argv else ""   # None: RR, read at call time
@@ -29,30 +30,19 @@ _b = {}
 
 
 def facing(q):
-    w, x, y, z = q[:, 3], q[:, 4], q[:, 5], q[:, 6]
-    return np.arctan2(2 * (x * y + w * z), 1 - 2 * (y * y + z * z)) - np.pi / 2
+    """root yaw - 90 deg (crossenbodiment.geometry.facing)"""
+    return _facing(q)
 
 
 def one(c):
-    import mujoco
     import eval_metrics as E
     if not _b:
-        _b["body"] = E.Body(E.XML["child"], True); _b["m"] = mujoco.MjModel.from_xml_path(str(CHILD_XML)); _b["d"] = mujoco.MjData(_b["m"])
-    body, m, d = _b["body"], _b["m"], _b["d"]; st = c.split("/")[1]
+        _b["body"] = metric_body(E.XML["child"], True)
+    body = _b["body"]; st = c.split("/")[1]
     ref = np.load(REPO / f"data/child/retargeting_motion/{c}.npz")["qpos"].astype(np.float64)[1:]
-
-    def xpos(Q):
-        P = np.empty((len(Q), m.nbody - 1, 3))
-        for t, q in enumerate(Q):
-            d.qpos[:] = q; mujoco.mj_kinematics(m, d); P[t] = d.xpos[1:]
-        return P
-    Pr = xpos(ref)
-
-    def stats(q):
-        q = q.astype(np.float64); T = min(len(q), len(ref)); q, r = q[:T], ref[:T]
-        body_err = np.linalg.norm(xpos(q) - Pr[:T], axis=-1).mean(1)
-        return dict(mpjpe=E.tracking_metrics(body, q, r)["mpjpe"], drift=float(np.linalg.norm(q[:, :2] - r[:, :2], axis=1).mean() / S),
-                    heading=float(np.degrees(np.abs(np.angle(np.exp(1j * (facing(q) - facing(r)))))).mean()), success=float(body_err.max() <= 0.5 * S))
+    # {mpjpe, drift (adult-equivalent m), heading (deg), success (PHC, 0.5 m x S)} per rollout (crossenbodiment.metrics); the world
+    # positions are the Body's own model's (formerly a second MjModel of the same XML: the same numbers)
+    stats = MetricSuite(body, ("mpjpe", "drift", "heading", "success"), S, drift_unit="adult").reference(ref)
     out = {k: [] for k in ("z0", "native", "es", *SEQ)}
     out["z0"].append(stats(np.load(RR / f"{st}_es_s0/origin_z.npz")["qpos"]))
     out["native"].append(stats(np.load(LS / f"{st}_lso_s0/rollouts.npz")["q_ER8"]))

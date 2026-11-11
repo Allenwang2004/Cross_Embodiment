@@ -21,6 +21,7 @@ import numpy as np
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
 from crossenbodiment.bodies import BODIES
 from crossenbodiment.paths import CHILD_XML_REL
+from crossenbodiment.metrics import MetricSuite, metric_body, world_positions
 OUT = REPO / "outputs/loes_weight_test"; ROLL = OUT / "rollouts"; RERUN = REPO / "outputs/child_52_rerun"; S = BODIES.scale("child")
 XML = CHILD_XML_REL; SEEDS = range(3)
 NEW = {"w0": (0.0, 0.0), "w0.05": (0.05, 0.005)}; COND = ("w0", "w0.05", "w1")
@@ -59,22 +60,19 @@ def evalcmds():
 
 
 def world(Q):
-    m, d = body.m, body.d; P = np.empty((len(Q), m.nbody - 1, 3))
-    for t, q in enumerate(Q):
-        d.qpos[:] = q; mujoco.mj_kinematics(m, d); P[t] = d.xpos[1:]
-    return P
+    """world positions of every body of the module's `body` (crossenbodiment.metrics.world_positions)"""
+    return world_positions(body.m, body.d, Q)
 
 
 def stats(q, ref, Pw):
-    import eval_metrics as E
-    q = q.astype(np.float64); T = min(len(q), len(ref)); q, r = q[:T], ref[:T]; gw = np.linalg.norm(world(q) - Pw[:T], axis=-1).mean(1)
-    return dict(**E.tracking_metrics(body, q, r), success=float(not (gw > 0.5 * S).any()), drift=float(np.linalg.norm(q[:, :2] - r[:, :2], axis=1).mean()))
+    """{mpjpe, mmpjpe, mpjae, success (PHC, 0.5 m x S), drift (m)} of the module's `body` (crossenbodiment.metrics.MetricSuite)"""
+    return MetricSuite(body, ("mpjpe", "mmpjpe", "mpjae", "success", "drift"), S).reference(ref, Pw)(q)
 
 
 def clip(c):
     global body
     import eval_metrics as E
-    body = body or E.Body(E.XML["child"], True); stem = c.split("/")[1]; ref = np.load(REPO / f"data/child/retargeting_motion/{c}.npz")["qpos"].astype(np.float64)[1:]; Pw = world(ref)
+    body = body or metric_body(E.XML["child"], True); stem = c.split("/")[1]; ref = np.load(REPO / f"data/child/retargeting_motion/{c}.npz")["qpos"].astype(np.float64)[1:]; Pw = world(ref)
     d = ROLL / stem; ix = json.load(open(d / "index.json"))["map"]; Q = np.load(d / "eval_qpos.npz")["qpos"]; res = {}; worst = 0.0
     for k in NEW:
         res[k] = []

@@ -16,6 +16,7 @@ import mujoco
 import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
+from crossenbodiment.metrics import mean_body_error, metric_body, phc_success, root_success, world_positions   # noqa: E402
 OUT = REPO / "outputs/success_definitions"; RERUN = REPO / "outputs/child_52_rerun"; CEMP = REPO / "outputs/child_52_cem_phc"; LSO = REPO / "outputs/child_52_lso"
 # --loes-dir outputs/noanchor/child (user 11/11): LOES ("es") from LOES without the anchor term, everything else unchanged;
 # the result goes to task_motions_noanchor.json next to the anchored one
@@ -30,26 +31,24 @@ def clips():
 
 
 def world(Q):
-    m, d = body.m, body.d; P = np.empty((len(Q), m.nbody - 1, 3))
-    for t, q in enumerate(Q):
-        d.qpos[:] = q; mujoco.mj_kinematics(m, d); P[t] = d.xpos[1:]
-    return P
+    """world positions of every body of the module's `body` (crossenbodiment.metrics.world_positions)"""
+    return world_positions(body.m, body.d, Q)
 
 
 def tests(q, ref, R):
     """q (T, nq) rollout, ref the reference frames 1.., R = (world positions, local positions) of the reference"""
     Pw_r, Pl_r = R; T = min(len(q), len(ref)); q = q[:T].astype(np.float64); r = ref[:T]
-    pos = np.linalg.norm(q[:, :2] - r[:, :2], axis=1); rot = np.degrees(2 * np.arccos(np.abs((q[:, 3:7] * r[:, 3:7]).sum(1)).clip(0, 1)))
-    gw = np.linalg.norm(world(q) - Pw_r[:T], axis=-1).mean(1); (pl, _) = body.local(q); gl = np.linalg.norm(pl - Pl_r[:T], axis=-1).mean(1)
-    return dict(root=float(not ((pos > 1.5) | (rot > 45)).any()), global_=float(not (gw > THR * S).any()), global_raw=float(not (gw > THR).any()),
-                local=float(not (gl > THR * S).any()))
+    gw = mean_body_error(world(q), Pw_r[:T]); (pl, _) = body.local(q); gl = mean_body_error(pl, Pl_r[:T])
+    # crossenbodiment.metrics: the legacy root_success; phc_success on world positions (s, or 1 = raw metres) and on local ones
+    return dict(root=float(root_success(q, r)), global_=phc_success(gw, S, THR), global_raw=phc_success(gw, 1.0, THR),
+                local=phc_success(gl, S, THR))
 
 
 def clip(c):
     global body, S
     import eval_metrics as E
     from model.exact_obs import ExactObs
-    body = body or E.Body(E.XML["child"], True); S = S or ExactObs(REPO / E.XML["child"], REPO / "assets/robots/adult/robot.xml").s
+    body = body or metric_body(E.XML["child"], True); S = S or ExactObs(REPO / E.XML["child"], REPO / "assets/robots/adult/robot.xml").s
     stem = c.split("/")[1]; ref = np.load(REPO / f"data/child/retargeting_motion/{c}.npz")["qpos"].astype(np.float64)[1:]
     R = (world(ref), body.local(ref)[0]); res = {"frozen": tests(np.load(RERUN / f"{stem}_es_s0/origin_z.npz")["qpos"], ref, R)}
     self_check = tests(ref, ref, R)

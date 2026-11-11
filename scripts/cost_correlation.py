@@ -25,6 +25,8 @@ from pathlib import Path
 import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
+from crossenbodiment.metrics import metric_body   # noqa: E402  one Body per (xml, smpl) and process (refactor step 3)
+from crossenbodiment.geometry import sphere16   # noqa: E402  16 z / |z| (refactor step 3)
 from crossenbodiment.bodies import BODIES
 from crossenbodiment.paths import CHILD_XML_REL
 RR = REPO / "outputs/child_52_rerun"; OUT = REPO / "outputs/cost_corr"; XML = CHILD_XML_REL
@@ -38,7 +40,7 @@ def clips():
 def prepare():
     for c in clips():
         st = c.split("/")[1]; d = OUT / st; d.mkdir(parents=True, exist_ok=True)
-        z0 = np.load(REPO / f"data/origin_z/{c}.npy").reshape(-1).astype(np.float64); z0 = 16 * z0 / np.linalg.norm(z0)
+        z0 = np.load(REPO / f"data/origin_z/{c}.npy").reshape(-1).astype(np.float64); z0 = sphere16(z0)
         np.save(d / "z.npy", np.concatenate([np.load(RR / "rollouts" / st / "z.npy").astype(np.float64), z0[None]]))
     print("prepared", len(clips()))
 
@@ -61,7 +63,7 @@ def one(c):
     from model.exact_obs import ExactObs, ADULT_XML
     from model.phc_reward import PHCCost
     if not _ctx:
-        _ctx.update(body=E.Body(E.XML["child"], True), ex=ExactObs(REPO / XML, REPO / ADULT_XML), ma=mujoco.MjModel.from_xml_path(str(REPO / ADULT_XML)),
+        _ctx.update(body=metric_body(E.XML["child"], True), ex=ExactObs(REPO / XML, REPO / ADULT_XML), ma=mujoco.MjModel.from_xml_path(str(REPO / ADULT_XML)),
                     mc=mujoco.MjModel.from_xml_path(str(REPO / XML)))
         _ctx["da"] = mujoco.MjData(_ctx["ma"])
     body, ex, ma, da = _ctx["body"], _ctx["ex"], _ctx["ma"], _ctx["da"]

@@ -23,10 +23,13 @@ d(b, m, s) = D(b, m, s) - mean_s D(adult, m, s).
 Writes outputs/multibody_corr/search/<body>/<clip>_s<seed>/ (single_z_search.py output) and transfer/.
 """
 import argparse, json, os, random, subprocess, time
+import sys
 from pathlib import Path
 import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO))
+from crossenbodiment.geometry import sphere16   # noqa: E402  16 z / |z| (refactor step 3)
 OUT = REPO / "outputs/multibody_corr"
 LOG = REPO / "outputs/train_logs/multibody_corr"
 ADULT = "m2c_t000"
@@ -162,16 +165,16 @@ def transfer(args):
     rng = np.random.default_rng(0)
     cs, jobs = clips(), []
     for c in cs:
-        z0 = np.load(REPO / f"data/origin_z/{c}.npy").reshape(-1); z0 = 16 * z0 / np.linalg.norm(z0)
+        z0 = np.load(REPO / f"data/origin_z/{c}.npy").reshape(-1); z0 = sphere16(z0)
         Zs, labels = [], []
         for b in BODIES:
             for s in SEEDS:
                 z = np.load(cell_dir(b, c, s) / "best_z.npy").reshape(-1)
-                Zs.append(16 * z / np.linalg.norm(z)); labels.append(dict(kind="body", source=b, seed=s))
+                Zs.append(sphere16(z)); labels.append(dict(kind="body", source=b, seed=s))
         norms = [n for n in (np.linalg.norm(z - z0) for z in Zs) if n > 1e-9]
         for _ in range(N_RANDOM):
             r = rng.standard_normal(256); r *= rng.choice(norms) / np.linalg.norm(r)
-            z = z0 + r; Zs.append(16 * z / np.linalg.norm(z)); labels.append(dict(kind="random", norm=float(np.linalg.norm(r))))
+            z = z0 + r; Zs.append(sphere16(z)); labels.append(dict(kind="random", norm=float(np.linalg.norm(r))))
         for t in BODIES:
             out = OUT / "transfer" / t / c.split("/")[1]
             out.mkdir(parents=True, exist_ok=True)
@@ -196,7 +199,7 @@ E_K = 8
 def _corr(b, c, s):
     z0 = np.load(REPO / f"data/origin_z/{c}.npy").reshape(-1)
     z = np.load(cell_dir(b, c, s) / "best_z.npy").reshape(-1)
-    return 16 * z / np.linalg.norm(z) - 16 * z0 / np.linalg.norm(z0)
+    return sphere16(z) - sphere16(z0)
 
 
 def _top(D, k=E_K):
@@ -224,7 +227,7 @@ def ebases(args):
         if f"{t}_{k}" in ours or not (src / f"{t}_{k}" / "best_z.npy").exists():
             continue
         z0 = np.load(REPO / f"data/origin_z/{t}/{t}_{k}.npy").reshape(-1); z = np.load(src / f"{t}_{k}" / "best_z.npy").reshape(-1)
-        D.append(16 * z / np.linalg.norm(z) - 16 * z0 / np.linalg.norm(z0))
+        D.append(sphere16(z) - sphere16(z0))
     np.save(out / "child524.npy", _top(D))
     np.save(out / "rand8.npy", np.load(REPO / "outputs/pca_subspace_bfmg/basis_rand8.npy")[:E_K])
     print(f"bases from {len(train)} training bodies; child524 from {len(D)} child corrections -> {out}")

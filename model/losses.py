@@ -54,6 +54,7 @@ import mujoco
 import numpy as np
 
 from . import kinematics as kin
+from crossenbodiment.geometry import quat_mul as _quat_mul   # the Hamilton product, wxyz (refactor step 3)
 
 
 # Control-step duration. The clips in datasets/ all carry fps 30.0 and the env
@@ -308,13 +309,6 @@ def functional_equivalence(model, qpos_beta: np.ndarray, qpos_ref, weights: dict
 MSE_WEIGHTS = {"pose": 1.0, "ee": 1.0, "root": 1.0, "heading": 1.0}
 # conj of the SMPL pelvis base rotation (humenv.utils.remove_base_rot), so the heading is humenv's own
 _SMPL_BASE_CONJ = np.array([0.5, -0.5, -0.5, -0.5])
-
-
-def _quat_mul(a, b):
-    aw, ax, ay, az = np.moveaxis(a, -1, 0)
-    bw, bx, by, bz = np.moveaxis(b, -1, 0)
-    return np.stack([aw * bw - ax * bx - ay * by - az * bz, aw * bx + ax * bw + ay * bz - az * by,
-                     aw * by - ax * bz + ay * bw + az * bx, aw * bz + ax * by - ay * bx + az * bw], -1)
 
 
 def root_heading(quat_wxyz):

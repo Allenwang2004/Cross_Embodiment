@@ -4,16 +4,17 @@ outputs/single_z_seeds_s005_5k (child, move-ego-0-2_4, 20 seeds, cost = 1 - mean
 position term; from 09/18, obs_scale auto, not the later exact observation): each seed's best latent, its rollout's mean BFM cosine to the reference (1 - bfm), its pelvis path, and how
 far it ended from the reference (position, heading). Writes outputs/z_heading/bfm_blind_paths.{png,json}.
 usage: uv run python scripts/plot_bfm_blind_paths.py"""
-import glob, json, os
+import glob, json, os, sys
 from pathlib import Path
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import mujoco
 import numpy as np
-import humenv.utils as hu
 
 REPO = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO))
+from crossenbodiment.geometry import smpl_heading        # noqa: E402  humenv's heading (refactor step 3)
 RUNS = REPO / "outputs/single_z_seeds_s005_5k"
 REF = REPO / "data/child/retargeting_motion/move-ego-0-2/move-ego-0-2_4.npz"
 XML = REPO / "assets/robots_torque/child/robot_torque_full.xml"
@@ -23,11 +24,7 @@ m = mujoco.MjModel.from_xml_path(str(XML)); d = mujoco.MjData(m)
 
 
 def heading(Q):
-    h = []
-    for q in Q:
-        d.qpos[:] = q; mujoco.mj_kinematics(m, d)
-        h.append(hu.calc_heading(hu.remove_base_rot(d.xquat[1][None].copy(), "smpl"))[0])
-    return np.array(h)
+    return smpl_heading(m, Q, d)
 
 
 ref = np.load(REF)["qpos"]; href = heading(ref); rows = []; Z = []; paths = []

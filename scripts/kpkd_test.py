@@ -12,6 +12,7 @@ import numpy as np
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
 from crossenbodiment.bodies import BODIES
 from crossenbodiment.paths import CHILD_XML_REL
+from crossenbodiment.metrics import contact_fall_time, mean_body_error, metric_body, phc_success, world_positions
 OUT = REPO / "outputs/kpkd"; SEEDS = range(5)
 BODY = dict(child=dict(xml=CHILD_XML_REL, ref="data/child/retargeting_motion/{c}.npz", label="child"), g1=dict(ref="outputs/g1/roundtrip/{stem}/g1.npz"),
             limit_leg=dict(xml="assets/robots/adult_lockRleg_bent_lim/robot.xml", ref="data/adult_lockRleg_bent_lim/retargeting_motion/{c}.npz", label="adult_lockRleg_bent_lim"),
@@ -73,7 +74,7 @@ def one(job):
     from child_52_means import full, KEYS
     b, name, c, s = job
     if b not in body:
-        body[b] = E.Body(E.XML["g1"] if b == "g1" else BODY[b]["xml"], b != "g1")
+        body[b] = metric_body(E.XML["g1"] if b == "g1" else BODY[b]["xml"], b != "g1")
     d = OUT / f"{b}_{name}/{c.split('/')[1]}_s{s}"; S = json.load(open(d / "summary.json")); ref = ref_of(b, c); base = S["origin_z"]["cost"]; bq = np.load(d / "best.npz")["qpos"].astype(np.float64); zq = np.load(d / "origin_z.npz")["qpos"].astype(np.float64)
     vz, vb = full(body[b], zq, ref, 1.0), full(body[b], bq, ref, S["best"]["cost"] / base)
     bad = [k for k, want in (("evals", 1024), ("seed", s), ("frame_offset", 1), ("sampling", "independent"), ("sigma", 0.05), ("lr", 0.03), ("heading_weight", 1.0), ("pos_weight", 0.1), ("anchor_weight", 0.3)) if S.get(k) != want]
@@ -148,7 +149,7 @@ def hand_one(job):
     from child_52_means import hand_fall
     b, name, c, s = job
     if b not in body:
-        body[b] = E.Body(E.XML["g1"] if b == "g1" else BODY[b]["xml"], b != "g1")
+        body[b] = metric_body(E.XML["g1"] if b == "g1" else BODY[b]["xml"], b != "g1")
     d = OUT / f"{b}_{name}/{c.split('/')[1]}_s{s}"; ref = ref_of(b, c)
     return job, hand_fall(body[b], np.load(d / "origin_z.npz")["qpos"].astype(np.float64), ref), hand_fall(body[b], np.load(d / "best.npz")["qpos"].astype(np.float64), ref)
 
@@ -179,11 +180,11 @@ def contact_one(job):
     import eval_metrics as E
     b, name, c, s = job
     if b not in body:
-        body[b] = E.Body(E.XML["g1"] if b == "g1" else BODY[b]["xml"], b != "g1")
+        body[b] = metric_body(E.XML["g1"] if b == "g1" else BODY[b]["xml"], b != "g1")
     B = body[b]; ref = ref_of(b, c); _, Dr = B.part_floor(ref); d = OUT / f"{b}_{name}/{c.split('/')[1]}_s{s}"; out = []
     for f in ("origin_z", "best"):
         q = np.load(d / f"{f}.npz")["qpos"].astype(np.float64); T = min(len(q), len(ref)); _, D = B.part_floor(q[:T])
-        out.append(float(((D <= 0.01) & (Dr[:T] > 0.05)).any(1).sum() / 30))
+        out.append(contact_fall_time(D, Dr[:T]))
     return job, out
 
 
@@ -210,20 +211,14 @@ SCALE = {b: BODIES.scale(b) for b in ("child", "g1", "limit_leg", "heavy_arm")} 
 
 def phc_one(job):
     import eval_metrics as E
-    import mujoco
     b, name, c, s = job
     if b not in body:
-        body[b] = E.Body(E.XML["g1"] if b == "g1" else BODY[b]["xml"], b != "g1")
+        body[b] = metric_body(E.XML["g1"] if b == "g1" else BODY[b]["xml"], b != "g1")
     B = body[b]; m, dd = B.m, B.d; ref = ref_of(b, c); d = OUT / f"{b}_{name}/{c.split('/')[1]}_s{s}"
-    def world(Q):
-        P = np.empty((len(Q), m.nbody - 1, 3))
-        for t, q in enumerate(Q):
-            dd.qpos[:] = q; mujoco.mj_kinematics(m, dd); P[t] = dd.xpos[1:]
-        return P
-    Pr = world(ref); out = []
+    Pr = world_positions(m, dd, ref); out = []
     for f in ("origin_z", "best"):
         q = np.load(d / f"{f}.npz")["qpos"].astype(np.float64); T = min(len(q), len(ref))
-        out.append(float(not (np.linalg.norm(world(q[:T]) - Pr[:T], axis=-1).mean(1) > 0.5 * SCALE[b]).any()))
+        out.append(phc_success(mean_body_error(world_positions(m, dd, q[:T]), Pr[:T]), SCALE[b]))
     return job, out
 
 

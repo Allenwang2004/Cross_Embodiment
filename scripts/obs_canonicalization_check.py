@@ -25,6 +25,7 @@ from pathlib import Path
 import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO))
+from crossenbodiment.geometry import sphere16   # noqa: E402  16 z / |z| (refactor step 3)
 from crossenbodiment.bodies import BODIES
 from crossenbodiment.paths import ADULT_XML_REL, CHILD_XML_REL, MOTIVO_CKPT
 OUT = REPO / "outputs/obs_canon_52"; XML = CHILD_XML_REL; ADULT = ADULT_XML_REL
@@ -49,7 +50,7 @@ def family(stem):
 def commands():
     for c in clips():
         task, stem = c.split("/")
-        z = np.load(REPO / f"data/origin_z/{task}/{stem}.npy").reshape(-1).astype(np.float64); z = 16 * z / np.linalg.norm(z)
+        z = np.load(REPO / f"data/origin_z/{task}/{stem}.npy").reshape(-1).astype(np.float64); z = sphere16(z)
         for k, v in SETTINGS.items():
             d = OUT / k / stem; d.mkdir(parents=True, exist_ok=True); np.save(d / "z0.npy", z[None])
             print(d.relative_to(REPO), f"uv run python scripts/single_z_search.py --clip {c} --body child --xml {XML} --objective bfm --pairs 8 "

@@ -24,6 +24,7 @@ import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.append(str(REPO))
+from crossenbodiment.geometry import sphere16   # noqa: E402  16 z / |z| (refactor step 3; 16 (z / |z|) is the same bits: 16 = 2^4)
 OUT = REPO / "outputs/mse_vs_align"
 LOG = REPO / "outputs/train_logs/mse_vs_align"
 ARMS = ("align", "mse")
@@ -113,7 +114,7 @@ def report(args):
             m["L_align"] = float(losses.functional_equivalence(fk, q, ref, W, 1 / 30)[0])
             m["mse"] = float(losses.tracking_mse(fk, q, ref)[0])
             m["dist_z0"] = float(np.linalg.norm(np.load(OUT / name / stem / "best_z.npy").reshape(-1)
-                                                - 16 * (lambda v: v / np.linalg.norm(v))(np.load(REPO / f"data/origin_z/{t}/{stem}.npy").reshape(-1)))) if name in ARMS else 0.0
+                                                - sphere16(np.load(REPO / f"data/origin_z/{t}/{stem}.npy").reshape(-1)))) if name in ARMS else 0.0
             rows[stem][name] = m
     json.dump(rows, open(OUT / "metrics.json", "w"), indent=1)
     keys = ["L_align", "mse", "joint_deg", "mpjpe_loc", "mpjpe_glob", "head_deg", "dist_z0"]

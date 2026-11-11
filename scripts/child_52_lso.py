@@ -25,6 +25,7 @@ import numpy as np
 from scipy.stats import wilcoxon
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
+from crossenbodiment.metrics import metric_body   # noqa: E402  one Body per (xml, smpl) and process (refactor step 3)
 SRC = REPO / "outputs/child_52"; OUT = REPO / "outputs/child_52_lso"; RERUN = REPO / "outputs/child_52_rerun"
 METHODS = dict(lso="", lsor="--rank", ta="--method ta --objective phc", lsor_ours="--rank --heading-weight 1.0 --pos-weight 0.1", lsor_w005="--rank --heading-weight 0.05 --pos-weight 0.005"); SEEDS = range(5); G = (4, 8, 16, 32, 64)
 OWN = dict(heading_weight=0.0, pos_weight=0.0); OURS = dict(heading_weight=1.0, pos_weight=0.1, pos_unit="adult"); OURS005 = dict(heading_weight=0.05, pos_weight=0.005, pos_unit="adult")     # BFMTrack's own cost; ours without the anchor
@@ -52,7 +53,7 @@ def clip(c):
     global body
     import eval_metrics as E
     from child_52_means import full, KEYS
-    body = body or E.Body(E.XML["child"], True); stem = c.split("/")[1]
+    body = body or metric_body(E.XML["child"], True); stem = c.split("/")[1]
     ref = np.load(REPO / f"data/child/retargeting_motion/{c}.npz")["qpos"].astype(np.float64)[1:]
     met = lambda q, ratio: [full(body, q.astype(np.float64), ref, ratio)[k] for k in KEYS]
     nat = np.load(OUT / f"{stem}_lso_s0/rollouts.npz")["q_ER8"]; native = met(nat, 1.0); bad, nat_diff, reroll = [], 0.0, 0.0

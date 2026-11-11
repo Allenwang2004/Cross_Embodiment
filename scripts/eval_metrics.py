@@ -20,6 +20,8 @@ from scipy.spatial.distance import cdist
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
+from crossenbodiment.geometry import heading_humenv_one, robot_yaw          # noqa: E402
+from crossenbodiment.metrics import height_fall, root_fail                  # noqa: E402  (the legacy success / fall definitions)
 XML = {"child": "assets/robots_torque/child/robot_torque_full.xml", "g1": "assets/robots/g1/scene.xml"}
 SETS = {"child": ("child", "z0", "best"), "g1": ("g1", "z0", "best"), "child_amass": ("child", "zero_shot", "lso_best"), "g1_amass": ("g1", "zero_shot", "lso_best")}
 METRICS = ("fall_s", "mpjpe", "mmpjpe", "emd", "dtw", "mpjae")
@@ -76,14 +78,10 @@ class Body:
 
     def local(self, Q):
         """(T, B, 3) non-root positions, (T, B + 1, 6) rotations, in each frame's path frame"""
-        import humenv.utils as hu
         m, d = self.m, self.d; B = m.nbody - 2; P = np.empty((len(Q), B, 3)); O = np.empty((len(Q), B + 1, 6))
         for t, q in enumerate(Q):
             d.qpos[:] = q; mujoco.mj_kinematics(m, d)
-            if self.smpl:
-                h = hu.calc_heading(hu.remove_base_rot(d.xquat[1][None].copy(), "smpl"))[0]
-            else:
-                R = d.xmat[1].reshape(3, 3); h = np.arctan2(R[1, 0], R[0, 0])
+            h = heading_humenv_one(d.xquat[1]) if self.smpl else robot_yaw(d.xmat[1])     # crossenbodiment.geometry
             c, s = np.cos(-h), np.sin(-h); Z = np.array([[c, -s, 0], [s, c, 0], [0, 0, 1]])
             P[t] = (d.xpos[2:] - d.xpos[1]) @ Z.T
             O[t] = (Z @ d.xmat[1:].reshape(-1, 3, 3))[:, :, [0, 2]].transpose(0, 2, 1).reshape(-1, 6)
@@ -92,13 +90,12 @@ class Body:
 
 def metrics(body, q, qr):
     T = min(len(q), len(qr)); q, qr = q[:T], qr[:T]; (p, o), (pr, or_) = body.local(q), body.local(qr); e = np.linalg.norm(p - pr, axis=-1)
-    pos = np.linalg.norm(q[:, :2] - qr[:, :2], axis=1); rot = np.degrees(2 * np.arccos(np.abs((q[:, 3:7] * qr[:, 3:7]).sum(1)).clip(0, 1)))
-    bad = (pos > 1.5) | (rot > 45); why = None
+    bad, pos = root_fail(q, qr); why = None                                 # legacy root_success: 1.5 m / 45 deg
     if bad.any():
         t = int(np.argmax(bad)); why = dict(t_s=t / 30, by="position" if pos[t] > 1.5 else "rotation")
     a, ar = np.diff(p, n=2, axis=0) * 900, np.diff(pr, n=2, axis=0) * 900
     x = np.concatenate([q[:, 2:3], p.reshape(T, -1), o.reshape(T, -1)], 1); xr = np.concatenate([qr[:, 2:3], pr.reshape(T, -1), or_.reshape(T, -1)], 1); w = np.ones(T) / T
-    return dict(frames=T, fall_s=float((q[:, 2] < 0.5 * qr[:, 2]).sum() / 30), success=not bad.any(), first_fail=why, mpjpe=float(100 * e.mean()), mmpjpe=float(100 * e.max(0).mean()),
+    return dict(frames=T, fall_s=height_fall(q, qr), success=not bad.any(), first_fail=why, mpjpe=float(100 * e.mean()), mmpjpe=float(100 * e.max(0).mean()),
                 emd=float(ot.emd2(w, w, cdist(x, xr), numItermax=100000)), dtw=dtw(q[:, 7:], qr[:, 7:]), mpjae=float(np.linalg.norm(a - ar, axis=-1).mean()))
 
 

@@ -25,6 +25,8 @@ import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO / "scripts"))
 import export_blender_package as E                                        # noqa: E402  (pose, load, meshes)
+sys.path.insert(1, str(REPO))
+from crossenbodiment.geometry import root_yaw as yaw                      # noqa: E402  root quaternion yaw (refactor step 3)
 
 OUT = REPO / "outputs/strobe_task52_blender"; S = REPO / "outputs/user_survey"; AZ = 125.0; THREADS = int(os.environ.get("STROBE_THREADS", 32))
 MODEL = dict(payload=S / "models/heavy_arm.xml", limit_leg=S / "models/limit_leg.xml", g1=S / "models/g1/scene.xml", child=S / "models/child.xml")
@@ -62,11 +64,6 @@ def add_cem(name):
     d = OUT / "trajectories" / name; n = len(np.load(d / "reference_body.npz")["qpos"]); q = np.load(REPO / CEM[name] / "best.npz")["qpos"]
     assert len(q) >= n, (name, len(q), n); np.savez_compressed(d / "cem.npz", qpos=q[:n].astype(np.float32), fps=np.float32(30))
     v = json.loads((d / "video.json").read_text()); v.setdefault("frames", {})["cem"] = n; v["cem_run"] = CEM[name]; (d / "video.json").write_text(json.dumps(v, indent=1))
-
-
-def yaw(q):
-    w, x, y, z = q[:, 3], q[:, 4], q[:, 5], q[:, 6]
-    return np.arctan2(2 * (x * y + w * z), 1 - 2 * (y * y + z * z))
 
 
 def trajectories(name, body, clip, src):

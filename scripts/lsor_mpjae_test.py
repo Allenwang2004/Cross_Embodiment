@@ -22,6 +22,7 @@ from scipy.stats import spearmanr
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
 from crossenbodiment.bodies import BODIES
+from crossenbodiment.metrics import MetricSuite, drift, metric_body, world_positions
 OUT = REPO / "outputs/lsor_mpjae_test"; OLD = REPO / "outputs/child_52_lso"; S = BODIES.scale("child")
 COND = ("lsor", "w0.01", "w0.02", "w0.05", "w0.1", "w0.2", "w0.3", "w0.5", "lsor_ours", "w2", "head", "pos"); SEEDS = range(3)
 WEIGHTS = {"lsor": "x 0", "w0.01": "x 0.01", "w0.02": "x 0.02", "w0.05": "x 0.05", "w0.1": "x 0.1", "w0.2": "x 0.2", "w0.3": "x 0.3", "w0.5": "x 0.5", "lsor_ours": "x 1", "w2": "x 2", "head": "heading only", "pos": "position only"}
@@ -29,18 +30,19 @@ body = None
 
 
 def world(Q):
-    m, d = body.m, body.d; P = np.empty((len(Q), m.nbody - 1, 3))
-    for t, q in enumerate(Q):
-        d.qpos[:] = q; mujoco.mj_kinematics(m, d); P[t] = d.xpos[1:]
-    return P
+    """world positions of every body of the module's `body` (crossenbodiment.metrics.world_positions)"""
+    return world_positions(body.m, body.d, Q)
+
+
+def body_acc(x):
+    """mean |body acceleration| (m/s^2, root-relative positions in the path frame, as in MPJAE) of a metrics.Rollout"""
+    p, _ = x.body.local(x.q)
+    return float(np.linalg.norm(np.diff(p, n=2, axis=0) * 900, axis=-1).mean())
 
 
 def stats(q, ref, Pw):
-    import eval_metrics as E
-    q = q.astype(np.float64); T = min(len(q), len(ref)); q, r = q[:T], ref[:T]; tm = E.tracking_metrics(body, q, r); p, _ = body.local(q)
-    gw = np.linalg.norm(world(q) - Pw[:T], axis=-1).mean(1)
-    return dict(**tm, success=float(not (gw > 0.5 * S).any()), drift=float(np.linalg.norm(q[:, :2] - r[:, :2], axis=1).mean()),
-                acc=float(np.linalg.norm(np.diff(p, n=2, axis=0) * 900, axis=-1).mean()))
+    """{mpjpe, mmpjpe, mpjae, success (PHC, 0.5 m x S), drift (m), acc} of the module's `body` (crossenbodiment.metrics.MetricSuite)"""
+    return MetricSuite(body, ("mpjpe", "mmpjpe", "mpjae", "success", "drift", ("acc", body_acc)), S).reference(ref, Pw)(q)
 
 
 def run_dir(stem, k, s):
@@ -50,7 +52,7 @@ def run_dir(stem, k, s):
 def clip(c):
     global body
     import eval_metrics as E
-    body = body or E.Body(E.XML["child"], True); stem = c.split("/")[1]; ref = np.load(REPO / f"data/child/retargeting_motion/{c}.npz")["qpos"].astype(np.float64)[1:]
+    body = body or metric_body(E.XML["child"], True); stem = c.split("/")[1]; ref = np.load(REPO / f"data/child/retargeting_motion/{c}.npz")["qpos"].astype(np.float64)[1:]
     Pw = world(ref); res = {}
     for k in COND:
         rows = []
@@ -64,13 +66,13 @@ def clip(c):
 def drift_vs_mpjae(c):
     global body
     import eval_metrics as E
-    body = body or E.Body(E.XML["child"], True); stem = c.split("/")[1]; ref = np.load(REPO / f"data/child/retargeting_motion/{c}.npz")["qpos"].astype(np.float64)[1:]
+    body = body or metric_body(E.XML["child"], True); stem = c.split("/")[1]; ref = np.load(REPO / f"data/child/retargeting_motion/{c}.npz")["qpos"].astype(np.float64)[1:]
     out = {}
     for k in ("lsor", "lsor_ours"):
         D, A = [], []
         for s in range(5):
             q = np.load(OLD / f"{stem}_{k}_s{s}/rollouts.npz")["q_best_it64"].astype(np.float64); T = min(len(q), len(ref))
-            D.append(np.linalg.norm(q[:T, :2] - ref[:T, :2], axis=1).mean()); A.append(E.tracking_metrics(body, q, ref)["mpjae"])
+            D.append(drift(q[:T], ref[:T])); A.append(E.tracking_metrics(body, q, ref)["mpjae"])
         out[k] = (float(np.mean(D)), float(np.mean(A)))
     return out
 

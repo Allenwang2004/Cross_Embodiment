@@ -35,6 +35,7 @@ import torch
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
+from crossenbodiment.geometry import rank_normalize_steps, smpl_heading, unit_sphere  # noqa: E402
 
 
 def colored_noise(beta, shape, rng):
@@ -158,21 +159,16 @@ def main():
         Bstart = bfm_align.embed(model, np.stack(ro2), a.device)[1:]
     Bstart = Bstart[np.minimum(np.arange(SR), len(Bstart) - 1)]            # (SR, 256), the last goal held
     Bc_t = torch.as_tensor(Bc, device=a.device)
-    unit = lambda x: x / np.linalg.norm(x, axis=-1, keepdims=True)
+    unit = unit_sphere                                                         # x / |x| along the last axis
     v0 = np.zeros(nv)
     if a.init_vel_scale:
         mujoco.mj_differentiatePos(fk, v0, 1.0 / 30, ref[0], ref[1]); v0 *= a.init_vel_scale
     ex0 = exact(ref[0], v0)
-    import humenv.utils as hu
     dk = mujoco.MjData(fk)
 
     def heading(q):
-        """(..., nq) -> humenv heading (...), as single_z_search.root_heading_xy (batched)."""
-        flat = q.reshape(-1, q.shape[-1]); Q = np.empty((len(flat), 4))
-        for i, qq in enumerate(flat):
-            dk.qpos[:] = qq; mujoco.mj_kinematics(fk, dk); Q[i] = dk.xquat[1]
-        base = np.repeat(hu.quat_conjugate(np.array([[0.5, 0.5, 0.5, 0.5]])), len(Q), axis=0)   # hu.remove_base_rot, batched
-        return hu.calc_heading(hu.quat_mul(Q, base)).reshape(q.shape[:-1])
+        """(..., nq) -> humenv heading (...), as single_z_search.root_heading_xy (batched: crossenbodiment.geometry)."""
+        return smpl_heading(fk, q, dk, batched=True)
     ref_h, ref_xy = heading(ref[1:]), ref[1:, :2]
     hid = fk.body("Head").id
     if a.objective == "mse":
@@ -320,7 +316,7 @@ def main():
         rs = r[1:]
         R = np.stack([np.convolve(x[::-1], disc)[:SR][::-1] for x in rs])              # discounted return-to-go
         if a.rank:                                                                     # centred ranks, per step
-            R = np.argsort(np.argsort(R, axis=0), axis=0) / (a.n - 1) - 0.5
+            R = rank_normalize_steps(R)                                                # R has a.n rows
         if a.antithetic:
             k = a.n // 2
             g = ((R[:k] - R[k:])[:, :, None] * eps[:k]).sum(0) / (2 * k * a.sigma)

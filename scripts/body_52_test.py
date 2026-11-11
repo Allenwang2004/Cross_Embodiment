@@ -32,6 +32,7 @@ import mujoco
 import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
+from crossenbodiment.metrics import MetricSuite, metric_body, world_positions   # noqa: E402
 OUT = REPO / "outputs/body_52"; CLIPS = tuple((REPO / "outputs/child_52/clips.txt").read_text().split())
 SEEDS = (0,); G = (4, 8, 16, 32, 64, 128); GENS = G[-1]; EVALS = 16 * GENS; KEYS = ("fall_s", "success", "mpjpe", "mmpjpe", "mpjae", "drift")
 BODIES = dict(payload=dict(label="adult_heavyRWristHand_x80", xml="assets/robots/adult_heavyRWristHand_x80/robot.xml", ref="data/origin_motion/{c}.npz",
@@ -128,19 +129,14 @@ def evalcmds():
 
 
 def world(Q):
-    m, d = body.m, body.d; P = np.empty((len(Q), m.nbody - 1, 3))
-    for t, q in enumerate(Q):
-        d.qpos[:] = q; mujoco.mj_kinematics(m, d); P[t] = d.xpos[1:]
-    return P
+    """world positions of every body of the module's `body` (crossenbodiment.metrics.world_positions)"""
+    return world_positions(body.m, body.d, Q)
 
 
 def stats(q, ref, Pw, Dr):
-    import eval_metrics as E
-    q = q.astype(np.float64); T = min(len(q), len(ref)); q, r = q[:T], ref[:T]
-    gw = np.linalg.norm(world(q) - Pw[:T], axis=-1).mean(1); _, D = body.part_floor(q)
-    tm = E.tracking_metrics(body, q, r)
-    return [float(((D <= 0.01) & (Dr[:T] > 0.05)).any(1).sum() / 30), float(not (gw > 0.5).any()), tm["mpjpe"], tm["mmpjpe"], tm["mpjae"],
-            float(np.linalg.norm(q[:, :2] - r[:, :2], axis=1).mean())]
+    """[fall_s, success, mpjpe, mmpjpe, mpjae, drift] of the module's `body` (the Task page's metrics, MetricSuite.task_page):
+    success threshold 0.5 m (s = 1: the payload and the limited leg are adult-sized), drift in metres"""
+    return MetricSuite.task_page(body, 1.0).reference(ref, Pw, Dr).values(q)
 
 
 def settings_bad(b, c, k, S_, s):
@@ -164,7 +160,7 @@ def clip(job):
     import eval_metrics as E
     b, c = job; B = BODIES[b]; D = OUT / b; st = stem(c)
     if body is None or body.xml != B["xml"]:
-        body = E.Body(str(REPO / B["xml"]), True); body.xml = B["xml"]
+        body = metric_body(str(REPO / B["xml"]), True); body.xml = B["xml"]
     ref = np.load(REPO / B["ref"].format(c=c))["qpos"].astype(np.float64)[1:]; Pw = world(ref); _, Dr = body.part_floor(ref)
     R = {}; chk = dict(bad=[], native_diff=0.0, reroll_cost=0.0, reroll_best_qpos=0.0, seq_reroll=0.0, cem_z0=0.0)
     R["frozen"] = np.array([stats(np.load(D / f"{st}_es_s0/origin_z.npz")["qpos"], ref, Pw, Dr)])

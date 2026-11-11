@@ -26,6 +26,7 @@ import numpy as np
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
 from crossenbodiment.bodies import BODIES
 from crossenbodiment.paths import CHILD_XML_REL
+from crossenbodiment.metrics import MetricSuite, metric_body, world_positions
 OUT = REPO / "outputs/amass_baselines"; CLIPS = [l.strip() for l in open(OUT / "clips.txt")]
 BODY = dict(child=dict(ref="amass_data/amass_retargeting_motion/ACCAD/{c}.npz", iters=64, G=(4, 8, 16, 32, 64), xml=CHILD_XML_REL),
             tall=dict(label="len1.4_wid0.8", ref="data/len1.4_wid0.8/amass_retargeting_motion/ACCAD/{c}.npz", iters=64, G=(4, 8, 16, 32, 64),
@@ -56,27 +57,15 @@ _ctx = {}
 
 
 def one(job):
-    import mujoco
-    import eval_metrics as E
     from model.exact_obs import ExactObs, ADULT_XML
     b, c = job; B = BODY[b]
     if _ctx.get("b") != b:
-        _ctx.update(b=b, body=E.Body(B["xml"], True))
+        _ctx.update(b=b, body=metric_body(B["xml"], True))
     body, s = _ctx["body"], scale(b, c); m, d = body.m, body.d
     ref = np.load(REPO / B["ref"].format(c=c))["qpos"].astype(np.float64)[1:]
-
-    def xpos(Q):
-        P = np.empty((len(Q), m.nbody - 1, 3))
-        for t, q in enumerate(Q):
-            d.qpos[:] = q; mujoco.mj_kinematics(m, d); P[t] = d.xpos[1:]
-        return P
-    Pr = xpos(ref); _, Dr = body.part_floor(ref)
-
-    def stats(q):
-        q = q.astype(np.float64); T = min(len(q), len(ref)); q, r = q[:T], ref[:T]
-        gw = np.linalg.norm(xpos(q) - Pr[:T], axis=-1).mean(1); _, D = body.part_floor(q); tm = E.tracking_metrics(body, q, r)
-        return [tm["mpjpe"], tm["mmpjpe"], tm["mpjae"], float(((D <= 0.01) & (Dr[:T] > 0.05)).any(1).sum() / 30), float(not (gw > 0.5 * s).any()),
-                float(np.linalg.norm(q[:, :2] - r[:, :2], axis=1).mean() / s)]
+    Pr = world_positions(m, d, ref); _, Dr = body.part_floor(ref)
+    # [mpjpe, mmpjpe, mpjae, fall_s, success (PHC, 0.5 m x s), drift (adult-equivalent m)] per rollout (crossenbodiment.metrics)
+    stats = MetricSuite(body, ("mpjpe", "mmpjpe", "mpjae", "fall_s", "success", "drift"), s, drift_unit="adult").reference(ref, Pr, Dr).values
     R, chk = {}, dict(native_diff=0.0, bad=[])
     nat = None
     for k in METHODS:

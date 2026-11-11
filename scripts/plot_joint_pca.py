@@ -4,9 +4,12 @@ each clip (every start tracking its own adult rollout on the child, two-stage L_
 outputs/latent_transfer_own/<stem>/align), 32 latents in all, PCA fit on all 32 (radius-16 vectors).
 Writes outputs/latent_transfer_own/pca_joint_align.png.
 """
+import sys
 from pathlib import Path
 import numpy as np
 REPO = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO))
+from crossenbodiment.geometry import sphere16   # noqa: E402  16 z / |z| (refactor step 3)
 SURF, INK, INK2, INK3 = "#fcfcfb", "#0b0b0b", "#52514e", "#8a8983"
 N = ["z0", "rot0.5_0", "rot1_0", "rot2_0", "rot5_0", "rot10_0", "rot20_0", "rot30_0"]
 L = ["0", "0.5", "1", "2", "5", "10", "20", "30"]
@@ -15,7 +18,7 @@ CLIPS = {"headstand_3": ("headstand", "#eb6834"), "move-ego-0-2_4": ("walking", 
 
 def ld(p):
     v = np.load(p).reshape(-1).astype(np.float64)
-    return 16 * v / np.linalg.norm(v)
+    return sphere16(v)
 
 
 pts, meta = [], []

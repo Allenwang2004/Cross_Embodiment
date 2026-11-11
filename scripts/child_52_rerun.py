@@ -12,6 +12,7 @@ import numpy as np
 from scipy.stats import wilcoxon
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
+from crossenbodiment.metrics import metric_body   # noqa: E402  one Body per (xml, smpl) and process (refactor step 3)
 SRC = REPO / "outputs/child_52"; OLD_CMA = REPO / "outputs/child_52_cmaes"; OUT = REPO / "outputs/child_52_rerun"; ROLL = OUT / "rollouts"; ALGOS = ("es", "cem", "random", "cmaes"); SEEDS = range(5); G = (4, 8, 16, 32, 64)
 SAME = ("evals", "generations", "pairs", "sigma", "lr", "steps", "fitness", "sampling", "objective", "init_vel_scale", "heading_weight", "pos_weight", "pos_unit", "pos_div", "anchor_weight", "obs_scale", "init", "bfm_zero_vel", "fall_weight", "seed", "algo")
 body = None
@@ -41,7 +42,7 @@ def clip(c):
     global body
     import eval_metrics as E
     from child_52_means import full, KEYS
-    body = body or E.Body(E.XML["child"], True); stem = c.split("/")[1]; ref = np.load(REPO / f"data/child/retargeting_motion/{c}.npz")["qpos"].astype(np.float64)[1:]; d = ROLL / stem
+    body = body or metric_body(E.XML["child"], True); stem = c.split("/")[1]; ref = np.load(REPO / f"data/child/retargeting_motion/{c}.npz")["qpos"].astype(np.float64)[1:]; d = ROLL / stem
     ix = json.load(open(d / "index.json"))["map"]; Q = np.load(d / "eval_qpos.npz")["qpos"].astype(np.float64); cost = [float(r["cost"]) for r in csv.DictReader(open(d / "eval.csv"))]; base = json.load(open(d / "eval_base.json"))["cost"]; V = {}
     def m(i):
         if i not in V:

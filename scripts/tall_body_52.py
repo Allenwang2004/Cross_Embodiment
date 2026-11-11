@@ -29,6 +29,7 @@ from pathlib import Path
 import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
+from crossenbodiment.metrics import MetricSuite, metric_body, world_positions   # noqa: E402
 B = "len1.4_wid0.8"; XML = f"assets/robots_torque/{B}/robot_torque_full.xml"; OUT = REPO / "outputs/tall_body_52"
 CLIPS = [l.strip() for l in open(REPO / "outputs/child_52/clips.txt")]
 KEYS = ("mpjpe", "mmpjpe", "mpjae", "fall_s", "success", "phc", "drift")
@@ -52,11 +53,9 @@ _ctx = {}
 
 
 def one(c):
-    import mujoco
-    import eval_metrics as E
     from model.phc_reward import PHCCost
     if not _ctx:
-        _ctx["body"] = E.Body(XML, True)
+        _ctx["body"] = metric_body(XML, True)
     body = _ctx["body"]; m, d = body.m, body.d; st = st_(c)
     ref_all = np.load(REPO / f"data/{B}/retargeting_motion/{c}.npz")["qpos"].astype(np.float64); ref = ref_all[1:]
     S = {a: json.load(open(OUT / f"{st}_{a}_s0/summary.json")) for a in ("es", "cem")}; s = S["es"]["pos_div"]
@@ -67,19 +66,10 @@ def one(c):
                pos_div=s, z0_same=float(np.abs(np.load(OUT / f"{st}_es_s0/origin_z.npz")["qpos"] - np.load(OUT / f"{st}_cem_s0/origin_z.npz")["qpos"]).max()))
     phc = PHCCost(m, ref_all[0], ref, scale=s)
 
-    def xpos(Q):
-        P = np.empty((len(Q), m.nbody - 1, 3))
-        for t, q in enumerate(Q):
-            d.qpos[:] = q; mujoco.mj_kinematics(m, d); P[t] = d.xpos[1:]
-        return P
-    Pr = xpos(ref); _, Dr = body.part_floor(ref)
-
-    def stats(q):
-        q = q.astype(np.float64); T = min(len(q), len(ref)); r = ref[:T]; q = q[:T]
-        gw = np.linalg.norm(xpos(q) - Pr[:T], axis=-1).mean(1); _, D = body.part_floor(q); tm = E.tracking_metrics(body, q, r)
-        return dict(mpjpe=tm["mpjpe"], mmpjpe=tm["mmpjpe"], mpjae=tm["mpjae"], fall_s=float(((D <= 0.01) & (Dr[:T] > 0.05)).any(1).sum() / 30),
-                    success=float(not (gw > 0.5 * s).any()), phc=1.0 - float(phc(q[None], ref_all[0])[0]),
-                    drift=float(np.linalg.norm(q[:, :2] - r[:, :2], axis=1).mean() / s))
+    Pr = world_positions(m, d, ref); _, Dr = body.part_floor(ref)
+    # {mpjpe, mmpjpe, mpjae, fall_s, success (PHC, 0.5 m x s), phc (PHC's tracking reward), drift (adult-equivalent m)} per rollout
+    stats = MetricSuite(body, ("mpjpe", "mmpjpe", "mpjae", "fall_s", "success", ("phc", lambda x: 1.0 - float(phc(x.q[None], ref_all[0])[0])), "drift"),
+                        s, drift_unit="adult").reference(ref, Pr, Dr)
     res = dict(z0=stats(np.load(OUT / f"{st}_es_s0/origin_z.npz")["qpos"]), cem=stats(np.load(OUT / f"{st}_cem_s0/best.npz")["qpos"]),
                ours=stats(np.load(OUT / f"{st}_es_s0/best.npz")["qpos"]))
     return st, res, chk

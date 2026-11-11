@@ -37,7 +37,8 @@ import torch
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
-from single_z_search import project_z, rank_normalize, ang_pair   # noqa: E402
+from single_z_search import project_z, rank_normalize, ang_pair   # noqa: E402  (crossenbodiment.geometry's, re-exported there)
+from crossenbodiment.geometry import robot_yaw, smpl_heading       # noqa: E402
 from g1_z0_rollout import motion                                    # noqa: E402
 from model import bfm_align                                         # noqa: E402
 from model.g1_env import G1VecEnv, G1_XML                           # noqa: E402
@@ -76,7 +77,6 @@ def main():
 
     vec = G1VecEnv(n_envs, gains=a.gains)                                  # spawn the workers before CUDA is touched
     from humenv import make_humenv
-    import humenv.utils as hu
     from metamotivo.fb_cpr.huggingface import FBcprModel
     ref = np.load(REPO / f"data/origin_motion/{a.clip}.npz")["qpos"]
     T = len(ref)
@@ -100,7 +100,7 @@ def main():
         E = np.empty((len(flat), 5, 3))
         for i, qq in enumerate(flat):
             gd.qpos[:] = qq; mujoco.mj_kinematics(mg, gd)
-            pel = gd.xpos[1].copy(); R = gd.xmat[1].reshape(3, 3); h = np.arctan2(R[1, 0], R[0, 0])
+            pel = gd.xpos[1].copy(); h = robot_yaw(gd.xmat[1])
             d = np.stack([gd.xpos[hands[0]], gd.xpos[hands[1]], gd.site_xpos[feet[0]], gd.site_xpos[feet[1]],
                           gd.geom_xpos[head_geom]]) - pel
             c, sn = np.cos(h), np.sin(h)
@@ -117,11 +117,7 @@ def main():
                 + ((P - ref_P[None]) ** 2).sum(-1).mean(1) + (1 - np.cos(H - ref_H[None])).mean(1))
 
     def heading_xy(qs):
-        flat = qs.reshape(-1, qs.shape[-1]); h = np.empty(len(flat))
-        for i, qq in enumerate(flat):
-            dk.qpos[:] = qq; mujoco.mj_kinematics(fk, dk)
-            h[i] = hu.calc_heading(hu.remove_base_rot(dk.xquat[1][None].copy(), "smpl"))[0]
-        return h.reshape(qs.shape[:-1]), qs[..., :2]
+        return smpl_heading(fk, qs, dk), qs[..., :2]                     # humenv's heading, frame by frame
     ref_h, ref_xy = heading_xy(ref)
 
     @torch.no_grad()

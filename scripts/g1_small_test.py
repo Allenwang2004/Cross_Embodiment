@@ -37,6 +37,7 @@ import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
 from crossenbodiment.bodies import BODIES
+from crossenbodiment.metrics import MetricSuite, metric_body, world_positions
 SET = sys.argv[sys.argv.index("--set") + 1] if "--set" in sys.argv else "small"
 CONF = {"small": dict(out="outputs/g1_small", clips=("headstand/headstand_4", "rotate-x--5-0.8/rotate-x--5-0.8_4", "move-ego-0-2/move-ego-0-2_1"),
                       seeds=(0, 1, 2), G=(4, 8, 16, 32, 64)),
@@ -105,19 +106,14 @@ def evalcmds():
 
 
 def world(Q):
-    m, d = body.m, body.d; P = np.empty((len(Q), m.nbody - 1, 3))
-    for t, q in enumerate(Q):
-        d.qpos[:] = q; mujoco.mj_kinematics(m, d); P[t] = d.xpos[1:]
-    return P
+    """world positions of every body of the module's `body` (crossenbodiment.metrics.world_positions)"""
+    return world_positions(body.m, body.d, Q)
 
 
 def stats(q, ref, Pw, Dr):
-    import eval_metrics as E
-    q = q.astype(np.float64); T = min(len(q), len(ref)); q, r = q[:T], ref[:T]
-    gw = np.linalg.norm(world(q) - Pw[:T], axis=-1).mean(1); _, D = body.part_floor(q)
-    tm = E.tracking_metrics(body, q, r)
-    return [float(((D <= 0.01) & (Dr[:T] > 0.05)).any(1).sum() / 30), float(not (gw > 0.5 * S).any()), tm["mpjpe"], tm["mmpjpe"], tm["mpjae"],
-            float(np.linalg.norm(q[:, :2] - r[:, :2], axis=1).mean())]
+    """[fall_s, success, mpjpe, mmpjpe, mpjae, drift] of the module's `body` (the G1; MetricSuite.task_page): success threshold
+    0.5 m x S (the G1's s), drift in the G1's metres"""
+    return MetricSuite.task_page(body, S).reference(ref, Pw, Dr).values(q)
 
 
 def settings_bad(k, S_, single):
@@ -135,7 +131,7 @@ def settings_bad(k, S_, single):
 def clip(c):
     global body
     import eval_metrics as E
-    body = body or E.Body(E.XML["g1"], False); st = stem(c)
+    body = body or metric_body(E.XML["g1"], False); st = stem(c)
     ref = np.load(REPO / f"outputs/g1/roundtrip/{st}/g1.npz")["qpos"].astype(np.float64)[1:]; Pw = world(ref); _, Dr = body.part_floor(ref)
     R = {}; chk = dict(bad=[], frozen_diff=0.0, native_diff=0.0, reroll_cost=0.0, reroll_best_qpos=0.0, seq_reroll=0.0)
     z0 = np.load(OUT / f"{st}_es_s0/origin_z.npz")["qpos"]; R["frozen"] = np.array([stats(z0, ref, Pw, Dr)])

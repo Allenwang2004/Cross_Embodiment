@@ -40,6 +40,7 @@ import torch
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
 from lso_search import colored_noise                                # noqa: E402
+from crossenbodiment.geometry import rank_normalize_steps, smpl_heading, unit_sphere   # noqa: E402
 from model import bfm_align                                         # noqa: E402
 from model.robot_env import RobotVecEnv                             # noqa: E402
 from model.robot_map import RobotMap                                # noqa: E402
@@ -85,14 +86,13 @@ def main():
     vec = RobotVecEnv(a.robot, n_envs, fill=a.fill, gains=a.gains)       # spawn the workers before CUDA is touched
     rm = RobotMap(a.robot, fill=a.fill); n_link = len(rm.pairs) - 1
     from humenv import make_humenv
-    import humenv.utils as hu
     from metamotivo.fb_cpr.huggingface import FBcprModel
     model = FBcprModel.from_pretrained("facebook/metamotivo-M-1").to(a.device); model.eval()
     adult, _ = make_humenv(num_envs=1, task=None, xml=str(REPO / "assets/robots/adult/robot.xml"), state_init="Default")
     fk = adult.unwrapped.model; dk = mujoco.MjData(fk)
     Bg = bfm_align.embed(model, bfm_align.obs_from_qpos(adult, ref), a.device)[1:]      # (S, 256): goal of step t = frame t+1
     Bg_t = torch.as_tensor(Bg, device=a.device)
-    unit = lambda x: x / np.linalg.norm(x, axis=-1, keepdims=True)
+    unit = unit_sphere                                                   # x / |x| along the last axis
     phc = None
     if a.objective == "phc":
         from model.phc_reward import PHCCost
@@ -104,11 +104,7 @@ def main():
         print(f"phc: {mg.nbody - 1} robot bodies against {tgt}, lengths / s = {rm.s:.6f}", flush=True)
 
     def heading_xy(qs):
-        flat = qs.reshape(-1, qs.shape[-1]); h = np.empty(len(flat))
-        for i, qq in enumerate(flat):
-            dk.qpos[:] = qq; mujoco.mj_kinematics(fk, dk)
-            h[i] = hu.calc_heading(hu.remove_base_rot(dk.xquat[1][None].copy(), "smpl"))[0]
-        return h.reshape(qs.shape[:-1]), qs[..., :2]
+        return smpl_heading(fk, qs, dk), qs[..., :2]                     # humenv's heading, frame by frame
     ref_h, ref_xy = heading_xy(ref[1:])
 
     @torch.no_grad()
@@ -203,7 +199,7 @@ def main():
         else:
             R = np.stack([np.convolve(x[::-1], disc)[:S][::-1] for x in r[1:]])       # discounted return-to-go
             if a.rank:
-                R = np.argsort(np.argsort(R, axis=0), axis=0) / (a.n - 1) - 0.5
+                R = rank_normalize_steps(R)                                            # R has a.n rows
             A = R - (R.sum(0, keepdims=True) - R) / (a.n - 1)
             g = (A[:, :, None] * eps).mean(0) / a.sigma
             m = b1 * m + (1 - b1) * g; v = b2 * v + (1 - b2) * g * g

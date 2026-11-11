@@ -12,13 +12,15 @@ from scipy.stats import wilcoxon
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
 import eval_metrics as E                                                  # noqa: E402
+from crossenbodiment import metrics as M                                  # noqa: E402  (the legacy definitions, refactor step 3)
 SRC = REPO / "outputs/child_52"; CUR = REPO / "outputs/child_52_curves"; MZ = REPO / "outputs/child_52_mean_z"; ALGOS = [("es", "LOES (ours)", "#2a78d6"), ("cem", "CEM", "#eb6834"), ("random", "Random search", "#1baf7a")]
 KEYS = ("ratio", "fall_s", "success", "mpjpe", "mmpjpe", "mpjae"); G = (4, 8, 16, 32, 64); INK, MUTED, GRID, SURF = "#1f1e1c", "#6b6a64", "#e4e3de", "#fcfcfb"
 
 
 def full(body, q, qr, ratio):
-    T = min(len(q), len(qr)); pos = np.linalg.norm(q[:T, :2] - qr[:T, :2], axis=1); rot = np.degrees(2 * np.arccos(np.abs((q[:T, 3:7] * qr[:T, 3:7]).sum(1)).clip(0, 1)))
-    return dict(E.tracking_metrics(body, q, qr), ratio=ratio, fall_s=float((q[:T, 2] < 0.5 * qr[:T, 2]).sum() / 30), success=float(not ((pos > 1.5) | (rot > 45)).any()))
+    """the legacy metrics: tracking_metrics + height_fall (fall_s) + root_success (1.5 m / 45 deg), crossenbodiment.metrics"""
+    T = min(len(q), len(qr))
+    return dict(E.tracking_metrics(body, q, qr), ratio=ratio, fall_s=M.height_fall(q[:T], qr[:T]), success=float(M.root_success(q[:T], qr[:T])))
 
 
 TOUCH, REF_NEAR, HAND_MOTION_S = 0.01, 0.05, 0.5
@@ -29,9 +31,8 @@ def hand_fall(body, q, qr):
     Returns (by_motion, by_frame): by_motion is NaN for a motion whose reference has its hands within REF_NEAR (5 cm; kinematic references
     hover) for HAND_MOTION_S (0.5 s) or more, i.e. one where the hands are meant to touch the floor; by_frame counts only the frames
     where the reference's hands are more than 5 cm above the floor. q[t] is compared with qr[t] (pass qr = ref[1:])."""
-    T = min(len(q), len(qr)); h, hr = body.hand_floor(q[:T]), body.hand_floor(qr[:T]); touch = h <= TOUCH
-    hand_motion = (hr <= REF_NEAR).sum() / 30 >= HAND_MOTION_S
-    return (float("nan") if hand_motion else float(touch.sum() / 30)), float((touch & (hr > REF_NEAR)).sum() / 30)
+    T = min(len(q), len(qr))
+    return M.hand_fall(body.hand_floor(q[:T]), body.hand_floor(qr[:T]), touch=TOUCH, near=REF_NEAR, motion_s=HAND_MOTION_S)
 
 
 def main():
