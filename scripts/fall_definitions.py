@@ -21,6 +21,7 @@ REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sy
 from crossenbodiment.metrics import contact_fall_time, height_fall, metric_body   # noqa: E402
 from crossenbodiment import paths   # noqa: E402
 from crossenbodiment.experiment import output_arg, parse_flag, workers   # noqa: E402
+from crossenbodiment.methods import RESULT_KEYS, experiment_keys, key_in   # noqa: E402
 from crossenbodiment.reroll import Reroller   # noqa: E402
 from crossenbodiment.results import write_json   # noqa: E402
 # refactor step 8: runs are read under paths.outputs_root() ($CE_OUTPUTS_ROOT), the result written under paths.results_root()
@@ -29,6 +30,14 @@ OUT = paths.result("fall_definitions"); RERUN = paths.output("child_52_rerun"); 
 # --loes-dir outputs/noanchor/child (user 11/11): LOES ("es") from LOES without the anchor term, everything else unchanged;
 # the result goes to task_motions_noanchor.json next to the anchored one
 LOESD = None       # None: RERUN, read at call time
+# run-directory keys (crossenbodiment/methods.py RUNS) and this file's method keys (RESULT_KEYS "outputs/fall_definitions"): in child_52_rerun
+# "es" = LOES with the anchor, "cem" = CEM with our cost (cem_ours); in child_52_cem_phc "cem" = BFM-Zero's CEM, written as "cem_phc";
+# in child_52_lso "lsor" = LSOR with BFMTrack's cost (lsor_bfm)
+RR, LK = experiment_keys("outputs/child_52_rerun"), experiment_keys("outputs/child_52_lso")
+LOES, CEMP_KEY = RR["loes_anchor"], key_in("outputs/child_52_cem_phc", "cem_phc")
+CEMP_RESULT = next(k for k, m in RESULT_KEYS["outputs/fall_definitions"].items() if m == "cem_phc")      # "cem_phc"
+RERUN_ALGOS = (RR["random"], RR["cem_ours"], RR["cmaes"])
+SEQ_KEYS = (LK["lso"], LK["lsor_bfm"], LK["ta"], LK["lsor_ours"], LK["lsor_w005"])
 SUFFIX = ""
 DEFS = ("height", "hand_mot", "hand_frm", "contact", "head"); TOUCH, NEAR = 0.01, 0.05
 body = None
@@ -62,16 +71,16 @@ def clip(c):
     names, Dr = body.part_floor(ref); d = mujoco.MjData(body.m); hid = body.m.body("Head").id; hr = np.empty(len(ref))
     for t in range(len(ref)):
         d.qpos[:] = ref[t]; mujoco.mj_kinematics(body.m, d); hr[t] = d.xpos[hid][2]
-    R = (names, Dr, hr); res = {"frozen": falls(np.load(RERUN / f"{stem}_es_s0/origin_z.npz")["qpos"], ref, R)}
+    R = (names, Dr, hr); res = {"frozen": falls(np.load(RERUN / f"{stem}_{LOES}_s0/origin_z.npz")["qpos"], ref, R)}
     self_check = falls(ref, ref, R)
-    for src, algos in ((LOESD or RERUN, ("es",)), (RERUN, ("random", "cem", "cmaes")), (CEMP, ("cem",))):            # LOES from --loes-dir (default RERUN)
+    for src, algos in ((LOESD or RERUN, (LOES,)), (RERUN, RERUN_ALGOS), (CEMP, (CEMP_KEY,))):            # LOES from --loes-dir (default RERUN)
         ix = Reroller.read(src / f"rollouts/{stem}"); Q = np.load(src / f"rollouts/{stem}/eval_qpos.npz")["qpos"]
         for a in algos:
-            key = "cem_phc" if src == CEMP else a
+            key = CEMP_RESULT if src == CEMP else a
             res[key + "_best"] = [falls(Q[ix.best_last(f"{stem}_{a}_s{s}")], ref, R) for s in range(5)]
             res[key + "_centre"] = [falls(Q[ix.centre_last(f"{stem}_{a}_s{s}")], ref, R) for s in range(5)]
-    res["native"] = falls(np.load(LSO / f"{stem}_lso_s0/rollouts.npz")["q_ER8"], ref, R)
-    for k in ("lso", "lsor", "ta", "lsor_ours", "lsor_w005"):
+    res["native"] = falls(np.load(LSO / f"{stem}_{LK['lso']}_s0/rollouts.npz")["q_ER8"], ref, R)
+    for k in SEQ_KEYS:
         if all((LSO / f"{stem}_{k}_s{s}/rollouts.npz").exists() for s in range(5)):
             Rs = [np.load(LSO / f"{stem}_{k}_s{s}/rollouts.npz") for s in range(5)]
             res[k + "_best"] = [falls(x["q_best_it64"], ref, R) for x in Rs]; res[k + "_centre"] = [falls(x["q_mean_it64"], ref, R) for x in Rs]

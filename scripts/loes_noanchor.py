@@ -30,6 +30,7 @@ from crossenbodiment.metrics import MetricSuite, metric_body, world_positions
 from crossenbodiment.paths import CHILD_52_TASK, read_clips   # noqa: E402  configs/clips/child_52_task.txt = outputs/child_52/clips.txt (refactor step 4)
 from crossenbodiment import paths
 from crossenbodiment.experiment import ClipSet, Experiment, parse_flag, workers
+from crossenbodiment.methods import key_in
 from crossenbodiment.reroll import EvalRollouts, Reroller, read_best_so_far
 from crossenbodiment.results import Checks, ReportWriter, ResultsTable, write_json
 # refactor step 8: --bodies is read in main (not at import); runs are read under paths.outputs_root() ($CE_OUTPUTS_ROOT), results
@@ -37,7 +38,12 @@ from crossenbodiment.results import Checks, ReportWriter, ResultsTable, write_js
 # (crossenbodiment/reroll.py), analyse reads any. body_52_test / g1_small_test are imported for their builders (g1: configure("52")).
 CLIPS = read_clips(CHILD_52_TASK)
 ORDER = sorted(CLIPS, key=lambda c: -len(np.load(REPO / f"data/origin_motion/{c}.npz")["qpos"]))
-EXP = Experiment(OUT, clips=ClipSet(ORDER), methods=("es",), name="{body}/{stem}_{method}_s{seed}")
+# run-directory keys (crossenbodiment/methods.py RUNS): LOES without the anchor is "es" here; the anchored LOES it is compared with is
+# "es" too in child_52_rerun, g1_52 and body_52/<body> (and their results.json method key)
+LOES = key_in("outputs/noanchor/<body>", "loes")
+ANCHORED = key_in("outputs/child_52_rerun", "loes_anchor")
+assert ANCHORED == key_in("outputs/g1_52", "loes_anchor") == key_in("outputs/body_52/<body>", "loes_anchor")
+EXP = Experiment(OUT, clips=ClipSet(ORDER), methods=(LOES,), name="{body}/{stem}_{method}_s{seed}")
 
 
 def child_cmd(c, s):
@@ -63,9 +69,9 @@ def commands():
     B, G1 = builders()
     EXP.print_commands(lambda r: f"{noanchor(child_cmd(r.clip, r.seed))} --out {r.dir}", order=("seed", "clip"), seed=range(5), body=("child",))
     for c in ORDER:
-        EXP.print_commands(lambda r: f"{noanchor(B.zcmd(r.body, r.clip, 'es'))} --seed 0 --out {r.dir}", order=("body",), clip=(c,),
+        EXP.print_commands(lambda r: f"{noanchor(B.zcmd(r.body, r.clip, B.LOES))} --seed 0 --out {r.dir}", order=("body",), clip=(c,),
                            body=("payload", "limit_leg"))
-        EXP.print_commands(lambda r: f"{noanchor(G1.zcmd(r.clip, 'es'))} --seed 0 --out {r.dir}", order=(), clip=(c,), body=("g1",))
+        EXP.print_commands(lambda r: f"{noanchor(G1.zcmd(r.clip, G1.LOES))} --seed 0 --out {r.dir}", order=(), clip=(c,), body=("g1",))
 
 
 REP = Path(__file__).resolve().parent.parent
@@ -81,7 +87,7 @@ def st_(c):
 
 
 def done(b, c):
-    return all(EXP.done(EXP.run(c, "es", s, b)) for s in CONF[b]["seeds"])
+    return all(EXP.done(EXP.run(c, LOES, s, b)) for s in CONF[b]["seeds"])
 
 
 def reroller(b):
@@ -96,7 +102,7 @@ def prepare():
         for c in CLIPS:
             if not done(b, c):
                 continue
-            reroller(b).prepare(RESD / b / "rollouts" / st_(c), [(f"{st_(c)}_es_s{s}", IN / b / f"{st_(c)}_es_s{s}") for s in CONF[b]["seeds"]],
+            reroller(b).prepare(RESD / b / "rollouts" / st_(c), [(f"{st_(c)}_{LOES}_s{s}", IN / b / f"{st_(c)}_{LOES}_s{s}") for s in CONF[b]["seeds"]],
                                 body=b, clip=c); n += 1
     print("prepared", n)
 
@@ -108,7 +114,7 @@ def evalcmds():
             d = EXP.rollouts_dir(st_(c), body=b)
             if not (IN / b / "rollouts" / st_(c) / "z.npy").exists():
                 continue
-            base = {"child": lambda: child_cmd(c, 0), "g1": lambda: G1.zcmd(c, "es")}.get(b, lambda: B.zcmd(b, c, "es"))()
+            base = {"child": lambda: child_cmd(c, 0), "g1": lambda: G1.zcmd(c, G1.LOES)}.get(b, lambda: B.zcmd(b, c, B.LOES))()
             print(EXP.eval_line(d, noanchor(base), seed=None if b == "child" else 0))
 
 
@@ -149,23 +155,24 @@ def clip_job(job):
     cost = np.array(ev.cost); chk = Checks(("reroll_cost", "z0_vs_anchored"), ("bad",))
     R = dict(best=np.zeros((len(CONF[b]["seeds"]), len(G), len(KEYS))), centre=np.zeros((len(CONF[b]["seeds"]), len(G), len(KEYS))))
     for i, s in enumerate(CONF[b]["seeds"]):
-        r = f"{st}_es_s{s}"; new = json.load(open(IN / b / r / "summary.json")); old = json.load(open(old_dir / r / "summary.json"))
+        r, r_old = f"{st}_{LOES}_s{s}", f"{st}_{ANCHORED}_s{s}"
+        new = json.load(open(IN / b / r / "summary.json")); old = json.load(open(old_dir / r_old / "summary.json"))
         skip = {"minutes", "best", "improvement_vs_origin_z", "cos_best_z0", "path_len_deg", "net_deg", "origin_z", "anchor_weight", "xml", "out", "summary", "elapsed_min", "best_from"}
         chk["bad"] += [(r, k, old.get(k), new.get(k)) for k in set(old) | set(new) if k not in skip and old.get(k) != new.get(k)]
         if new.get("anchor_weight") not in (0, 0.0):
             chk["bad"].append((r, "anchor_weight", new.get("anchor_weight")))
         chk.high("reroll_cost", ix.check_vs_curve(r, cost, read_best_so_far(IN / b / r)))   # every re-rolled generation
         bi = ix.best_budgets(r)                                                              # the best latent at each budget of G
-        zn = np.load(IN / b / r / "origin_z.npz")["qpos"]; zo = np.load(old_dir / r / "origin_z.npz")["qpos"]
+        zn = np.load(IN / b / r / "origin_z.npz")["qpos"]; zo = np.load(old_dir / r_old / "origin_z.npz")["qpos"]
         chk.diff("z0_vs_anchored", zn, zo)
         ci = ix.centre(r)
         for j in range(len(G)):
             R["best"][i, j] = f(Q[bi[j]]); R["centre"][i, j] = f(Q[ci[j]])
-    R["frozen"] = np.array(f(np.load(IN / b / f"{st}_es_s0/origin_z.npz")["qpos"]))
+    R["frozen"] = np.array(f(np.load(IN / b / f"{st}_{LOES}_s0/origin_z.npz")["qpos"]))
     if b == "child":                                                   # the anchored LOES, the same code (must give the Task page's numbers)
         oev = EvalRollouts(old_dir / "rollouts" / st, G, G[-1]); oix = oev.index; OQ = oev.qpos
-        R["anchored_best"] = np.array([[f(OQ[oix.best_at(f"{st}_es_s{s}", g)]) for g in G] for s in CONF[b]["seeds"]])
-        R["anchored_centre"] = np.array([[f(OQ[oix.centre(f"{st}_es_s{s}")[j]]) for j in range(len(G))] for s in CONF[b]["seeds"]])
+        R["anchored_best"] = np.array([[f(OQ[oix.best_at(f"{st}_{ANCHORED}_s{s}", g)]) for g in G] for s in CONF[b]["seeds"]])
+        R["anchored_centre"] = np.array([[f(OQ[oix.centre(f"{st}_{ANCHORED}_s{s}")[j]]) for j in range(len(G))] for s in CONF[b]["seeds"]])
     return b, st, R, chk
 
 
@@ -191,7 +198,7 @@ def analyse():
             rep[b]["anchored"] = dict(best=mean("anchored_best"), centre=mean("anchored_centre"))
         else:
             old = json.load(open(paths.output("g1_52" if b == "g1" else f"body_52/{b}") / "results.json"))["mean"]
-            rep[b]["anchored"] = {w: old[w]["es"] for w in ("best", "centre")}; rep[b]["baselines"] = {w: {k: v for k, v in old[w].items() if k != "es"} for w in ("best", "centre")}
+            rep[b]["anchored"] = {w: old[w][ANCHORED] for w in ("best", "centre")}; rep[b]["baselines"] = {w: {k: v for k, v in old[w].items() if k != ANCHORED} for w in ("best", "centre")}
         L.append(f"\n## {b} ({chk['motions']} motions)\nchecks: settings differing beyond anchor_weight: {len(chk['bad'])} {chk['bad'][:3]} | re-roll vs best cost so far: {chk['reroll_cost']:.2g} | z0 rollout vs the anchored runs': {chk['z0_vs_anchored']}")
         for n_ in sorted({1024, 16 * G[-1]}):
             for w in ("best", "centre"):

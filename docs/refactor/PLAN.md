@@ -35,20 +35,23 @@ step, reporting after each step and stopping only when a check fails or a decisi
 
 ## Steps (in order)
 
-| # | Step | Verification |
-|---|---|---|
-| 0 | Golden harness `tests/golden/` (commands, baseline outputs from the snapshot code, comparator) | baseline exists; re-running the snapshot code reproduces it (determinism check) |
-| 1 | Archive unused files to `archive/` (see list below) | every remaining script imports (`python -c "import ast"` + import smoke test of modules); golden identical |
-| 2 | Package skeleton `crossenbodiment/` (paths.py with REPO from `__file__`), `BodySpec`/`BodyRegistry` (+ s computed once), `RobotSpec`, `MethodSpec` registry; replace literal paths/scales in live code | registry reproduces every s/path used by existing results (assert table); golden identical |
-| 3 | Pure-function consolidation: geometry (heading x6, robot yaw, lowest point x5, quaternion), `project_z` x13, metrics (`world/xpos` x9, `stats` x8) into `eval/metrics.py` + `MetricSuite` with named definitions (legacy root-success/height-fall vs PHC-success/contact-fall) | golden metrics file (Task-page metrics of fixed saved rollouts) identical; golden runs identical |
-| 4 | Pull library code out of scripts: `compute_batch_cost` out of `model/simple`, `child_52_means.full/KEYS/hand_fall`, `survey_body_videos` CLIPS/BODY/colours, `g1_z0_rollout.act/motion`, `bfm_velocity_check.resample`, `rollout_z_trace.label`, `mse_vs_align_test.metrics` | imports; golden identical |
-| 5 | Simulation layer: `MotivoPolicy`, `ObsMapper` (Raw/Multiplier/Exact; scale explicit from BodySpec), `Simulator` (Humenv/Robot) + `BatchRollout` | golden identical (highest risk: batch composition) |
-| 6 | Costs (`CostTerm`s + `CompositeCost` returning (cost, parts)), optimisers (`ES`, `CEM`, `CMAES`, `RandomSearch`, `Adam`; `LSO`, `TrajectoryAdaptation`), `SearchLoop`, `RunRecorder`; the four search scripts become thin CLIs; `g1_z_search`, `batch_z_search` retired | golden identical for every algo x body; `--eval-z` identical; robot `--resume` works |
-| 7 | Merge `g1_map`/`g1_env` into `robot_map`/`robot_env` (keep or archive the pre-10/20 "mass" gains: ASK the user) and the `g1_*`<->`robot_*` script pairs | G1 golden identical |
-| 8 | Experiment layer: `Experiment`/`RunSpec`, `Reroller` (one index schema + readers for the 3 old ones), `ResultsTable`, `Checks`, `CommandQueue` + `ResourceGate` (CLAUDE.md thresholds, 20 GB emergency stop, correct exit codes, summary.json as done marker, sentinel files instead of log greps); port the live drivers | re-running `analyse` of existing results gives identical numbers (written into the worktree); queue dry-run |
-| 9 | Body pipeline: `BodyBuilder` (+ subclasses), `TorqueCalibrator`, `GainScaler`, `Retargeter`, `BodyPipeline` (replaces new_body_pipeline.sh, make_grid_bodies.sh, make_morph_path.sh, make_scaled_bodies.py) | rebuild child and one len/wid body into a temp dir: XML, skeleton.json, retargets byte-identical |
-| 10 | Visualisation: `Palette`, `FigureStyle`, `ViewSpec`, `ClipBundle`, `StrobeLayout`, `BlenderScene`, `VideoRenderer`, `ContactSheet`; strobe picks (EX/CEM) to YAML; `render_blender.py` stays a standalone file | re-exported scene.json identical; one panel re-rendered pixel-equal; figures re-plotted equal |
-| 11 | Naming (es->loes, cem->cem_ours/cem_phc, lsor->lsor_bfm/lsor_w005, z0/origin_z, s/scale/pos_div, body/robot/label) with read aliases for old output files; update docs (workflow.md, new_body.md) | old outputs still readable; golden identical |
+| # | Step | Verification | Status (commit) |
+|---|---|---|---|
+| 0 | Golden harness `tests/golden/` (commands, baseline outputs from the snapshot code, comparator) | baseline exists; re-running the snapshot code reproduces it (determinism check) | done, e014fb1 |
+| 1 | Archive unused files to `archive/` (see list below) | every remaining script imports (`python -c "import ast"` + import smoke test of modules); golden identical | done, 35f0bcb |
+| 2 | Package skeleton `crossenbodiment/` (paths.py with REPO from `__file__`), `BodySpec`/`BodyRegistry` (+ s computed once), `RobotSpec`, `MethodSpec` registry; replace literal paths/scales in live code | registry reproduces every s/path used by existing results (assert table); golden identical | done, 01e511e |
+| 3 | Pure-function consolidation: geometry (heading x6, robot yaw, lowest point x5, quaternion), `project_z` x13, metrics (`world/xpos` x9, `stats` x8) into `eval/metrics.py` + `MetricSuite` with named definitions (legacy root-success/height-fall vs PHC-success/contact-fall) | golden metrics file (Task-page metrics of fixed saved rollouts) identical; golden runs identical | done, 68c95f4 |
+| 4 | Pull library code out of scripts: `compute_batch_cost` out of `model/simple`, `child_52_means.full/KEYS/hand_fall`, `survey_body_videos` CLIPS/BODY/colours, `g1_z0_rollout.act/motion`, `bfm_velocity_check.resample`, `rollout_z_trace.label`, `mse_vs_align_test.metrics` | imports; golden identical | done, 37ed139 |
+| 5 | Simulation layer: `MotivoPolicy`, `ObsMapper` (Raw/Multiplier/Exact; scale explicit from BodySpec), `Simulator` (Humenv/Robot) + `BatchRollout` | golden identical (highest risk: batch composition) | done, fa6c5f9 |
+| 6 | Costs (`CostTerm`s + `CompositeCost` returning (cost, parts)), optimisers (`ES`, `CEM`, `CMAES`, `RandomSearch`, `Adam`; `LSO`, `TrajectoryAdaptation`), `SearchLoop`, `RunRecorder`; the four search scripts become thin CLIs; `g1_z_search`, `batch_z_search` retired | golden identical for every algo x body; `--eval-z` identical; robot `--resume` works | done, d299653 |
+| 7 | Merge `g1_map`/`g1_env` into `robot_map`/`robot_env` (keep or archive the pre-10/20 "mass" gains: ASK the user) and the `g1_*`<->`robot_*` script pairs | G1 golden identical | done, be4ad1d (after step 8) |
+| 8 | Experiment layer: `Experiment`/`RunSpec`, `Reroller` (one index schema + readers for the 3 old ones), `ResultsTable`, `Checks`, `CommandQueue` + `ResourceGate` (CLAUDE.md thresholds, 20 GB emergency stop, correct exit codes, summary.json as done marker, sentinel files instead of log greps); port the live drivers | re-running `analyse` of existing results gives identical numbers (written into the worktree); queue dry-run | done, 543a303 |
+| 9 | Body pipeline: `BodyBuilder` (+ subclasses), `TorqueCalibrator`, `GainScaler`, `Retargeter`, `BodyPipeline` (replaces new_body_pipeline.sh, make_grid_bodies.sh, make_morph_path.sh, make_scaled_bodies.py) | rebuild child and one len/wid body into a temp dir: XML, skeleton.json, retargets byte-identical | done, 8e9dc99 |
+| 10 | Visualisation: `Palette`, `FigureStyle`, `ViewSpec`, `ClipBundle`, `StrobeLayout`, `BlenderScene`, `VideoRenderer`, `ContactSheet`; strobe picks (EX/CEM) to YAML; `render_blender.py` stays a standalone file | re-exported scene.json identical; one panel re-rendered pixel-equal; figures re-plotted equal | done, eee1938 |
+| 11 | Naming (es->loes, cem->cem_ours/cem_phc, lsor->lsor_bfm/lsor_w005, z0/origin_z, s/scale/pos_div, body/robot/label) with read aliases for old output files; update docs (workflow.md, new_body.md) | old outputs still readable; golden identical | done, the commit "refactor(step 11): consistent naming with on-disk compatibility, documentation" |
+
+Also on the branch: a997a23 (the rule on waiting for background jobs), ded6f5d and 2bdb2fe (ports of main-tree changes made during
+the refactor: the --loes-dir switches of 11/11, the strobe examples of 11/12).
 
 Stay plain functions (do not wrap in classes): `project_z`, `rank_normalize`, `colored_noise`, return-to-go, latent distance,
 quaternion/heading/yaw, lowest point (a cached function), `losses.*`, `dtw`, PHC kinematics, MPJPE/MMPJPE/MPJAE math (MPJAE is the
@@ -91,3 +94,45 @@ CLI `main`s. Lists (strobe picks, clip lists, bodies) are YAML data, not classes
 - 0.611036 (child s) appears in ~13 scripts, 0.8212611427612194 (G1 s) in 3; "facebook/metamotivo-M-1" in 9 places; the adult XML literal
   in ~68 files; `slice(214, 358)` duplicates obs_scale.OBS_SEGMENTS.
 - `single_z_search` imports `ESConfig` and `compute_batch_cost` from `model.simple` (training code that imports wandb, dataset, networks).
+
+## Step 11 (naming): what was renamed, what was not
+
+The canonical names and their old spellings are tabled in docs/architecture.md ("Names"). Renamed in the code only, with read-only
+aliases where anything outside the module used the old name: method keys (crossenbodiment/methods.py `run_key`, `key_in`,
+`experiment_keys`, `canonical`; the experiment drivers take their run keys from the registry), palette keys (frozen, cem_phc,
+cem_ours, lsor_w005; OLD_KEYS), the root scale (`scale` on BodySpec, ExactObs, RobotMap, MetricSuite, Position; problems'
+`pos_scale`), RobotMap / RobotEnv's G1-era attributes (OLD_NAMES), z0's on-disk names behind paths constants (Z0_ROLLOUT, Z0_KEY,
+task_z0). Deliberately left as they were:
+* everything on disk (folders, run keys, file names, JSON / npz / CSV keys, configs/bodies.yaml keys) and every CLI flag and choice
+  (no alias flags were added: tests/test_cli.py pins each parser to its fa6c5f9 version, and no flag name was misleading enough to
+  need one; `--objective g1mse` stays a choice);
+* the drivers' docstrings (analyse copies them into README.md / topview.md, which must stay byte-identical) and the searches'
+  progress lines on stdout (people and old logs read them; "origin_z" and "steps" stay there);
+* the robot problems' record keys `qg` / `qs` / `fz` (in-memory dicts and ScoreContext attributes the cost terms read by name) and
+  the scripts' own local variables (`mg`, `dg` in robot_pairs.py, robot_gain_scaling.py);
+* the scripts outside the experiment drivers (figures, videos, one-off studies) still spell run folders with their literal keys
+  (`<stem>_es_s0`): those are on-disk names, and each such script reads one experiment whose keys are not ambiguous there.
+
+## Decisions left to the user
+
+1. **Palette disagreements** (step 10, crossenbodiment/palette.py DISAGREEMENTS; every script keeps its own colours until decided):
+   CEM green #1baf7a vs orange #eb6834 in plot_algo_compare.py (step 11 found that this one is CEM with OUR cost, cem_ours, a
+   different method from BFM-Zero's cem_phc: it may keep a colour of its own); random search orange (plot_child_convergence) vs
+   green (plot_algo_compare); z0 grey #8c8b87 (plots, top views) vs orange (plot_k_scale_bars) vs red (every video); two LOES video
+   blues ([0.18, 0.42, 0.85] survey / lso videos vs [0.16, 0.47, 0.84] tall_body_52 videos); label variants: CEM "BFM-Zero" /
+   "CEM (BFM-Zero)" / "CEM", LOES "Ours" / "LOES (ours)" / "ES (ours)" / "LOES (best latent)", z0 "$z_0$" / "z0".
+2. **robot_z_search --resume**: two derived records differ from a straight run when the best latent was found before the resume
+   point (tests/golden KNOWN_RESUME, pre-existing): summary.json `best.motion` is recomputed from best.npz's float32 qpos (~1e-7 m),
+   and curve.csv `best_done` is "" instead of "nan". The search itself is exact. Fixing it changes the output of resumed runs.
+3. **The child's stored robot_torque_full.xml** was made on 08-24 from the child's previous robot.xml; the step-9 pipeline (old and
+   new code alike) rebuilds a file whose compiled numbers differ by <= 1.1e-14 relative. Keep the stored file (every child result
+   used it) or rebuild it (re-run the child's experiments)?
+4. **lso_search.py --scale** defaults to the child's 0.611036 for ANY body (kept for bit-identity; every driver passes it for other
+   bodies). Make it required, or default to the registry's value for --body?
+5. **model/simple, model/dataset, model/networks** (the adapter-training line) are kept because dump_heldout_clips.py,
+   test_exact_obs.py and model/simple/train_es.py import them (and write_body_splits.py / strength_rollout.py import model/bodies.py).
+   Archive them together with those scripts?
+6. **Merging refactor/oop back into feat/multibody**: not done. The main tree still runs the old code (experiments running there,
+   the tall / AMASS queues held); the refactor's CLIs take the same flags and write the same files, so the queues can move over
+   once the user decides.
+

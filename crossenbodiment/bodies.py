@@ -15,6 +15,20 @@ existing runs), so a literal can be replaced by a registry lookup without changi
 The root scale s (see configs/bodies.yaml): fixed bodies return their literal; clip_ratio bodies compute, once per clip,
 exactly single_z_search.py's expression (median of reference root x, y / the adult clip's, where |adult| > 1e-3), on the
 task clip (data/origin_motion) or the AMASS clip (amass_data/amass_origin_motion/ACCAD) as amass_baselines.py scale() does.
+
+One quantity, many spellings (step 11: `scale` in the code, `s` only inside a formula). The root scale is body size / adult size,
+the factor between a body's metres and adult-equivalent metres; every one of these is the same number for one body and clip:
+  BODIES.scale(body[, clip])            the registry (BodySpec.scale / scale_rule / scale_default; configs/bodies.yaml keys
+                                        s / s_rule / s_default, kept on disk; BodySpec.s / s_rule / s_default read-only aliases)
+  model/exact_obs.ExactObs(scale=)      .scale (alias .s): positions and velocities / scale before Motivo sees them; its default
+                                        0.611036 is the child's (crossenbodiment/obs.py CHILD_SCALE)
+  crossenbodiment/obs.ExactObs.scale    the same, through the mapper (alias .s)
+  model/robot_map.RobotMap.scale        a robot's: robot / SMPL hip-to-ankle length in the nominal pose (alias .s)
+  PHCCost(scale=), Position(scale=)     PHC's lengths and the position term in adult-equivalent metres (crossenbodiment/costs.py)
+  problems' pos_scale                   what the searches divide positions by: the scale with --pos-unit adult, else 1.0
+  summary.json "pos_div"                that value as single_z_search.py / lso_search.py write it (on-disk key, unchanged)
+  lso_search.py --scale                 the flag (default: none = ExactObs's 0.611036, the child's, for ANY body; obs.lso_scale_kw)
+  MetricSuite(body, keys, scale)        the metrics' success threshold (0.5 m x scale) and adult-equivalent drift (.s alias)
 """
 from __future__ import annotations
 
@@ -29,6 +43,7 @@ from . import paths
 CONFIG = paths.REPO / "configs" / "bodies.yaml"
 KINDS = ("smpl_scaled", "smpl_variant", "gain_variant", "robot")
 S_RULES = ("fixed", "clip_ratio")
+YAML_KEYS = {"s": "scale", "s_rule": "scale_rule", "s_default": "scale_default"}     # configs/bodies.yaml key -> BodySpec field
 
 
 @dataclass(frozen=True)
@@ -41,10 +56,10 @@ class BodySpec:
     smpl: bool                        # SMPL topology (humenv observation)
     ref_task: str | None              # reference rule on a task clip ({clip}, {stem})
     ref_amass: str | None             # reference rule on an AMASS clip ({clip}); None: none made or used
-    s_rule: str                       # fixed | clip_ratio
-    s: float | None = None            # fixed: the literal
-    s_default: float | None = None    # clip_ratio: the value used without a clip (lso_search.py --scale)
-    label: str = ""                   # the --body / --robot value the scripts pass
+    scale_rule: str                   # fixed | clip_ratio (configs/bodies.yaml s_rule)
+    scale: float | None = None        # fixed: the literal (yaml s); BODIES.scale(name, clip) is the lookup to use
+    scale_default: float | None = None    # clip_ratio: the value used without a clip (yaml s_default; lso_search.py --scale)
+    label: str = ""                   # the on-disk asset folder name (assets/robots[_torque]/<label>), = the --body / --robot value
     parent: str | None = None
     aliases: tuple[str, ...] = ()
     display: str = ""
@@ -52,6 +67,11 @@ class BodySpec:
     kp_scale: float | None = None     # gain variants: kp x, kd x (kpkd_test.py) or k x (scale_body_gains.py --m)
     kd_scale: float | None = None
     k_scale: float | None = None
+
+    # the field names before step 11 (= the yaml keys), read-only
+    s = property(lambda self: self.scale, doc="alias of scale (configs/bodies.yaml key s)")
+    s_rule = property(lambda self: self.scale_rule, doc="alias of scale_rule (yaml s_rule)")
+    s_default = property(lambda self: self.scale_default, doc="alias of scale_default (yaml s_default)")
 
     def reference(self, clip, amass=None):
         """repository-relative path of the reference this body tracks on `clip` (task clip '<task>/<stem>' or AMASS name)."""
@@ -121,8 +141,8 @@ class BodyRegistry:
         self._alias = {}
         for b in specs:
             assert b.kind in KINDS, (b.name, b.kind)
-            assert b.s_rule in S_RULES, (b.name, b.s_rule)
-            assert (b.s is not None) == (b.s_rule == "fixed"), (b.name, "a fixed body needs s, a clip_ratio body none")
+            assert b.scale_rule in S_RULES, (b.name, b.scale_rule)
+            assert (b.scale is not None) == (b.scale_rule == "fixed"), (b.name, "a fixed body needs s, a clip_ratio body none")
             for a in (b.name,) + b.aliases:
                 assert a not in self._alias, f"name / alias {a!r} used twice ({self._alias.get(a)}, {b.name})"
                 self._alias[a] = b.name
@@ -135,7 +155,7 @@ class BodyRegistry:
             cfg = yaml.safe_load(f)
         specs = {}
         for name, d in cfg["bodies"].items():
-            d = {k: _fill(v, "name", name) for k, v in d.items()}
+            d = {YAML_KEYS.get(k, k): _fill(v, "name", name) for k, v in d.items()}
             specs[name] = BodySpec(name=name, kind=d.pop("kind"), label=d.pop("label", name), aliases=tuple(d.pop("aliases", ())), **d)
         gv = cfg.get("gain_variants", {})
         for parent, d in gv.get("parents", {}).items():
@@ -146,7 +166,8 @@ class BodyRegistry:
                 name = f"{parent}_{cond}"
                 specs[name] = BodySpec(
                     name=name, kind="gain_variant", shape_xml=p.shape_xml, physics_xml=over.get("physics_xml", p.physics_xml),
-                    smpl=p.smpl, ref_task=p.ref_task, ref_amass=p.ref_amass, s_rule=p.s_rule, s=p.s, s_default=p.s_default,
+                    smpl=p.smpl, ref_task=p.ref_task, ref_amass=p.ref_amass, scale_rule=p.scale_rule, scale=p.scale,
+                    scale_default=p.scale_default,
                     label=p.label, parent=parent, aliases=tuple(_fill(a, "cond", cond) for a in d.get("aliases", ())),
                     display=f"{p.display} ({cond.replace('_', ', ')})", gains=over.get("gains", p.gains),
                     kp_scale=sc.get("kp"), kd_scale=sc.get("kd"), k_scale=sc.get("k"))
@@ -194,12 +215,12 @@ class BodyRegistry:
     def scale(self, body, clip=None, amass=None):
         """the root scale s of `body` (on `clip`), exactly as the current code gets it (module docstring, configs/bodies.yaml)."""
         b = self.get(body)
-        if b.s_rule == "fixed":
-            return b.s
+        if b.scale_rule == "fixed":
+            return b.scale
         if clip is None:
-            if b.s_default is None:
+            if b.scale_default is None:
                 raise ValueError(f"{b.name}: s is read off the clip (s_rule clip_ratio); pass the clip")
-            return b.s_default
+            return b.scale_default
         amass = (not paths.is_task_clip(clip)) if amass is None else amass
         key = (b.reference(clip, amass), self.adult_reference(clip, amass))
         if key not in self._s:

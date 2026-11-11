@@ -111,16 +111,16 @@ def smpl_qpos(M, R, xy, clearance, pred=None):
             rel[f"{S}_Hand"] = wr.T @ R[f"{S}_Elbow"].T @ R[f"{S}_Hand"]
         elif pred is not None:
             rel[f"{S}_Hand"] = pred[f"{S}_Hand"]
-    q = M.ms.qpos0.copy()
+    q = M.m_smpl.qpos0.copy()
     q[3:7] = _quat(R["Pelvis"])
     for body, v in M.fill.items():
-        q[[M.s_qadr[M.s_names.index(f"{body}_{ax}")] for ax in "xyz"]] = v
+        q[[M.smpl_qadr[M.smpl_names.index(f"{body}_{ax}")] for ax in "xyz"]] = v
     bodies = list(rel)
     ang = Rotation.from_matrix(np.stack([rel[b] for b in bodies])).as_euler("XYZ")
-    q[[M.s_qadr[M.s_names.index(f"{b}_{ax}")] for b in bodies for ax in "xyz"]] = ang.ravel()
+    q[[M.smpl_qadr[M.smpl_names.index(f"{b}_{ax}")] for b in bodies for ax in "xyz"]] = ang.ravel()
     q[:2] = xy; q[2] = 0.0
-    M.ds.qpos[:] = q; mujoco.mj_kinematics(M.ms, M.ds)
-    q[2] = clearance - M.low_s(M.ds)
+    M.d_smpl.qpos[:] = q; mujoco.mj_kinematics(M.m_smpl, M.d_smpl)
+    q[2] = clearance - M.low_smpl(M.d_smpl)
     return q
 
 
@@ -133,11 +133,11 @@ def predict_all(model, Rs, hand):
 
 def clip_arrays(M, ds, Q, hand):
     """per frame: the paired parts' world orientations (features) and the unreported parts' local rotations (targets)."""
-    W = body_rots(M.ms, ds, Q)                                            # (T, nbody-1, 3, 3)
-    R = {b: W[:, M.ms.body(b).id - 1] for b, _ in M.pairs + ([] if hand else [])}
+    W = body_rots(M.m_smpl, ds, Q)                                            # (T, nbody-1, 3, 3)
+    R = {b: W[:, M.m_smpl.body(b).id - 1] for b, _ in M.pairs + ([] if hand else [])}
     if hand:
-        R.update({f"{S}_Hand": W[:, M.ms.body(f"{S}_Hand").id - 1] for S in SIDES})
-    Y = np.concatenate([Rotation.from_euler("XYZ", Q[:, [M.s_qadr[M.s_names.index(f"{b}_{ax}")] for ax in "xyz"]]).as_rotvec()
+        R.update({f"{S}_Hand": W[:, M.m_smpl.body(f"{S}_Hand").id - 1] for S in SIDES})
+    Y = np.concatenate([Rotation.from_euler("XYZ", Q[:, [M.smpl_qadr[M.smpl_names.index(f"{b}_{ax}")] for ax in "xyz"]]).as_rotvec()
                         for b in targets(hand)], 1)
     return feats(R, hand), Y
 
@@ -157,11 +157,11 @@ def main():
     val = set(rng.choice(len(files), len(files) // 10, replace=False))
     models, out = {}, {}
     for hand, key in ((True, "g1"), (False, "h1")):
-        M = RobotMap(key); ds = mujoco.MjData(M.ms)
+        M = RobotMap(key); ds = mujoco.MjData(M.m_smpl)
         Xt, Yt, Xv, Yv = [], [], [], []
         for i, f in enumerate(files):
             Q = np.load(f)["qpos"][::3]
-            if Q.shape[1] != M.ms.nq or len(Q) < 2:
+            if Q.shape[1] != M.m_smpl.nq or len(Q) < 2:
                 continue
             X, Y = clip_arrays(M, ds, Q, hand)
             (Xv if i in val else Xt).append(X); (Yv if i in val else Yt).append(Y)
@@ -190,20 +190,20 @@ def main():
     bfm = FBcprModel.from_pretrained("facebook/metamotivo-M-1").to("cuda")
     emb = lambda Q: bfm_align.embed(bfm, bfm_align.obs_from_qpos(env, Q), "cuda")
     for key in ("g1", "h1", "apollo"):
-        M = RobotMap(key); ds = mujoco.MjData(M.ms); hand = M.has_hand
-        names = [M.ms.body(i).name for i in range(1, M.ms.nbody)]
+        M = RobotMap(key); ds = mujoco.MjData(M.m_smpl); hand = M.has_hand
+        names = [M.m_smpl.body(i).name for i in range(1, M.m_smpl.nbody)]
         modes = ("fixed", "ridge", "mlp")
         part_err, b1, bfull = ({m: [] for m in modes} for _ in range(3))
         for stem in CLIPS:
             ref = np.load(REPO / f"data/origin_motion/{stem.rsplit('_', 1)[0]}/{stem}.npz")["qpos"]
             qg = np.load(target_path(key, stem))["qpos"]
-            Wref = body_rots(M.ms, ds, ref); B0 = emb(ref)
+            Wref = body_rots(M.m_smpl, ds, ref); B0 = emb(ref)
             Rs, clr, Rrs, clr_r, xy_r = [], [], [], [], []
             for t in range(len(ref)):
-                M.ds.qpos[:] = ref[t]; mujoco.mj_kinematics(M.ms, M.ds)
-                Rs.append({b: M.ds.xmat[M.ms.body(b).id].reshape(3, 3).copy() for b, _ in M.pairs}); clr.append(M.low_s(M.ds))
+                M.d_smpl.qpos[:] = ref[t]; mujoco.mj_kinematics(M.m_smpl, M.d_smpl)
+                Rs.append({b: M.d_smpl.xmat[M.m_smpl.body(b).id].reshape(3, 3).copy() for b, _ in M.pairs}); clr.append(M.low_smpl(M.d_smpl))
                 Rrs.append({b: r.copy() for b, r in M.smpl_rots_from_robot(qg[t]).items()})
-                clr_r.append(M.low_g(M.dg) / M.s); xy_r.append(qg[t][M.free_q:M.free_q + 2] / M.s)
+                clr_r.append(M.low_robot(M.d_robot) / M.scale); xy_r.append(qg[t][M.free_q:M.free_q + 2] / M.scale)
             for mode in modes:
                 p1 = [None] * len(ref) if mode == "fixed" else predict_all(models[hand][mode], Rs, hand)
                 pr = [None] * len(ref) if mode == "fixed" else predict_all(models[hand][mode], Rrs, hand)
@@ -212,7 +212,7 @@ def main():
                 if mode == "fixed" and stem == CLIPS[0]:
                     ref_rt = np.load(target_path(key, stem).parent / "smpl_rt.npz")["qpos"]
                     print(f"  {key}: fixed fill vs robot_map round trip, max |dq| = {np.abs(rt - ref_rt).max():.2e}")
-                part_err[mode].append(ang_err(Wref, body_rots(M.ms, ds, st1)).mean(0))
+                part_err[mode].append(ang_err(Wref, body_rots(M.m_smpl, ds, st1)).mean(0))
                 b1[mode].append(bfm_align.bfm_align_loss(emb(st1), B0)); bfull[mode].append(bfm_align.bfm_align_loss(emb(rt), B0))
         res = {}
         for mode in modes:

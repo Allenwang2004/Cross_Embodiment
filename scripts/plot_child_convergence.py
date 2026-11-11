@@ -30,8 +30,8 @@ from crossenbodiment.figstyle import FigureStyle                           # noq
 from crossenbodiment.palette import INK, Palette                           # noqa: E402
 RR, CP = paths.read_path("outputs/child_52_rerun"), paths.read_path("outputs/child_52_cem_phc"); OUT = paths.write_path("outputs/child_convergence")
 # legend names (user, 11/10): LOES -> Ours, CEM -> BFM-Zero
-METHODS = tuple((a, Palette.label(k), Palette.hex(k)) for a, k in (("es", "loes"), ("random", "random"), ("cem", "cem"), ("cmaes", "cmaes")))
-Z0 = Palette.hex("z0"); AXIS, GRID, GRID_ALL = INK["curves"]["axis"], INK["curves"]["grid"], INK["curves"]["grid_all"]
+METHODS = tuple((a, Palette.label(k), Palette.hex(k)) for a, k in (("es", "loes"), ("random", "random"), ("cem", "cem_phc"), ("cmaes", "cmaes")))
+Z0 = Palette.hex("frozen"); AXIS, GRID, GRID_ALL = INK["curves"]["axis"], INK["curves"]["grid"], INK["curves"]["grid_all"]
 # the mean figure's style; the 52-panel grids are drawn on top of it (DejaVu Sans 8 pt, keeping its axis colours, as they always were)
 MEAN_STYLE = FigureStyle.paper({"font.size": 10, "axes.edgecolor": AXIS, "xtick.color": AXIS, "ytick.color": AXIS}, svg=False)
 GRID_STYLE = MEAN_STYLE.updated({"font.family": "DejaVu Sans", "font.size": 8})
@@ -95,7 +95,7 @@ def plot_mean(D, x):
         ax.set_xlabel("Rollouts"); ax.set_ylabel(lab); ax.yaxis.grid(True, color=GRID, lw=0.6); ax.set_axisbelow(True)
         for s in ("top", "right"):
             ax.spines[s].set_visible(False)
-    h, l = axs[1].get_legend_handles_labels(); h.append(plt.Line2D([], [], color=Z0, ls="--", lw=1.2)); l.append(Palette.label("z0"))
+    h, l = axs[1].get_legend_handles_labels(); h.append(plt.Line2D([], [], color=Z0, ls="--", lw=1.2)); l.append(Palette.label("frozen"))
     fig.legend(h, l, loc="upper center", ncol=5, frameon=False, handlelength=1.6, columnspacing=1.0, borderaxespad=0.1)
     FigureStyle.save(fig, paths.figures_root() / "child_convergence_mean", formats=("pdf", "png"), dpi={"png": 300})
     plt.close(fig)
@@ -118,7 +118,7 @@ def plot_grid(D, x, key, ylab):
             ax.set_ylabel(ylab)
     for ax in axs[len(names):]:
         ax.axis("off")
-    h, l = axs[0].get_legend_handles_labels(); h.append(plt.Line2D([], [], color=Z0, ls="--")); l.append(Palette.label("z0", "plain"))
+    h, l = axs[0].get_legend_handles_labels(); h.append(plt.Line2D([], [], color=Z0, ls="--")); l.append(Palette.label("frozen", "plain"))
     fig.legend(h, l, loc="upper center", bbox_to_anchor=(0.5, 0.982), ncol=5, fontsize=12, frameon=False)
     fig.suptitle(f"Child, 52 task motions: {ylab} of the best latent so far (mean of 5 seeds; band = min-max over seeds) by rollouts", y=0.997, fontsize=13)
     fig.tight_layout(rect=(0, 0, 1, 0.962)); fig.savefig(OUT / f"{key}_all.png", dpi=110); plt.close(fig)

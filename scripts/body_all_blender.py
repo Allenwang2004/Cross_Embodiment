@@ -31,7 +31,7 @@ REF = {"limit_leg": "data/adult_lockRleg_bent_lim/retargeting_motion/{t}/{c}.npz
 RUN_REL = f"outputs/body_52/{BODY}"; RUN = paths.read_path(RUN_REL); OUT_REL = f"outputs/{BODY}_all52"; OUT = paths.write_path(OUT_REL)
 CLIPS = sorted(json.load(open(RUN / "results.json"))["per_motion"]["best"]); N, STEP, BEFORE, START, MINLEN, ROWS = 6, 15, 40, 45, 9, 9
 ENV = dict(os.environ, MUJOCO_GL="egl", CUDA_VISIBLE_DEVICES="2", MUJOCO_EGL_DEVICE_ID="2", OMP_NUM_THREADS="1", PYTHONDONTWRITEBYTECODE="1")
-COLUMNS = (Palette.label("adult", "pages"), Palette.label("z0", "plain"), Palette.label("loes", "pages_best"))
+COLUMNS = (Palette.label("adult", "pages"), Palette.label("frozen", "plain"), Palette.label("loes", "pages_best"))
 
 
 def package(c):

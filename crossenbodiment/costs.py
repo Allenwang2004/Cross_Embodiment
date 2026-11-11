@@ -14,11 +14,12 @@ anchor_dist, ik / ik_arm / atlim, ik_deg, mse, mse_frames, phc, dtw / done / pac
                   B sees obs[214:358] set to 0 (the "plain" variant   robot_lso: bfm_align.embed then a tensor)
                   is the same term without it, logged as bfm_plain)
   Heading         mean_t (1 - cos(h - h_ref)) / 2 (SMPL pelvis)      (1 - cos(h - h_ref)) / 2
-  Position        mean_t |xy - xy_ref| (/ pos_div)                    |xy - xy_ref| (/ pos_div)
+  Position        mean_t |xy - xy_ref| (/ scale)                      |xy - xy_ref| (/ scale)
   Anchor          (|z - anchor| / 16)^2 (logs anchor_dist)            -
   IKResidual      radians(mean IK residual) (logs ik, ik_arm, atlim)  radians(mean over links) (logs ik_deg, atlim)
   TrackingMSE     losses.tracking_mse                                 1 - losses.tracking_mse_frames (logs mse_frames)
-  RobotMSE        robot_z_search's g1mse (pose + ee + root + heading)  -
+  RobotMSE        robot_z_search's --objective mse (= g1mse): pose +  -
+                  ee + root + heading against the robot target
   PHCReward       1 - mean_t PHC reward (model/phc_reward.PHCCost)   PHC reward r_t (logs phc = 1 - mean r)
   SlowDTW         1 - score of model/dtw.align_slow (logs done,       the per-step reward of lso_search --dtw (its similarity
                   pace, path)                                         share minus heading and fall along the alignment)
@@ -209,28 +210,31 @@ class Heading(CostTerm):
 
 
 class Position(CostTerm):
-    """|root xy - reference root xy| per step (metres; / pos_div when given: adult-equivalent metres), or its mean.
-    src as Heading's; the batch form scores the first min(T, len(ref_xy)) states."""
+    """|root xy - reference root xy| per step (metres; / scale when given: adult-equivalent metres -- the searches pass their
+    pos_scale, written as summary.json pos_div), or its mean. src as Heading's; the batch form scores the first
+    min(T, len(ref_xy)) states."""
     name = "pos"
 
-    def __init__(self, ref_xy, pos_div=None, src="q"):
-        self.ref_xy, self.pos_div, self.src = ref_xy, pos_div, src
+    def __init__(self, ref_xy, scale=None, src="q"):
+        self.ref_xy, self.scale, self.src = ref_xy, scale, src
+
+    pos_div = property(lambda self: self.scale, doc="read-only alias of scale (the name before step 11)")
 
     def batch(self, ctx):
         X = getattr(ctx, self.src)
         T = min(X.shape[1], len(self.ref_xy))
         xy = (X if T >= X.shape[1] else X[:, :T])[..., :2]
         v = np.linalg.norm(xy - self.ref_xy[None, :T], axis=-1).mean(1)
-        if self.pos_div is not None:
-            v = v / self.pos_div
+        if self.scale is not None:
+            v = v / self.scale
         ctx.parts[self.name] = v
         return v
 
     def per_step(self, ctx):
         X = getattr(ctx, self.src)
         ps = np.linalg.norm(X[..., :2] - self.ref_xy[None], axis=-1)
-        if self.pos_div is not None:
-            ps = ps / self.pos_div
+        if self.scale is not None:
+            ps = ps / self.scale
         ctx.parts[self.name] = ps.mean(1)
         return ps
 
@@ -274,73 +278,74 @@ class IKResidual(CostTerm):
         return ik
 
 
-def robot_ee_points(cfg, rm, mg):
-    """model/robots.py ROBOTS[robot]["ee"] resolved on the robot model mg: per point (kind, id, body-frame offset for "end")
+def robot_ee_points(cfg, rm, m_robot):
+    """model/robots.py ROBOTS[robot]["ee"] resolved on the robot's MjModel: per point (kind, id, body-frame offset for "end")
     (robot_z_search.py's ee list; kind geom_top -> the body's highest geom)"""
-    n_jnt = len(rm.g_jnt)
+    n_jnt = len(rm.robot_jnt)
     ee = []
     for kind, nm in cfg["ee"]:
         if kind == "geom_top":
-            b = mg.body(nm).id
-            ee.append(("geom", max((g for g in range(mg.ngeom) if mg.geom_bodyid[g] == b), key=lambda g: mg.geom_pos[g][2]), None))
+            b = m_robot.body(nm).id
+            ee.append(("geom", max((g for g in range(m_robot.ngeom) if m_robot.geom_bodyid[g] == b), key=lambda g: m_robot.geom_pos[g][2]),
+                       None))
         elif kind == "end":
-            rm._fk_g(np.zeros(n_jnt)); ee.append(("end", mg.body(nm).id, rm._robot_end(rm.mg.body(nm).id)))
+            rm._fk_robot(np.zeros(n_jnt)); ee.append(("end", m_robot.body(nm).id, rm._robot_end(rm.m_robot.body(nm).id)))
         else:
-            ee.append((kind, mg.body(nm).id if kind == "body" else mg.site(nm).id, None))
+            ee.append((kind, m_robot.body(nm).id if kind == "body" else m_robot.site(nm).id, None))
     return ee
 
 
 class RobotPoints:
     """forward kinematics of robot qpos: pelvis xyz, pelvis yaw, hands / feet / head relative to the pelvis in its heading
-    frame (robot_z_search.py's g1_points)"""
+    frame (g1_points of the archived g1_z_search.py)"""
 
-    def __init__(self, mg, root, ee):
+    def __init__(self, m_robot, root, ee):
         import mujoco
-        self.mg, self.root, self.ee = mg, root, ee
-        self.gd = mujoco.MjData(mg)
+        self.m_robot, self.root, self.ee = m_robot, root, ee
+        self.d_robot = mujoco.MjData(m_robot)
 
     def _ee_pos(self, kind, i, off):
-        gd = self.gd
+        d = self.d_robot
         if kind == "body":
-            return gd.xpos[i]
+            return d.xpos[i]
         if kind == "site":
-            return gd.site_xpos[i]
+            return d.site_xpos[i]
         if kind == "geom":
-            return gd.geom_xpos[i]
-        return gd.xpos[i] + gd.xmat[i].reshape(3, 3) @ off
+            return d.geom_xpos[i]
+        return d.xpos[i] + d.xmat[i].reshape(3, 3) @ off
 
-    def __call__(self, qg):
+    def __call__(self, q_robot):
         """(..., nq) robot qpos -> pelvis xyz (..., 3), pelvis yaw (...), points (..., n_ee, 3)"""
         import mujoco
         from .geometry import robot_yaw
-        mg, gd, root, n_ee = self.mg, self.gd, self.root, len(self.ee)
-        flat = qg.reshape(-1, qg.shape[-1]); P = np.empty((len(flat), 3)); H = np.empty(len(flat))
+        m, d, root, n_ee = self.m_robot, self.d_robot, self.root, len(self.ee)
+        flat = q_robot.reshape(-1, q_robot.shape[-1]); P = np.empty((len(flat), 3)); H = np.empty(len(flat))
         E = np.empty((len(flat), n_ee, 3))
         for i, qq in enumerate(flat):
-            gd.qpos[:] = qq; mujoco.mj_kinematics(mg, gd)
-            pel = gd.xpos[root].copy(); h = robot_yaw(gd.xmat[root])
-            d = np.stack([self._ee_pos(*e) for e in self.ee]) - pel
+            d.qpos[:] = qq; mujoco.mj_kinematics(m, d)
+            pel = d.xpos[root].copy(); h = robot_yaw(d.xmat[root])
+            dp = np.stack([self._ee_pos(*e) for e in self.ee]) - pel
             c, sn = np.cos(h), np.sin(h)
-            E[i] = np.stack([c * d[:, 0] + sn * d[:, 1], -sn * d[:, 0] + c * d[:, 1], d[:, 2]], -1); P[i], H[i] = pel, h
-        sh = qg.shape[:-1]
+            E[i] = np.stack([c * dp[:, 0] + sn * dp[:, 1], -sn * dp[:, 0] + c * dp[:, 1], dp[:, 2]], -1); P[i], H[i] = pel, h
+        sh = q_robot.shape[:-1]
         return P.reshape(sh + (3,)), H.reshape(sh), E.reshape(sh + (n_ee, 3))
 
 
 class RobotMSE(CostTerm):
-    """robot_z_search.py --objective mse (g1mse): squared errors against the robot target gT (the clip mapped onto the robot),
-    weights 1 as losses.tracking_mse: pose (wrapped joint angles), ee (hands / feet / head, pelvis heading frame), root
-    (pelvis xyz; no_xy: height only), heading (1 - cos yaw). ctx.q: the robot qpos."""
+    """robot_z_search.py --objective mse (= g1mse, the choice's name before the robot port): squared errors against the robot
+    target (the clip mapped onto the robot), weights 1 as losses.tracking_mse: pose (wrapped joint angles), ee (hands / feet /
+    head, pelvis heading frame), root (pelvis xyz; no_xy: height only), heading (1 - cos yaw). ctx.q: the robot qpos."""
     name = "mse"
 
-    def __init__(self, points, gT, no_xy=False):
-        self.points, self.gT, self.no_xy = points, gT, no_xy
-        self.ref_P, self.ref_H, self.ref_E = points(gT)
+    def __init__(self, points, target, no_xy=False):
+        self.points, self.target, self.no_xy = points, target, no_xy
+        self.ref_P, self.ref_H, self.ref_E = points(target)
 
     def batch(self, ctx):
-        QG, gT = ctx.q, self.gT
+        Q, target = ctx.q, self.target
         ref_P, ref_H, ref_E = self.ref_P, self.ref_H, self.ref_E
-        P, H, E = self.points(QG)
-        dq = (QG[..., 7:] - gT[None, :, 7:] + np.pi) % (2 * np.pi) - np.pi
+        P, H, E = self.points(Q)
+        dq = (Q[..., 7:] - target[None, :, 7:] + np.pi) % (2 * np.pi) - np.pi
         v = ((dq ** 2).mean((1, 2)) + ((E - ref_E[None]) ** 2).sum(-1).mean((1, 2))
              + (((P[..., 2:] - ref_P[None, :, 2:]) if self.no_xy else (P - ref_P[None])) ** 2).sum(-1).mean(1)
              + (1 - np.cos(H - ref_H[None])).mean(1))

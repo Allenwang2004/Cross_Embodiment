@@ -60,7 +60,7 @@ def _worker(conn, name, fill):
             q_prev = d.qpos.copy()
             mujoco.mj_step(m, d); tq[-1] = demand()
             qs_prev, qs = env.map.robot_to_smpl_qpos(q_prev), env.map.robot_to_smpl_qpos(d.qpos)
-            vs = np.zeros(env.ms.nv); mujoco.mj_differentiatePos(env.ms, vs, 1 / 450, qs_prev, qs)
+            vs = np.zeros(env.m_smpl.nv); mujoco.mj_differentiatePos(env.m_smpl, vs, 1 / 450, qs_prev, qs)
             obs = env.smpl_obs(qs, vs)
         conn.send((obs, d.qpos.copy(), tq, lo, hi))
 

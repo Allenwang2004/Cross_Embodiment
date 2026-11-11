@@ -17,7 +17,7 @@ import sys  # noqa: E402
 sys.path.insert(0, str(REPO))
 from crossenbodiment.palette import INK as _INK, Palette   # noqa: E402  (refactor step 10: this figure's own colours, VARIANTS "k_scale")
 INK, MUTED, GRID, SURF = (_INK["dataviz"][k] for k in ("ink", "muted", "grid", "surface"))
-C_Z0, C_BEST = Palette.hex("z0", "k_scale"), Palette.hex("loes", "k_scale")   # dataviz categorical 2 / 1 (red-ish z0, blue searched, as in the videos)
+C_Z0, C_BEST = Palette.hex("frozen", "k_scale"), Palette.hex("loes", "k_scale")   # dataviz categorical 2 / 1 (red-ish z0, blue searched, as in the videos)
 
 ap = argparse.ArgumentParser(); ap.add_argument("--body", default="child", choices=["child", "g1"]); body = ap.parse_args().body
 sfx = "" if body == "child" else f"_{body}"

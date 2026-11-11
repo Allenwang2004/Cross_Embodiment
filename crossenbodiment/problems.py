@@ -29,7 +29,7 @@ import numpy as np
 from .costs import (AlignPhys, Anchor, AsType, BFMSimilarity, CompositeCost, Fall, Heading, PHCReward, Position, ScoreContext,
                     SlowDTW, TrackingMSE, AlignedHeading)
 from .geometry import ang_pair, project_z
-from .paths import REPO
+from .paths import REPO, Z0_DIRNAME, Z0_KEY, Z0_ROLLOUT, task_z0
 from .search import copies
 
 # (lambda_align, lambda_phys) per single_z_search.py --objective -- fed straight into AlignCostConfig so the cost
@@ -73,7 +73,7 @@ class HumanLatentProblem:
         a = self.args = args
         task, stem = a.clip.split("/")
         data_root = Path(a.data_root) if Path(a.data_root).is_absolute() else REPO / a.data_root
-        z0_path = data_root / "origin_z" / task / f"{stem}.npy"
+        z0_path = data_root / Z0_DIRNAME / task / f"{stem}.npy"
         ref_path = (Path(a.ref) if a.ref else data_root / a.body / "retargeting_motion" / task / f"{stem}.npz")
         for q in (z0_path, ref_path):
             if not q.exists():
@@ -172,14 +172,15 @@ class HumanLatentProblem:
             Bg = Bg[a.frame_offset:]
         self.Bg = Bg
         glob_w = (a.heading_weight, a.pos_weight)
-        self.pos_div = pos_div = exact.s if a.pos_unit == "adult" and exact is not None else 1.0
+        # what positions (and PHC's lengths) are divided by: the root scale with --pos-unit adult, else 1 (summary.json pos_div)
+        self.pos_scale = pos_scale = exact.scale if a.pos_unit == "adult" and exact is not None else 1.0
         if a.pos_weight:
-            print(f"position term: metres / {pos_div:.6f} ({a.pos_unit if exact is not None else 'body, no s without --obs-scale exact'})")
+            print(f"position term: metres / {pos_scale:.6f} ({a.pos_unit if exact is not None else 'body, no s without --obs-scale exact'})")
         self.phc = None
         if a.objective == "phc":
             from model.phc_reward import PHCCost
-            self.phc = PHCCost(fk, ref[max(a.frame_offset - 1, 0)], goal, scale=pos_div)
-            print(f"phc: lengths / {pos_div:.6f} ({a.pos_unit if exact is not None else 'body'} metres), {fk.nbody - 1} bodies")
+            self.phc = PHCCost(fk, ref[max(a.frame_offset - 1, 0)], goal, scale=pos_scale)
+            print(f"phc: lengths / {pos_scale:.6f} ({a.pos_unit if exact is not None else 'body'} metres), {fk.nbody - 1} bodies")
         self.anchor = None
         if a.anchor_weight:
             if not a.anchor:
@@ -191,7 +192,7 @@ class HumanLatentProblem:
         ref_h, ref_xy = smpl_heading(fk, goal), goal[..., :2]   # humenv's heading, frame by frame
         self.align_phys = AlignPhys(fk, cfg, goal)
         self.tmse = TrackingMSE(fk, goal, root_xy=not a.mse_no_xy)
-        heading, position = Heading(fk, ref_h), Position(ref_xy, pos_div)
+        heading, position = Heading(fk, ref_h), Position(ref_xy, pos_scale)
         log, terms = [], []
         if Bg is None and self.phc is None:                    # bfm / dtw / phc only log L_align / L_phys / tracking_mse
             log += [self.align_phys, self.tmse]
@@ -347,7 +348,7 @@ class HumanLatentProblem:
         self.U = U
         best = dict(cost=base["cost"], align=base["align"], phys=base["phys"], bfm=base["bfm"],
                     head=base["head"], pos=base["pos"], mse=base["mse"],
-                    z=z0.copy(), qpos=self.sc0.q[0].copy(), gen=-1, source="origin_z")
+                    z=z0.copy(), qpos=self.sc0.q[0].copy(), gen=-1, source=Z0_KEY)
         if a.z_start and a.best_from_start:
             best = start_best
         self.opt = single_latent_optimizer(a.algo, z_start.copy(), a.sigma, a.lr, a.pairs, a.seed, sampling=a.sampling,
@@ -360,7 +361,7 @@ class HumanLatentProblem:
         return dict(gen=gen, evals=(gen + 1) * self.n_envs,
                     gen_best=float(sc.cost.min()), gen_mean=float(sc.cost.mean()),
                     best_so_far=loop.best["cost"], mean_z_cost="",
-                    z_start=(a.z_start or "origin_z"),
+                    z_start=(a.z_start or Z0_KEY),
                     start_deg_from_z0=ang_pair(self.z_start, z0),
                     cos_z0=float(np.dot(z, z0) / (np.linalg.norm(z) * np.linalg.norm(z0))),
                     path_len_deg=round(loop.path_len, 2), net_deg=round(ang_pair(z0, z), 2),
@@ -389,9 +390,9 @@ class HumanLatentProblem:
         rec.best_z(best["z"])
         rec.npz("best.npz", qpos=best["qpos"].astype(np.float32),
                 fps=cfg.control_fps, **({"dtw_path": best["path"]} if "path" in best else {}))
-        # the origin_z rollout under the SAME init and env as the search (a falling rollout is chaotic: re-rendering it
+        # z0's rollout under the SAME init and env as the search (a falling rollout is chaotic: re-rendering it
         # elsewhere would not reproduce it)
-        rec.npz("origin_z.npz", qpos=self.sc0.q[0].astype(np.float32),
+        rec.npz(Z0_ROLLOUT, qpos=self.sc0.q[0].astype(np.float32),
                 fps=cfg.control_fps, **({"dtw_path": self.base_path} if self.base_path is not None else {}))
         rec.z_trace(loop.trace_mean, loop.trace_best)          # gen -1 is the start latent
         rec.curve(loop.curve)
@@ -409,10 +410,10 @@ class HumanLatentProblem:
             "path_len_deg": round(loop.path_len, 1), "net_deg": round(ang_pair(z0, z), 1),
             "obs_scale": a.obs_scale, "seed": a.seed, "init": a.init, "init_ref": a.init_ref, "frame_offset": a.frame_offset,
             "align_discount": a.discount, "heading_weight": a.heading_weight, "pos_weight": a.pos_weight,
-            "pos_unit": a.pos_unit if exact is not None else "body", "pos_div": self.pos_div,
+            "pos_unit": a.pos_unit if exact is not None else "body", "pos_div": self.pos_scale,
             "anchor": a.anchor, "anchor_weight": a.anchor_weight,
             "subspace": a.subspace, "subspace_dim": None if U is None else len(U),
-            "origin_z": base, "reference_floor": floor,
+            Z0_KEY: base, "reference_floor": floor,
             "best": {k: best[k] for k in ("cost", "align", "phys", "bfm", "gen", "source", "head", "pos", "mse",
                                           "dtw", "done", "pace", "head_al", "fallen") if k in best},
             "improvement_vs_origin_z": (base["cost"] - best["cost"]) / max(abs(base["cost"]), 1e-12),
@@ -475,12 +476,12 @@ class RobotLatentProblem:
 
         self.sim = RobotSim(a.robot, n_envs, fill=a.fill, gains=a.gains)          # spawn the workers before CUDA is touched
         rm = RobotMap(a.robot, fill=a.fill)
-        n_link, n_jnt = len(rm.pairs) - 1, len(rm.g_jnt)
+        n_link, n_jnt = len(rm.pairs) - 1, len(rm.robot_jnt)
         ARM = [i for i, (b, _) in enumerate(rm.pairs[1:]) if b.split("_")[-1] in ("Shoulder", "Elbow", "Hand")]
         from humenv import make_humenv
         self.ref = ref = np.load(REPO / f"data/origin_motion/{a.clip}.npz")["qpos"][a.start_frame:]
         T = len(ref) - a.frame_offset                 # steps
-        self.z0 = z0 = project_z(np.load(REPO / f"data/origin_z/{a.clip}.npy").reshape(-1).astype(np.float64))
+        self.z0 = z0 = project_z(np.load(REPO / task_z0(a.clip)).reshape(-1).astype(np.float64))
         anchor = project_z(np.load(a.anchor).reshape(-1).astype(np.float64)) if a.anchor else z0
         self.policy = policy = MotivoPolicy.load(device=a.device, eval_mode=False)   # this script never called eval()
         model = policy.model
@@ -492,22 +493,22 @@ class RobotLatentProblem:
         if a.bfm_zero_vel:
             Og = Og.copy(); Og[:, VEL] = 0
         Bg = bfm_align.embed(model, Og, a.device)[a.frame_offset:]
-        self.gref = gref = np.load(target_path(a.robot, stem))["qpos"][a.start_frame:]
+        self.robot_ref = robot_ref = np.load(target_path(a.robot, stem))["qpos"][a.start_frame:]
         floor = json.loads((target_path(a.robot, stem).parent / "summary.json").read_text())["bfm_floor"]
         fc = REPO / "outputs/map_error/fill_compare_motivo.json"            # the ridge fill's floor (scripts/fit_smpl_fill.py)
         if a.fill == "ridge" and fc.exists():
             floor = json.loads(fc.read_text()).get(a.robot, {}).get("ridge", {}).get("bfm_full_per_clip", {}).get(stem, floor)
         self.floor = floor
-        mg = mujoco.MjModel.from_xml_path(str(REPO / cfg["xml"]))
-        root = mg.body(cfg["root"]).id
-        ee = robot_ee_points(cfg, rm, mg)             # per point: (kind, id, body-frame offset for "end")
-        gT = gref[a.frame_offset:a.frame_offset + T]
-        mse = RobotMSE(RobotPoints(mg, root, ee), gT, no_xy=a.mse_no_xy)
+        m_robot = mujoco.MjModel.from_xml_path(str(REPO / cfg["xml"]))
+        root = m_robot.body(cfg["root"]).id
+        ee = robot_ee_points(cfg, rm, m_robot)             # per point: (kind, id, body-frame offset for "end")
+        robot_goal = robot_ref[a.frame_offset:a.frame_offset + T]
+        mse = RobotMSE(RobotPoints(m_robot, root, ee), robot_goal, no_xy=a.mse_no_xy)
         self.phc = None
         if a.objective == "phc":
             from model.phc_reward import PHCCost
-            self.phc = PHCCost(mg, gref[max(a.frame_offset - 1, 0)], gT, scale=rm.s)
-            print(f"phc: {mg.nbody - 1} robot bodies against the robot target, lengths / s = {rm.s:.6f}", flush=True)
+            self.phc = PHCCost(m_robot, robot_ref[max(a.frame_offset - 1, 0)], robot_goal, scale=rm.scale)
+            print(f"phc: {m_robot.nbody - 1} robot bodies against the robot target, lengths / s = {rm.scale:.6f}", flush=True)
 
         from .geometry import smpl_heading
         ref_h, ref_xy = smpl_heading(fk, ref[a.frame_offset:], dk, batched=True), ref[a.frame_offset:][..., :2]
@@ -574,7 +575,7 @@ class RobotLatentProblem:
         self.t0 = t0 = time.time()
         r0 = self.score(copies(z0, self.n_envs))
         spread = float(np.abs(r0.parts["qg"] - r0.parts["qg"][:1]).max())
-        self.base = base = self.record(r0, 0, z0, -1, "origin_z")
+        self.base = base = self.record(r0, 0, z0, -1, Z0_KEY)
         print(f"  origin_z:{self.al(base)} cost {base['cost']:.4f}  bfm {base['bfm']:.4f} (plain {base['bfm_plain']:.4f})  mse {base['mse']:.4f}  heading {base['head']:.4f}  pos {base['pos']:.2f}"
               f"  ik {base['ik']:.2f} deg (arms {base['ik_arm']:.2f}, at limit {100 * base['atlim']:.1f}%)"
               f"   (16 copies identical to {spread:.1e}; {time.time() - t0:.0f} s per step)", flush=True)
@@ -619,7 +620,7 @@ class RobotLatentProblem:
             assert not same, f"--resume: settings differ from {rd}: {same}"
             ps_sampling = ps.get("sampling", "antithetic")     # runs before 11/04 record none: all antithetic
             assert ps_sampling == a.sampling, f"--resume: {rd} ran --sampling {ps_sampling}, this run has --sampling {a.sampling}"
-            assert abs(ps["origin_z"]["cost"] - base["cost"]) < 1e-9, f"--resume: z0 costs {base['cost']} now, {ps['origin_z']['cost']} then"
+            assert abs(ps[Z0_KEY]["cost"] - base["cost"]) < 1e-9, f"--resume: z0 costs {base['cost']} now, {ps[Z0_KEY]['cost']} then"
             gen0 = st["gen0"] = ps["generations"]
             assert self.n_gens > gen0, f"--resume: {rd} already has {gen0} steps; --evals is the total budget"
             st["curve"] = list(csv.DictReader(open(rd / "curve.csv")))
@@ -663,7 +664,7 @@ class RobotLatentProblem:
 
     def save(self, rec, loop):
         from .robot_rollout import motion
-        a, best, base, z0, opt, gref = self.args, loop.best, self.base, self.z0, loop.opt, self.gref
+        a, best, base, z0, opt, robot_ref = self.args, loop.best, self.base, self.z0, loop.opt, self.robot_ref
         n_gens, n_envs, gen0 = self.n_gens, self.n_envs, self.gen0
         rec.best_z(best["z"])
         # everything --resume needs to continue this search exactly (ES's Adam and RNG; the other optimisers have none to
@@ -673,7 +674,7 @@ class RobotLatentProblem:
         rec.state(z=loop.z, m=opt.adam.m if es else np.zeros_like(z0), v=opt.adam.v if es else np.zeros_like(z0),
                   t_adam=n_gens - gen0 + self.t_adam0, path_len=loop.path_len, best_z=best["z"],
                   rng=json.dumps(rng.bit_generator.state))
-        for f, b in (("best.npz", best), ("origin_z.npz", base)):
+        for f, b in (("best.npz", best), (Z0_ROLLOUT, base)):
             rec.npz(f, qpos=b["qg"].astype(np.float32), qpos_smpl=b["qs"].astype(np.float32),
                     fz=b["fz"].astype(np.float32), fps=30, **({"dtw_path": b["path"]} if a.objective == "dtw" and "path" in b else {}))
         rec.z_trace(loop.trace_mean, loop.trace_best)
@@ -684,8 +685,8 @@ class RobotLatentProblem:
                     seed=a.seed, **({"dtw_lambda": a.dtw_lambda} if a.objective == "dtw" else {}), bfm_zero_vel=a.bfm_zero_vel, mse_no_xy=a.mse_no_xy, init_vel=a.init_vel, frame_offset=a.frame_offset, start_frame=a.start_frame, heading_weight=a.heading_weight, pos_weight=a.pos_weight, anchor=a.anchor or "z0",
                     anchor_weight=a.anchor_weight, ik_weight=a.ik_weight, gains=a.gains or self.cfg["gains_json"], objective=a.objective, fill=a.fill,
                     bfm_floor_of_map=self.floor,
-                    origin_z={**{k: base.get(k) for k in keys}, "motion": motion(base["qg"], gref[a.frame_offset:])},
-                    best={**{k: best.get(k) for k in keys}, "motion": motion(best["qg"], gref[a.frame_offset:])},
+                    origin_z={**{k: base.get(k) for k in keys}, "motion": motion(base["qg"], robot_ref[a.frame_offset:])},   # Z0_KEY
+                    best={**{k: best.get(k) for k in keys}, "motion": motion(best["qg"], robot_ref[a.frame_offset:])},
                     improvement_vs_origin_z=(base["cost"] - best["cost"]) / abs(base["cost"]),
                     dist_best_z0=float(np.linalg.norm(best["z"] - z0)), path_len_deg=round(loop.path_len, 1),
                     resumed_from=a.resume, resumed_at=gen0 if a.resume else None, resume_exact=self.exact,
@@ -752,11 +753,11 @@ class HumanSequenceProblem(_SequenceRows):
         self.policy = policy = MotivoPolicy.load(device=a.device); model = policy.model     # facebook/metamotivo-M-1, eval()
         self.fk = fk = mujoco.MjModel.from_xml_path(str(xml)); nv = fk.nv
         exact = mapper.build()
-        self.pos_div = pos_div = exact.s if a.pos_unit == "adult" else 1.0
+        self.pos_scale = pos_scale = exact.scale if a.pos_unit == "adult" else 1.0      # summary.json pos_div
         phc = None
         if a.objective == "phc":
             from model.phc_reward import PHCCost
-            phc = PHCCost(fk, ref[0], ref[1:], scale=pos_div)
+            phc = PHCCost(fk, ref[0], ref[1:], scale=pos_scale)
         vr, ro = np.zeros(nv), []
         for t in range(T):
             if t:
@@ -807,7 +808,7 @@ class HumanSequenceProblem(_SequenceRows):
                 main = PHCReward(phc, lambda ctx: ref[0])
             else:
                 main = bfm
-            terms = [(a.heading_weight, heading), (a.pos_weight, Position(ref_xy, pos_div))] \
+            terms = [(a.heading_weight, heading), (a.pos_weight, Position(ref_xy, pos_scale))] \
                 if a.heading_weight or a.pos_weight else []
             self.cost = CompositeCost(main, terms, log=[bfm], form="per_step")
 
@@ -921,7 +922,7 @@ class HumanSequenceProblem(_SequenceRows):
         rec.rollouts(self.ref, loop.keep)
         rec.summary(dict(ref=a.ref, body=a.body, frames=T, n=a.n, iters=a.iters, sigma=a.sigma,
                          lr=a.lr, gamma=a.gamma, beta=a.beta, seed=a.seed, heading_weight=a.heading_weight,
-                         pos_weight=a.pos_weight, pos_unit=a.pos_unit, pos_div=self.pos_div, antithetic=a.antithetic, rank=a.rank, floor_friction=a.floor_friction,
+                         pos_weight=a.pos_weight, pos_unit=a.pos_unit, pos_div=self.pos_scale, antithetic=a.antithetic, rank=a.rank, floor_friction=a.floor_friction,
                          steps_scale=a.steps_scale, init_pace=a.init_pace, dtw=a.dtw, init_vel_scale=a.init_vel_scale,
                          fall_weight=a.fall_weight, fall_head=a.fall_head,
                          bfm_zero_vel=a.bfm_zero_vel, objective=a.objective, mse_no_xy=a.mse_no_xy,
@@ -968,11 +969,11 @@ class RobotSequenceProblem(_SequenceRows):
         if a.objective == "phc":
             from model.phc_reward import PHCCost
             tgt = Path(a.target) if a.target else target_path(a.robot, Path(a.ref).stem)
-            gref = np.load(tgt if tgt.is_absolute() else REPO / tgt)["qpos"].astype(np.float64)
-            assert len(gref) == T, (len(gref), T)
-            mg = mujoco.MjModel.from_xml_path(str(REPO / ROBOTS[a.robot]["xml"]))
-            phc = PHCCost(mg, gref[0], gref[1:], scale=rm.s)
-            print(f"phc: {mg.nbody - 1} robot bodies against {tgt}, lengths / s = {rm.s:.6f}", flush=True)
+            robot_ref = np.load(tgt if tgt.is_absolute() else REPO / tgt)["qpos"].astype(np.float64)
+            assert len(robot_ref) == T, (len(robot_ref), T)
+            m_robot = mujoco.MjModel.from_xml_path(str(REPO / ROBOTS[a.robot]["xml"]))
+            phc = PHCCost(m_robot, robot_ref[0], robot_ref[1:], scale=rm.scale)
+            print(f"phc: {m_robot.nbody - 1} robot bodies against {tgt}, lengths / s = {rm.scale:.6f}", flush=True)
         self.phc = phc
         from .geometry import smpl_heading
         ref_h, ref_xy = smpl_heading(fk, ref[1:], dk), ref[1:][..., :2]           # humenv's heading, frame by frame
@@ -980,7 +981,7 @@ class RobotSequenceProblem(_SequenceRows):
         # n + 1 robots (slot 0: the mean sequence) from ref[0] mapped onto the robot, S steps, latent z_t = 16 * Z[:, t]
         self.batch = BatchRollout(policy, self.sim, RawObs(), n_envs, S, z_scale=16.0, record=("obs", "qpos_smpl", "qpos", "fz"))
         main = bfm if phc is None else PHCReward(phc, lambda ctx: ctx.ro.start.qpos[0], same_start=True)
-        self.n_jnt = len(rm.g_jnt)
+        self.n_jnt = len(rm.robot_jnt)
         self.cost = CompositeCost(main, [(a.heading_weight, Heading(fk, ref_h, d=dk, src="qs")),
                                          (a.pos_weight, Position(ref_xy, src="qs")),
                                          (a.ik_weight, IKResidual(n_link, self.n_jnt))], log=[bfm], form="per_step")

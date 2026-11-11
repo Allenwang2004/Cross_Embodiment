@@ -49,8 +49,8 @@ MATCH_W = ARG("--match-width", 0.0)   # > 0: bodies, path lines and margins draw
                                        # scene MATCH_W metres wide at the same image width (11.22: the --poses 6 render); pelvis positions unchanged
 MODEL = paths.read_path("outputs/user_survey/models/child.xml")
 # (trajectory file, colour key = render_blender.py COLORS key and panel suffix, label)
-BODIES = tuple((f, Palette.method(k).blender, Palette.label(k, v)) for f, k, v in (("reference_body", "ref", None), ("z0", "z0", "plain"), ("cem", "cem", None), ("best", "loes", None)))
-RGB = {Palette.method(k).blender: Palette.rgb(k) for k in ("ref", "z0", "cem", "loes")}    # sRGB, as the top-view plots
+BODIES = tuple((f, Palette.method(k).blender, Palette.label(k, v)) for f, k, v in (("reference_body", "ref", None), ("z0", "frozen", "plain"), ("cem", "cem_phc", None), ("best", "loes", None)))
+RGB = {Palette.method(k).blender: Palette.rgb(k) for k in ("ref", "frozen", "cem_phc", "loes")}    # sRGB, as the top-view plots
 EVERY, AZ, PXPM, MARGIN = 20, BLENDER_AZIMUTH, 90, 1.2                    # pose spacing (frames), the renderer's camera azimuth, pixels per metre
 
 

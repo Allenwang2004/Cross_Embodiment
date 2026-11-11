@@ -74,7 +74,7 @@ def main():
     model = FBcprModel.from_pretrained("facebook/metamotivo-M-1").to("cuda")
     ma = mujoco.MjModel.from_xml_path(str(REPO / ADULT_XML))
     exact = ExactObs(CHILD_XML)
-    print(f"adult-equivalent scale s = {exact.s}")
+    print(f"adult-equivalent scale s = {exact.scale}")
     env_c, _ = make_humenv(num_envs=16, vectorization_mode="async", task=None, xml=str(CHILD_XML), state_init="Default",
                            wrappers=[functools.partial(ExactObsWrapper, child_xml=str(CHILD_XML), adult_xml=str(REPO / ADULT_XML))])
     env_a, _ = make_humenv(num_envs=16, vectorization_mode="async", task=None, xml=str(REPO / ADULT_XML), state_init="Default")

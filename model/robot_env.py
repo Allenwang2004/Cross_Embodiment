@@ -14,6 +14,8 @@ Timing is humenv's (450 Hz physics, 15 substeps per action, implicitfast). Per a
             on the adult SMPL body, qvel by finite difference over one substep.
 G1 through this class matches the old G1Env with gains="perjoint" bit for bit (tests/test_g1_generic.py); its other gains,
 "mass" (the first, pre-10/20 version), have no counterpart here: dropped (user, 11/12).
+Names (step 11): the SMPL side is m_smpl / smpl_kp / smpl_gain / smpl_bias / smpl_spring / smpl_qadr (the names before, ms / s_kp /
+..., are read-only aliases: OLD_NAMES), the robot's MjModel / MjData m / d.
 """
 import json
 from pathlib import Path
@@ -41,6 +43,10 @@ def torque_limits(m):
     return lim
 
 
+OLD_NAMES = {"ms": "m_smpl", "s_kp": "smpl_kp", "s_gain": "smpl_gain", "s_bias": "smpl_bias", "s_spring": "smpl_spring",
+             "s_qadr": "smpl_qadr"}
+
+
 class RobotEnv:
     def __init__(self, name, rmap=None, gains=None, fill="fixed"):
         from humenv import make_humenv
@@ -51,14 +57,14 @@ class RobotEnv:
         m.opt.integrator = mujoco.mjtIntegrator.mjINT_IMPLICITFAST
         self.map = rmap or RobotMap(name, fill=fill)        # fill: robot -> SMPL, RobotMap's fill
         self.adult, _ = make_humenv(num_envs=1, task=None, xml=str(REPO / SMPL_XML), state_init="Default")
-        ms = self.ms = self.adult.unwrapped.model
-        trn = ms.actuator_trnid[:, 0]
-        self.s_kp = -ms.actuator_biasprm[:, 1]
-        self.s_gain, self.s_bias = ms.actuator_gainprm[:, 0], ms.actuator_biasprm[:, 0]
-        self.s_spring = ms.jnt_stiffness[trn]
-        self.s_qadr = ms.jnt_qposadr[trn]
+        m_smpl = self.m_smpl = self.adult.unwrapped.model
+        trn = m_smpl.actuator_trnid[:, 0]
+        self.smpl_kp = -m_smpl.actuator_biasprm[:, 1]
+        self.smpl_gain, self.smpl_bias = m_smpl.actuator_gainprm[:, 0], m_smpl.actuator_biasprm[:, 0]
+        self.smpl_spring = m_smpl.jnt_stiffness[trn]
+        self.smpl_qadr = m_smpl.jnt_qposadr[trn]
         # actuator i drives map joint act_j[i]
-        jnt_of = {mj: k for k, mj in enumerate(self.map.g_jnt)}
+        jnt_of = {mj: k for k, mj in enumerate(self.map.robot_jnt)}
         self.act_j = np.array([jnt_of[m.actuator_trnid[i, 0]] for i in range(m.nu)])
         g = json.loads((REPO / (gains or self.cfg["gains_json"])).read_text())
         names = [m.actuator(i).name for i in range(m.nu)]
@@ -79,7 +85,7 @@ class RobotEnv:
         m.actuator_biasprm[:, 2] = -self.kd
         for i in np.flatnonzero(motor):
             m.actuator_forcerange[i] = [-self.lim[i], self.lim[i]]; m.actuator_forcelimited[i] = 1
-            m.actuator_ctrlrange[i] = self.map.g_range[self.act_j[i]]; m.actuator_ctrllimited[i] = 1
+            m.actuator_ctrlrange[i] = self.map.robot_range[self.act_j[i]]; m.actuator_ctrllimited[i] = 1
             m.actuator_gear[i] = 0; m.actuator_gear[i, 0] = 1
         self.q_tgt = None
 
@@ -90,28 +96,28 @@ class RobotEnv:
     def reset(self, smpl_qpos, smpl_qpos_next=None):
         """Start from an SMPL pose (e.g. a reference's frame 0) mapped onto the robot, at rest; with the next frame
         (1/30 s later) also given, moving at the velocity between the two mapped poses (the reference's own)."""
-        qg, _ = self.map.smpl_to_robot_qpos(smpl_qpos)
+        q_robot, _ = self.map.smpl_to_robot_qpos(smpl_qpos)
         mujoco.mj_resetData(self.m, self.d)
-        self.d.qpos[:] = qg
-        vs = np.zeros(self.ms.nv)
+        self.d.qpos[:] = q_robot
+        vs = np.zeros(self.m_smpl.nv)
         if smpl_qpos_next is not None:
-            qg1, _ = self.map.smpl_to_robot_qpos(smpl_qpos_next, qg[self.map.g_qadr])
-            mujoco.mj_differentiatePos(self.m, self.d.qvel, 1.0 / 30, qg, qg1)
-            mujoco.mj_differentiatePos(self.ms, vs, 1.0 / 30, self.map.robot_to_smpl_qpos(qg),
-                                       self.map.robot_to_smpl_qpos(qg1))
+            q_robot1, _ = self.map.smpl_to_robot_qpos(smpl_qpos_next, q_robot[self.map.robot_qadr])
+            mujoco.mj_differentiatePos(self.m, self.d.qvel, 1.0 / 30, q_robot, q_robot1)
+            mujoco.mj_differentiatePos(self.m_smpl, vs, 1.0 / 30, self.map.robot_to_smpl_qpos(q_robot),
+                                       self.map.robot_to_smpl_qpos(q_robot1))
         mujoco.mj_forward(self.m, self.d)
-        self.q_tgt = qg[self.map.g_qadr].copy()
+        self.q_tgt = q_robot[self.map.robot_qadr].copy()
         self.d.ctrl[:] = self.q_tgt[self.act_j]
         self.last_resid, self.last_atlim = np.zeros(len(self.map.l_chain)), 0
         qs = self.map.robot_to_smpl_qpos(self.d.qpos)
         return self.smpl_obs(qs, vs), qs
 
     def action_to_ctrl(self, u):
-        theta = (self.s_gain * np.clip(u, -1, 1) + self.s_bias) / self.s_kp
-        qs = self.ms.qpos0.copy()
-        qs[self.s_qadr] = theta * self.s_kp / (self.s_kp + self.s_spring)
+        theta = (self.smpl_gain * np.clip(u, -1, 1) + self.smpl_bias) / self.smpl_kp
+        qs = self.m_smpl.qpos0.copy()
+        qs[self.smpl_qadr] = theta * self.smpl_kp / (self.smpl_kp + self.smpl_spring)
         self.q_tgt, self.last_resid = self.map.smpl_to_robot_joints(qs, self.q_tgt)
-        lo, hi = self.map.g_range[:, 0], self.map.g_range[:, 1]
+        lo, hi = self.map.robot_range[:, 0], self.map.robot_range[:, 1]
         self.last_atlim = int(np.sum((self.q_tgt <= lo + 1e-6) | (self.q_tgt >= hi - 1e-6)))
         return self.q_tgt[self.act_j]
 
@@ -121,9 +127,13 @@ class RobotEnv:
         q_prev = self.d.qpos.copy()
         mujoco.mj_step(self.m, self.d)
         qs_prev, qs = self.map.robot_to_smpl_qpos(q_prev), self.map.robot_to_smpl_qpos(self.d.qpos)
-        vs = np.zeros(self.ms.nv)
-        mujoco.mj_differentiatePos(self.ms, vs, SIM_DT, qs_prev, qs)
+        vs = np.zeros(self.m_smpl.nv)
+        mujoco.mj_differentiatePos(self.m_smpl, vs, SIM_DT, qs_prev, qs)
         return self.smpl_obs(qs, vs), qs
+
+
+for _old, _new in OLD_NAMES.items():
+    setattr(RobotEnv, _old, property(lambda self, _n=_new: getattr(self, _n), doc=f"read-only alias of {_new} (before step 11)"))
 
 
 def _worker(conn, name, fill, gains=None):
@@ -153,8 +163,8 @@ class RobotVecEnv:
             self.conns.append(a); self.procs.append(p)
 
     def _gather(self):
-        o, qs, qg, fz = zip(*[c.recv() for c in self.conns])
-        return np.stack(o), np.stack(qs), np.stack(qg), np.stack(fz)
+        o, qs, q_robot, fz = zip(*[c.recv() for c in self.conns])
+        return np.stack(o), np.stack(qs), np.stack(q_robot), np.stack(fz)
 
     def reset(self, smpl_qpos):
         for c in self.conns:

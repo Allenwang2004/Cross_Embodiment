@@ -122,22 +122,33 @@ def test_map_calibration():
     assert [b for b, _ in old_g1_map().PAIRS] == list(old.C) == list(new.C) and old_g1_map().PAIRS == new.pairs, "pairs"
     for b in old.C:
         check(f"C[{b}]", old.C[b], new.C[b])
-    assert type(old.s) is type(new.s) and old.s == new.s, (old.s, new.s)
-    for k in ("g_qadr", "g_dadr", "g_range", "s_qadr", "anc", "w"):
-        check(k, getattr(old, k), getattr(new, k))
+    assert type(old.s) is type(new.scale) and old.s == new.scale, (old.s, new.scale)
+    for k, k_new in (("g_qadr", "robot_qadr"), ("g_dadr", "robot_dadr"), ("g_range", "robot_range"), ("s_qadr", "smpl_qadr"),
+                     ("anc", "anc"), ("w", "w")):
+        check(k, getattr(old, k), getattr(new, k_new))
+    # step 11: the G1Map-era names stay readable on RobotMap, read-only, as the same objects
+    from model.robot_map import OLD_NAMES
+    for k, k_new in OLD_NAMES.items():
+        x, y = getattr(new, k), getattr(new, k_new)
+        assert x is y or (callable(x) and x.__func__ is y.__func__), k
+    try:
+        new.g_jnt = []
+        raise AssertionError("RobotMap.g_jnt is writable")
+    except AttributeError:
+        pass
     check("link_ids", np.array(old.link_ids), new.link_ids)
     # chain labels differ (g1_map "left_leg", robot_map "Lleg"); the re-solve only uses which joints / links share a chain
     # (chains are disjoint, so the order np.unique visits them in does not matter): the same partition, one label each
     pair = set(zip(old.j_chain, new.j_chain)) | set(zip(old.l_chain, new.l_chain))
     assert len(pair) == len({o for o, _ in pair}) == len({n for _, n in pair}) == 5, sorted(pair)
-    assert old.g_jnt == new.g_jnt and old.s_names == new.s_names
+    assert old.g_jnt == new.robot_jnt and old.s_names == new.smpl_names
     assert list(old.fill) == list(new.fill) and all(same(old.fill[b], new.fill[b]) for b in old.fill), "fill"
 
 
 def test_map_smpl_to_robot_clip():
     old, new = maps(); ref = clip()
     a = roundtrip(old.smpl_to_g1_qpos, old.g1_to_smpl_qpos, ref, old.g_qadr)
-    b = roundtrip(new.smpl_to_robot_qpos, new.robot_to_smpl_qpos, ref, new.g_qadr)
+    b = roundtrip(new.smpl_to_robot_qpos, new.robot_to_smpl_qpos, ref, new.robot_qadr)
     for k, x, y in zip(("G1 qpos", "IK residual", "SMPL round trip"), a, b):
         check(k, x, y)
     F["clip_qg"] = a[0]
@@ -149,32 +160,32 @@ def test_map_smpl_to_robot_clip():
 def random_smpl(n, k):
     """SMPL poses far from the clip: root orientation random, hinges uniform over 1.5 x their ranges (+-pi if unlimited),
     so the G1 targets run into joint limits and the per-chain re-solve runs"""
-    _, new = maps(); ms = new.ms; rng = RNG(k)
+    _, new = maps(); ms = new.m_smpl; rng = RNG(k)
     out = np.repeat(ms.qpos0[None], n, 0)
     q = rng.standard_normal((n, 4)); out[:, 3:7] = q / np.linalg.norm(q, axis=1, keepdims=True)
     out[:, :3] = rng.uniform([-2, -2, 0.3], [2, 2, 1.2], (n, 3))
-    r = np.where(ms.jnt_limited[new.s_jnt][:, None].astype(bool), 1.5 * ms.jnt_range[new.s_jnt], [[-np.pi, np.pi]])
-    out[:, new.s_qadr] = rng.uniform(r[:, 0], r[:, 1], (n, len(new.s_jnt)))
+    r = np.where(ms.jnt_limited[new.smpl_jnt][:, None].astype(bool), 1.5 * ms.jnt_range[new.smpl_jnt], [[-np.pi, np.pi]])
+    out[:, new.smpl_qadr] = rng.uniform(r[:, 0], r[:, 1], (n, len(new.smpl_jnt)))
     return out
 
 
 def test_map_smpl_to_robot_limits():
     old, new = maps(); X = random_smpl(40, 1)
-    lo, hi = new.g_range[:, 0], new.g_range[:, 1]
+    lo, hi = new.robot_range[:, 0], new.robot_range[:, 1]
     q_old = q_new = None; hit = 0
     for i, x in enumerate(X):                                                   # warm-started through unrelated poses
         a, b = old.smpl_to_g1_qpos(x, q_old), new.smpl_to_robot_qpos(x, q_new)
         check(f"random qpos {i}", a[0], b[0]); check(f"random resid {i}", a[1], b[1])
-        q_old, q_new = a[0][old.g_qadr], b[0][new.g_qadr]
+        q_old, q_new = a[0][old.g_qadr], b[0][new.robot_qadr]
         hit += bool(np.any((q_new <= lo + 1e-6) | (q_new >= hi - 1e-6)))
     assert hit >= 10, f"only {hit} of 40 random poses reached a joint limit: the re-solve branch is barely tested"
 
 
 def random_g1(n, k):
-    _, new = maps(); rng = RNG(k); out = np.zeros((n, new.mg.nq))
+    _, new = maps(); rng = RNG(k); out = np.zeros((n, new.m_robot.nq))
     q = rng.standard_normal((n, 4)); out[:, 3:7] = q / np.linalg.norm(q, axis=1, keepdims=True)
     out[:, :3] = rng.uniform([-2, -2, 0.2], [2, 2, 1.0], (n, 3))
-    out[:, new.g_qadr] = rng.uniform(new.g_range[:, 0], new.g_range[:, 1], (n, len(new.g_jnt)))
+    out[:, new.robot_qadr] = rng.uniform(new.robot_range[:, 0], new.robot_range[:, 1], (n, len(new.robot_jnt)))
     return out
 
 
@@ -252,7 +263,7 @@ def stored(stem):
 
 def test_stored_targets():
     old, new = maps()
-    for stem_path, fwd, back, qadr in (("move-ego-0-2/move-ego-0-2_4", new.smpl_to_robot_qpos, new.robot_to_smpl_qpos, new.g_qadr),
+    for stem_path, fwd, back, qadr in (("move-ego-0-2/move-ego-0-2_4", new.smpl_to_robot_qpos, new.robot_to_smpl_qpos, new.robot_qadr),
                                         ("move-ego-0-2/move-ego-0-2_1", old.smpl_to_g1_qpos, old.g1_to_smpl_qpos, old.g_qadr)):
         qg, rt = stored(stem_path.split("/")[1])
         a = roundtrip(fwd, back, clip(stem_path), qadr)

@@ -41,6 +41,7 @@ from crossenbodiment.bodies import BODIES
 from crossenbodiment.metrics import MetricSuite, metric_body, world_positions
 from crossenbodiment import paths
 from crossenbodiment.experiment import ClipSet, Experiment, parse_flag, workers
+from crossenbodiment.methods import experiment_keys
 from crossenbodiment.reroll import EvalRollouts, Reroller, read_best_so_far
 from crossenbodiment.results import Checks, ResultsTable, write_json
 # refactor step 8: --set / --methods are read in main (configure(), not at import: importing gives --set small with every method);
@@ -49,19 +50,23 @@ from crossenbodiment.results import Checks, ResultsTable, write_json
 CONFS = {"small": lambda: dict(out="outputs/g1_small", clips=("headstand/headstand_4", "rotate-x--5-0.8/rotate-x--5-0.8_4", "move-ego-0-2/move-ego-0-2_1"),
                                seeds=(0, 1, 2), G=(4, 8, 16, 32, 64)),
          "52": lambda: dict(out="outputs/g1_52", clips=tuple(read_clips(CHILD_52_TASK)), seeds=(0,), G=(4, 8, 16, 32, 64, 128))}
-S = BODIES.scale("g1")              # RobotMap("g1").s
+S = BODIES.scale("g1")              # RobotMap("g1").scale
 KEYS = ("fall_s", "success", "mpjpe", "mmpjpe", "mpjae", "drift")
 GAINS = "assets/robots/g1/gains_perjoint.json"
 OURS = "--heading-weight 1.0 --pos-weight 0.1 --anchor-weight 0.3 --ik-weight 1.0"
-ALL_SINGLE = dict(es=f"--algo es {OURS}", random=f"--algo random {OURS}", cmaes=f"--algo cmaes {OURS}",
-                  cem="--algo cem --objective phc --heading-weight 0 --pos-weight 0 --anchor-weight 0 --ik-weight 0")
-ALL_SEQ = dict(lso="--heading-weight 0 --pos-weight 0 --ik-weight 0", lsor="--rank --heading-weight 0.05 --pos-weight 0.005 --ik-weight 1.0",
-               ta="--method ta --objective phc --heading-weight 0 --pos-weight 0 --ik-weight 0")
-W_SINGLE = dict(es=(1.0, 0.1, 0.3, 1.0, "bfm", "es"), random=(1.0, 0.1, 0.3, 1.0, "bfm", "random"), cmaes=(1.0, 0.1, 0.3, 1.0, "bfm", "cmaes"),
-                cem=(0.0, 0.0, 0.0, 0.0, "phc", "cem"))
-W_SEQ = dict(lso=(0.0, 0.0, 0.0, False, "bfm", "lso"), lsor=(0.05, 0.005, 1.0, True, "bfm", "lso"), ta=(0.0, 0.0, 0.0, False, "phc", "ta"))
-NAMES = dict(frozen="Frozen (z0)", random="Random Search", cem="CEM (BFM-Zero)", cmaes="CMA-ES", native="Native BFM Tracking Inference", lso="LSO (BFMTrack)",
-             lsor="LSOR (our method)", ta="Trajectory Adaptation (BFM-Zero)", es="LOES (our method)")
+# the run-directory key of each method (crossenbodiment/methods.py RUNS: outputs/g1_52 and outputs/g1_small use the same keys; they are
+# also results.json's method keys and the --methods values): LOES with the anchor "es", BFM-Zero's CEM "cem", LSOR (w005) "lsor"
+K = experiment_keys("outputs/g1_52")
+LOES, RANDOM, CMAES, CEM, LSO, LSOR, TA = (K[m] for m in ("loes_anchor", "random", "cmaes", "cem_phc", "lso", "lsor_w005", "ta"))
+ALL_SINGLE = {LOES: f"--algo es {OURS}", RANDOM: f"--algo random {OURS}", CMAES: f"--algo cmaes {OURS}",
+              CEM: "--algo cem --objective phc --heading-weight 0 --pos-weight 0 --anchor-weight 0 --ik-weight 0"}
+ALL_SEQ = {LSO: "--heading-weight 0 --pos-weight 0 --ik-weight 0", LSOR: "--rank --heading-weight 0.05 --pos-weight 0.005 --ik-weight 1.0",
+           TA: "--method ta --objective phc --heading-weight 0 --pos-weight 0 --ik-weight 0"}
+W_SINGLE = {LOES: (1.0, 0.1, 0.3, 1.0, "bfm", "es"), RANDOM: (1.0, 0.1, 0.3, 1.0, "bfm", "random"), CMAES: (1.0, 0.1, 0.3, 1.0, "bfm", "cmaes"),
+            CEM: (0.0, 0.0, 0.0, 0.0, "phc", "cem")}
+W_SEQ = {LSO: (0.0, 0.0, 0.0, False, "bfm", "lso"), LSOR: (0.05, 0.005, 1.0, True, "bfm", "lso"), TA: (0.0, 0.0, 0.0, False, "phc", "ta")}
+NAMES = {"frozen": "Frozen (z0)", RANDOM: "Random Search", CEM: "CEM (BFM-Zero)", CMAES: "CMA-ES", "native": "Native BFM Tracking Inference",
+         LSO: "LSO (BFMTrack)", LSOR: "LSOR (our method)", TA: "Trajectory Adaptation (BFM-Zero)", LOES: "LOES (our method)"}
 body = None
 
 
@@ -76,9 +81,9 @@ def configure(set_="small", methods=None):
     SINGLE, SEQ = dict(ALL_SINGLE), dict(ALL_SEQ)
     if methods is not None:
         M = set(methods)
-        assert {"es", "lso"} <= M <= set(SINGLE) | set(SEQ), "frozen z0 comes from the LOES runs and native from the LSO runs"
+        assert {LOES, LSO} <= M <= set(SINGLE) | set(SEQ), "frozen z0 comes from the LOES runs and native from the LSO runs"
         SINGLE = {k: v for k, v in SINGLE.items() if k in M}; SEQ = {k: v for k, v in SEQ.items() if k in M}
-    ORDER = tuple(k for k in ("frozen", "random", "cem", "cmaes", "native", "lso", "lsor", "ta", "es") if k in ("frozen", "native") or k in SINGLE or k in SEQ)
+    ORDER = tuple(k for k in ("frozen", RANDOM, CEM, CMAES, "native", LSO, LSOR, TA, LOES) if k in ("frozen", "native") or k in SINGLE or k in SEQ)
     EXP = Experiment(OUT_REL, clips=ClipSet(CLIPS), methods=(*SINGLE, *SEQ), seeds=SEEDS, budgets=G, order=("seed", "clip", "method"))
     REROLL = Reroller(GENS, G, best="budgets")
 
@@ -148,7 +153,7 @@ def clip(c):
     body = body or metric_body(E.XML["g1"], False); st = stem(c)
     ref = np.load(REPO / f"outputs/g1/roundtrip/{st}/g1.npz")["qpos"].astype(np.float64)[1:]; Pw = world(ref); _, Dr = body.part_floor(ref)
     R = {}; chk = Checks(("frozen_diff", "native_diff", "reroll_cost", "reroll_best_qpos", "seq_reroll"), ("bad",))
-    z0 = np.load(OUT / f"{st}_es_s0/origin_z.npz")["qpos"]; R["frozen"] = np.array([stats(z0, ref, Pw, Dr)])
+    z0 = np.load(OUT / f"{st}_{LOES}_s0/origin_z.npz")["qpos"]; R["frozen"] = np.array([stats(z0, ref, Pw, Dr)])
     for k in SINGLE:
         ev = EvalRollouts(ROLL / f"{st}_{k}", G, GENS); ix = ev.index; Q = ev.qpos
         cost = np.array(ev.cost); B = np.zeros((len(SEEDS), len(G), len(KEYS))); C = np.zeros_like(B)
@@ -161,7 +166,7 @@ def clip(c):
             for j in range(len(G)):
                 B[i, j] = stats(Q[bi[j]], ref, Pw, Dr); C[i, j] = stats(Q[ci[j]], ref, Pw, Dr)
         R[f"{k}_best"], R[f"{k}_centre"] = B, C
-    nat = np.load(OUT / f"{st}_lso_s0/rollouts.npz")["q_ER8"]; R["native"] = np.array([stats(nat, ref, Pw, Dr)])
+    nat = np.load(OUT / f"{st}_{LSO}_s0/rollouts.npz")["q_ER8"]; R["native"] = np.array([stats(nat, ref, Pw, Dr)])
     for k in SEQ:
         B = np.zeros((len(SEEDS), len(G), len(KEYS))); C = np.zeros_like(B)
         for i, s in enumerate(SEEDS):
@@ -183,10 +188,10 @@ def analyse():
     print(f"single-latent re-rolls vs the search's best cost so far, largest difference: {chk['reroll_cost']:.3g} | best latent re-rolled vs saved best rollout, "
           f"largest qpos difference: {chk['reroll_best_qpos']:.3g} | latent-sequence best re-rolled vs saved: {chk['seq_reroll']:.3g}")
     others = [paths.output("kpkd/g1_kp1_kd1")] + ([paths.output("g1_small")] if SET != "small" else [])
-    kp = [(st, s, o) for st in (stem(c) for c in CLIPS) for s in SEEDS for o in others if (o / f"{st}_s{s}/z_trace.npz").exists() or (o / f"{st}_es_s{s}/z_trace.npz").exists()]
+    kp = [(st, s, o) for st in (stem(c) for c in CLIPS) for s in SEEDS for o in others if (o / f"{st}_s{s}/z_trace.npz").exists() or (o / f"{st}_{LOES}_s{s}/z_trace.npz").exists()]
     def zb(o, st, s):
-        f = o / f"{st}_s{s}/z_trace.npz"; return np.load(f if f.exists() else o / f"{st}_es_s{s}/z_trace.npz")["z_best"]
-    kpd = max((float(np.abs(np.load(OUT / f"{st}_es_s{s}/z_trace.npz")["z_best"][:len(zb(o, st, s))] - zb(o, st, s)[:GENS + 1]).max()) for st, s, o in kp), default=float("nan"))
+        f = o / f"{st}_s{s}/z_trace.npz"; return np.load(f if f.exists() else o / f"{st}_{LOES}_s{s}/z_trace.npz")["z_best"]
+    kpd = max((float(np.abs(np.load(OUT / f"{st}_{LOES}_s{s}/z_trace.npz")["z_best"][:len(zb(o, st, s))] - zb(o, st, s)[:GENS + 1]).max()) for st, s, o in kp), default=float("nan"))
     print(f"LOES against the same motion and seed in {', '.join(o.name for o in others)} ({len(kp)} runs), largest best-latent difference over the generations both have: {kpd}")
     chk["loes_vs_kpkd"] = kpd
     res = {o[0]: o[1] for o in out}; rep = dict(checks=dict(chk, bad=bad), per_motion={}, mean={})

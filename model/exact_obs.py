@@ -67,16 +67,21 @@ class ExactObs:
         self.env, _ = make_humenv(num_envs=1, task=None, xml=str(adult_xml), state_init="Default")
         self.low_c, self.low_a = _LowestPoint(self.mc), _LowestPoint(self.ma)
         # child / adult root scale of the dataset's retargeting, measured on it (x, y ratio, identical to 1e-16
-        # across clips); a different body needs its own
-        self.s = float(scale)
+        # across clips); a different body needs its own (crossenbodiment/bodies.py: the root scale's names)
+        self.scale = float(scale)
+
+    @property
+    def s(self):
+        """read-only alias of scale (the attribute's name before the OOP refactor's step 11)"""
+        return self.scale
 
     def adult_state(self, qpos_c, qvel_c):
-        qa = np.array(qpos_c, dtype=np.float64); qa[:3] /= self.s
+        qa = np.array(qpos_c, dtype=np.float64); qa[:3] /= self.scale
         self.dc.qpos[:] = qpos_c; mujoco.mj_kinematics(self.mc, self.dc)
-        clearance = self.low_c(self.dc) / self.s
+        clearance = self.low_c(self.dc) / self.scale
         self.da.qpos[:] = qa; mujoco.mj_kinematics(self.ma, self.da)
         qa[2] += clearance - self.low_a(self.da)
-        va = np.array(qvel_c, dtype=np.float64); va[:3] /= self.s
+        va = np.array(qvel_c, dtype=np.float64); va[:3] /= self.scale
         return qa, va
 
     def __call__(self, qpos_c, qvel_c):

@@ -33,7 +33,8 @@ import numpy as np
 
 from . import paths
 
-CHILD_EXACT_S = 0.611036        # model/exact_obs.ExactObs's default scale (the child's s; configs/bodies.yaml child.s)
+CHILD_SCALE = 0.611036          # model/exact_obs.ExactObs's default scale (the child's root scale; configs/bodies.yaml child.s)
+CHILD_EXACT_S = CHILD_SCALE     # the name before step 11
 
 
 class ObsMapper:
@@ -98,8 +99,11 @@ class ExactObs(ObsMapper):
         return cls(xml=None, exact=exact, in_env=in_env)
 
     @property
-    def s(self):
-        return self.exact.s
+    def scale(self):
+        """the root scale of the main-process ExactObs (after build())"""
+        return self.exact.scale
+
+    s = scale                                # the name before step 11
 
     def wrappers(self):
         if not self.in_env:

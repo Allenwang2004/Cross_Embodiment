@@ -52,8 +52,8 @@ def figure(name):
     for j, v in CALIB_POSE.items():
         ds.qpos[ms.joint(j).qposadr[0]] = v
     f = rm.free_q
-    dg.qpos[:] = 0; dg.qpos[f + 3] = 1; dg.qpos[rm.g_qadr] = rm.q_nom; mujoco.mj_kinematics(mg, dg)
-    rmap_low = rm.low_g; dg2 = rm.dg; dg2.qpos[:] = dg.qpos; mujoco.mj_kinematics(rm.mg, dg2)
+    dg.qpos[:] = 0; dg.qpos[f + 3] = 1; dg.qpos[rm.robot_qadr] = rm.q_nom; mujoco.mj_kinematics(mg, dg)
+    rmap_low = rm.low_robot; dg2 = rm.d_robot; dg2.qpos[:] = dg.qpos; mujoco.mj_kinematics(rm.m_robot, dg2)
     dg.qpos[f + 2] = -rmap_low(dg2)
     out = []
     for m, d, title, which in ((ms, ds, "SMPL adult (Motivo's body)", 1), (mg, dg, cfg["name"], 2)):
@@ -114,7 +114,7 @@ def figure_to_smpl(name, clip="move-ego-0-2_4", t=100, fill="fixed"):
     # the clip mapped onto the robot with the CURRENT map (warm-started IK up to frame t), then back to SMPL
     ref = np.load(REPO / f"data/origin_motion/{clip.rsplit('_', 1)[0]}/{clip}.npz")["qpos"]; q = None
     for k in range(t + 1):
-        qg, _ = rm.smpl_to_robot_qpos(ref[k], q); q = qg[rm.g_qadr]
+        qg, _ = rm.smpl_to_robot_qpos(ref[k], q); q = qg[rm.robot_qadr]
     qs = rm.robot_to_smpl_qpos(qg)
     ms = mujoco.MjModel.from_xml_path(str(REPO / SMPL_XML)); ds = mujoco.MjData(ms)
     mg = mujoco.MjModel.from_xml_path(str(REPO / cfg["scene"])); dg = mujoco.MjData(mg)

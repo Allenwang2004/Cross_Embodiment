@@ -27,7 +27,7 @@ from crossenbodiment.geometry import facing                    # noqa: E402  roo
 from crossenbodiment.palette import INK, Palette               # noqa: E402
 OUT = paths.write_path("outputs/child_all52"); T = paths.own_path("outputs/child_all52/trajectories")
 LINES = tuple((f, Palette.label(k), Palette.hex(k), ls, lw) for f, k, ls, lw in
-              (("reference_body", "ref", "-", 2.0), ("z0", "z0", "--", 1.4), ("cem", "cem", "-", 1.6), ("best", "loes", "-", 1.6)))
+              (("reference_body", "ref", "-", 2.0), ("z0", "frozen", "--", 1.4), ("cem", "cem_phc", "-", 1.6), ("best", "loes", "-", 1.6)))
 EVERY = 60                                                     # facing arrows every 2 s (30 fps)
 
 

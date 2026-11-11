@@ -1,113 +1,138 @@
-# Workflow and script index
+# Workflow
 
-The pipeline in the order it runs, then every script in `scripts/` by what it is for. Conventions used
-throughout: latents live on the sphere of radius 16 and distances between them are Euclidean (two random
-latents are ~22.6 apart); costs are reported as **cost ÷ the clip's z0 cost** on the same body (1.0 = no change).
-Names marked *archived* were moved to `archive/` on 2026-11-11 (unused; the reasons are in [`archive/README.md`](../archive/README.md));
-they find the repository from their own path, so move one back with `git mv` before running it.
+The pipeline as it runs since the OOP refactor (2026-11-11): **search -> re-roll -> analyse -> tables and figures**. Every
+step is a script in `scripts/` over the package `crossenbodiment/` (module map and class list: [architecture.md](architecture.md)).
+Commands run from the repository root with `uv run python ...` on GPU 2 only:
+
+```bash
+export CUDA_VISIBLE_DEVICES=2 MUJOCO_EGL_DEVICE_ID=2 MUJOCO_GL=egl HF_HUB_OFFLINE=1 OMP_NUM_THREADS=1
+```
+
+The box is shared (503 GB, 64 cores): run `free -g` before launching, keep >= 50 GB available, and launch long jobs detached
+(`setsid nohup ... &`) so a closed session does not kill them. `scripts/run_queue.py` does the memory check for a whole commands file.
+
+## Conventions
+
+* **Latents** live on Motivo's sphere, |z| = 16; distances are Euclidean (two random latents are ~22.6 apart). `z0` is the task
+  latent of a clip (`data/origin_z/<task>/<stem>.npy`, "origin_z" on disk); the method that keeps it is called *frozen*.
+* **Methods** have one name each in code and tables (`crossenbodiment/methods.py`): `loes` (ours, no anchor since 11/11),
+  `loes_anchor`, `cem_phc` (BFM-Zero's CEM), `cem_ours`, `random`, `cmaes` (single latent); `lso`, `lsor_w005`, `lsor_bfm`,
+  `lsor_ours`, `ta`, `native` (latent sequence). Run folders keep their old keys (`<stem>_es_s0`, `_cem_s0`, `_lsor_s0`, ...):
+  the same key means different methods in different experiments, so look it up with `methods.method_of(experiment, key)`.
+* **Root scale** s = body size / adult size (`BODIES.scale(body, clip)`): the child 0.611036, the G1 0.8213, the adult-size
+  variants 1, the scaled bodies read off the clip. Positions (the position term, PHC's lengths, drift, the 0.5 m success
+  threshold) are in adult-equivalent metres = metres / s. `lso_search.py --scale` defaults to the child's value for *any*
+  body: pass it explicitly (`obs.registry_scale(body, clip)`).
+* **Progress**: a single-latent search runs *generations* of 2 x pairs = 16 rollouts; a latent-sequence search runs
+  *iterations* of n = 16 sequences (+ the mean). Budgets are quoted in rollouts (64 generations = 1,024 rollouts).
+* **Metrics** (Task page; `crossenbodiment/metrics.py`, `eval_metrics.py`): every rollout q[t] against the reference
+  ref[t + 1], on the body itself. Fall Time (s, non-foot contact while the reference has none), PHC success (world-frame mean
+  body error never above 0.5 m adult-equivalent), MPJPE / MMPJPE (cm), MPJAE = per-joint acceleration error (m/s^2), drift
+  (mean pelvis x, y distance). Older results (per_run.npz of child_52_*) also carry the legacy root success / height fall.
 
 ## 1. Bodies
 
-A body is an MJCF scaled from `assets/robots/adult/robot.xml` by 8 parameters β (length and girth of leg,
-arm, torso, head), then given actuators calibrated to the torque it actually needs. Step-by-step guide (in
-Chinese): [`new_body.md`](new_body.md); one CLI for every recipe: `scripts/build_body.py` (crossenbodiment/bodybuild: BodyBuilder
-subclasses, SameTopologyRetargeter, TorqueCalibrator, GainScaler, BodyPipeline; finished steps are skipped). The scripts below keep
-their flags and call the same classes.
-
-| Script | What it does |
+| What | How |
 |---|---|
-| `build_body.py` | Build bodies: `scaled` (β axes, `--len/--wid`, `--preset`), `scaled-set`, `grid`, `morph`, the adult-size variants (`heavy-limb`, `lock-joints`, `limit-joints`, `elderly`, `strength`) and `gains` (kp / kd of an MJCF or a robot's gains json); steps shape → skeleton → retarget → torque ratio → aggregate → physics → registry, idempotent, memory-gated |
-| `scale_robot.py` | Scaled variant of the adult MJCF from β (`ScaledBody`) |
-| `qpos_retarget.py` | Retarget adult motions to a body: joint angles copied, root position scaled, lifted to the ground (`SameTopologyRetargeter`; foot-locked IK refinement: `archive/scripts/qpos_retarget_ik.py`, *archived 2026-11-11*) |
-| `export_skeleton_json.py` | Rest-pose transform of every body part |
-| `torque_ratio_per_joint.py`, `torque_ratio_across_motions.py`, `torque_aggregate_motion_k.py` | Gravity torque demand of a body vs the adult, per joint and over motions; the aggregate writes `robot_torque_full.xml` with actuators and joint dynamics scaled by that ratio (`TorqueCalibrator`; the one-clip writer `archive/scripts/torque_scale_actuators.py` is *archived 2026-11-12*) |
-| `scale_body_gains.py` | A body with its kp / kd (or k) multiplied (`GainScaler`) |
-| `heavy_arm_body.py`, `lock_joint_body.py`, `limit_joint_body.py`, `elderly_body.py` | Adult-size variants and their references: heavier arm (payload), locked joints, joints limited to a band (limited leg), stooped elderly walker |
-| `torque_capability_check.py`, `plot_k_diagnostics.py` | Checks: can the actuators hold the poses; the old 11-body roster's checks (reach commanded angles, replay the adult's controls) are `archive/scripts/pd_track_bodies.py`, `archive/scripts/replay_actions_on_body.py` (*archived 2026-11-11*) |
-| `archive/scripts/ik_action_from_qpos.py` | Control stream that commands a pose-only motion (*archived 2026-11-11*) |
-| `write_body_splits.py` | Write each body's train / test split (`model/bodies.py`) into its `parameter.json` |
-| `archive/scripts/render_bodies.py` | Contact sheet of a robot directory (default `assets/robots_advance`, gone; *archived 2026-11-11*) |
-| `make_scaled_bodies.py`, `make_grid_bodies.sh`, `make_morph_path.sh`, `make_all_paths.sh`, `new_body_pipeline.sh` | Thin wrappers over `build_body.py` (they print the line they run): the 8 len × wid bodies, bodies on a leg × arm grid, straight paths in β from the adult (morphology study), one body + its z0 cost ranking; the stature × build grid `archive/scripts/grid_l0_bodies.py` is *archived 2026-11-11* |
-| `archive/scripts/scale_robot_l1.py` | 30-axis generator; was library only for `render_bodies.py` / `grid_l0_bodies.py` (*archived 2026-11-11* with them) |
+| A new human body (scaled, adult-size variant, gain variant) | `scripts/build_body.py scaled / scaled-set / grid / morph / heavy-limb / lock-joints / limit-joints / elderly / strength / gains ...` -> assets/robots/<body>/robot.xml, data/<body>/retargeting_motion, assets/robots_torque/<body>/robot_torque_full.xml, the registry entry (configs/bodies.yaml). Runbook (in Chinese): [new_body.md](new_body.md) |
+| A robot (G1, H1, Apollo) | its entry in `model/robots.py`; `scripts/robot_gain_scaling.py --robot <r>` (per-joint kp / kd json); `scripts/robot_roundtrip.py --robot <r>` (the task clips mapped onto it: outputs/<robot>/roundtrip/<stem>/, the robot's targets); `scripts/fit_smpl_fill.py` (the ridge fill of the SMPL parts no link reports) |
+| z0's cost of every clip on a body | `scripts/rank_initial_cost.py`, `scripts/robot_z0.py --robot <r>` |
 
-## 2. Data and clip sets
+## 2. Search
 
-| Script | What it does |
+| Script | Body | Method |
+|---|---|---|
+| `single_z_search.py` | SMPL topology (child, scaled bodies, adult-size variants) | one latent per clip: `--algo es` (LOES) / `cem` / `cmaes` / `random`; `--objective bfm` (+ `--heading-weight 1.0 --pos-weight 0.1`; the anchor term is off since 11/11) or `phc` (BFM-Zero's reward) |
+| `robot_z_search.py` | a robot of model/robots.py (`--robot g1`) | the same search through RobotVecEnv, + an IK term; `--resume` continues a run exactly (state.npz) |
+| `lso_search.py` | SMPL topology | a latent per step: LSO (BFMTrack), `--rank` (LSOR), `--method ta` (BFM-Zero's Trajectory Adaptation) |
+| `robot_lso_search.py` | a robot | the same on a robot |
+
+Each run writes one folder (`--out`): `summary.json` last (the done marker), `curve.csv` (one row per generation / iteration),
+`best_z.npy`, `best.npz` / `origin_z.npz` (the best and z0's rollouts), `z_trace.npz` (single latent) or `mu_trace.npz` +
+`rollouts.npz` (sequences: `q_ER8` = native, `q_best_it<k>` / `q_mean_it<k>` at the `--budgets`). The settings each method uses on
+the Task page are `METHODS[...].flags` + `COMMON` in `crossenbodiment/methods.py`; the drivers below print the exact lines.
+
+Experiments are grids of runs, one driver each:
+
+| Driver | Experiment |
 |---|---|
-| `build_dataset.py` | The (clip × body) `manifest.jsonl` that `model/dataset.py` reads |
-| `batch_infer_z.py`, `infer_z_from_qpos.py` | Metamotivo tracking inference: per-frame z of a motion on a body (`data/*/infer_*`) |
-| `metamotivo_motion_rollout.py` | Roll Metamotivo's own skills in humenv |
-| `split_tasks.py`, `split_tasks_by_fall.py` | Train / test task splits |
-| `rank_initial_cost.py`, `write_clip_list.py`, `write_balanced_clips.py` | z0's cost on a body for every clip; clip lists above a threshold; the balanced 500-clip set + categories |
-| `dump_heldout_clips.py` | Reproduce a checkpoint's held-out clip split |
+| `child_52_rerun.py`, `child_52_cem_phc.py`, `child_52_lso.py` | the child on the 52 task motions (configs/clips/child_52_task.txt), 5 seeds: LOES + anchor, CEM (our cost), random, CMA-ES / CEM (BFM-Zero) / the latent-sequence methods |
+| `loes_noanchor.py` | LOES without the anchor on the child, the payload, the limited leg and the G1 |
+| `body_52_test.py` | the payload (adult_heavyRWristHand_x80) and the limited leg (adult_lockRleg_bent_lim): every method, seed 0, 2,048 rollouts |
+| `g1_small_test.py [--set 52]` | the G1: every method (3 clips x 3 seeds, or the 52 x seed 0) |
+| `tall_body_52.py` | the tall thin body len1.4_wid0.8: LOES vs CEM (BFM-Zero) |
+| `amass_baselines.py` | the latent-sequence methods on the 68 ACCAD locomotion clips (configs/clips/amass_locomotion_5s.txt), child and tall body |
+| `kpkd_test.py` | gains kp / kd moved in opposite directions on four bodies |
+| `loes_lso_4096.py`, `loes_weight_test.py`, `lsor_mpjae_test.py`, `cost_correlation.py`, `drift_success_child.py`, `success_definitions.py`, `fall_definitions.py` | follow-up questions on the child (each docstring says which) |
 
-## 3. Searching a latent for one clip
+A driver's `commands` prints `"<run dir>|<command>"` lines; run them through the queue:
 
-`single_z_search.py` is the workhorse: ES (16 independent perturbations, ranked; `--sampling antithetic` for the mirrored pairs of every search before 11/04) + Adam on one z for one (clip, body). The flags that
-matter:
+```bash
+uv run python scripts/body_52_test.py commands > outputs/body_52/commands.txt
+setsid nohup uv run python scripts/run_queue.py outputs/body_52/commands.txt --log outputs/body_52/queue.log \
+    --sentinel outputs/body_52/searches.done --max-jobs 8 > /dev/null 2>&1 &
+```
 
-| Flag | Meaning |
+`run_queue.py` skips finished folders (summary.json), keeps >= 50 GB available, retries crashes, writes `<dir>/run.out` and
+`<dir>/.rc`, and the sentinel file when every line is done (wait on that file, or on the queue's pid; never `pgrep -f` on text that
+is also in your own waiting command).
+
+## 3. Re-roll
+
+The analyses score the latents a search found, rolled out again with the search's own cost:
+
+* `<driver> prepare` -> `rollouts/<stem>[_<key>]/z.npy` + `index.json` (schema 2, `crossenbodiment/reroll.py`): each run's best
+  latent so far per generation (or at the budgets) and its centre (the mean z) at the budgets, each distinct latent once.
+* `<driver> evalcmds` -> one `--eval-z <dir>/z.npy --eval-save-qpos` line per folder, run with
+  `run_queue.py ... --done-file eval_qpos.npz` (latents padded with z0 to full batches; writes eval.csv, eval_base.json, eval_qpos.npz).
+* Latent-sequence runs need no re-roll: their rollouts at the budgets are in rollouts.npz.
+
+## 4. Analyse
+
+`<driver> analyse` reads the runs and re-rolls (under `$CE_OUTPUTS_ROOT`, default outputs/), checks them (settings as intended,
+re-rolls reproduce each search's best cost so far and its saved best rollout, z0 / native rollouts identical across runs) and
+writes `per_run.npz` / `results.json` / `means.json` / `README.md` (under `$CE_RESULTS_ROOT`, default the same folder) through
+`crossenbodiment/results.py` (`ResultsTable`: means over motions and seeds per budget, paired Wilcoxon tests per motion).
+
+## 5. Tables and figures
+
+| Output | Script |
 |---|---|
-| `--objective bfm \| align` | Cost: bfm, or L_align in joint space |
-| `--heading-weight`, `--pos-weight` | Add heading and root-xy terms (the "global" cost); position in adult-equivalent metres, `--pos-unit body` for the body's own (every search before 11/04) |
-| `--z-start`, `--best-from-start` | Start from another latent (e.g. the bfm stage's best) |
-| `--anchor`, `--anchor-weight` | Penalty λ (‖z − anchor‖ / 16)² inside the cost |
-| `--subspace`, `--subspace-dim` | Move only within start + span of the first k rows of a basis |
-| `--obs-scale auto \| none \| exact` | What the policy and B see (see the README) |
-| `--ref` | Track another reference (e.g. a start's own adult rollout) |
-| `--steps` | Rollout length; the costs only read the reference's frames, so `--steps` = its length gives the same result faster |
+| Task-page tables (Notion) | the drivers' `analyse` tables (results.json `mean`, at 1,024 / 2,048 rollouts; best latent and centre) |
+| convergence by budget, the child's 52 motions | `plot_child_convergence.py [--loes-dir outputs/noanchor/child]` |
+| LOES's MPJPE gain per motion | `plot_child_improvement.py` |
+| teaser, method figure | `plot_teaser.py render / draw / band`, `plot_method_figure.py render / draw / simple / first` (panels: configs/figures/*.yaml) |
+| strobe figures (Blender) | `strobe_final_blender.py [export] [render] [combine]` (examples: configs/figures/strobe_examples.yaml), `render_blender.py` (standalone, runs inside Blender), `topdown_blender.py`, `walk_band_blender.py`, `child_all_blender.py`, `body_all_blender.py` |
+| side-by-side and overlay videos | `render_panels.py <spec.json>`, `body_overlay.py`, `robot_overlay.py`, `lso_videos.py` |
+| the user survey | `survey_body_videos.py`, `survey_robot_videos.py`, `package_survey.py`, `package_survey_picks.py`, `package_amass_lso_survey.py` |
 
-The standard recipe is two stages: bfm (4096 evals, lr 0.1) → L_align and/or global (2048 evals, lr 0.03) from
-the bfm stage's best; `archive/scripts/analyze_search_convergence.py` (*archived 2026-11-11*: `outputs/b500_targets` is gone) showed where those budgets can be cut. Batches of searches
-are run by small schedulers next to their outputs (`outputs/b500_targets/scheduler.py`,
-`outputs/lowdim_*/scheduler.py`, `outputs/exact_train/scheduler.py`): one process per search, a cap per GPU.
+Colours and labels come from `crossenbodiment/palette.py` (where scripts still disagree, each keeps its own: `DISAGREEMENTS`),
+styles from `figstyle.py`; figures go to docs/figures (`$CE_FIGURES_ROOT` to write elsewhere).
 
-| Script | What it does |
-|---|---|
-| `score_z_matrix.py` | Roll arbitrary latents out on arbitrary (clip, body) and score them like training does |
-| `archive/scripts/batch_z_search.py` | One search per (clip, body) in a single process (older driver; *archived 2026-11-11*, see archive/README.md) |
+## 6. Checks
 
-## 4. Labels for supervised learning
+```bash
+tests/golden/check.sh <label>                # 22 golden runs + metrics + the --resume case, bit-identical to outputs/refactor_golden/baseline
+for t in tests/test_*.py; do uv run python $t; done
+uv run python tests/golden/import_check.py   # every repo-local import resolves
+uv run python tests/golden/verify_analyses.py <label>   # the drivers' analyses on the main tree's experiments, byte-identical results
+uv run python tests/golden/verify_bodies.py <label>     # the body pipeline rebuilds stored bodies byte for byte
+uv run python tests/golden/verify_vis.py <label>        # scenes, pages, figures, videos, renders as before
+```
 
-| Output | How it was made |
-|---|---|
-| `outputs/b500_targets/` | Full latent space, anchor λ = 1, bfm → global and L_align, all 500 clips |
-| `outputs/b500_targets/sup_dataset/` | `archive/scripts/build_b500_sup_dataset.py` (*archived 2026-11-11*): the clips whose targets beat z0 (488), with the ES runs' held-out split |
-| `outputs/lowdim_b100/`, `outputs/lowdim_train/` | 8-d subspace (`outputs/lowdim_search/basis_corrPCA_train.npy`), no anchor, bfm → L_align, all 441 training clips |
-| `outputs/exact_train/` | Exact observations, full space, anchor λ = 1, bfm → L_align, 441 training clips (in progress) |
+tests/golden/README.md says what each compares and what it ignores (wall-clock fields only).
 
-## 5. Training adapters
+## History
 
-An adapter maps (β, z0) to a z for the body. `model/simple/train_es.py` trains it by ES on the rollout cost
-(no labels); the `run_*.sh` launchers fix the settings of each run.
-
-| Launcher / script | Run |
-|---|---|
-| `run_b500_subspace.sh <k>` | 500 clips, correction confined to k dims; `OBS=exact`, `BASIS=`, `TAG=` |
-| `run_balanced500_global_anchor.sh` | 500 clips, full space, global cost + anchor |
-| `run_headstand_global_anchor.sh` | Headstand clips only |
-| `archive/scripts/train_sup_targets.py` | Supervised adapter on the full-space labels, scored by rollout (*archived 2026-11-11*) |
-| `archive/scripts/train_sup_lowdim.py` | Supervised adapter on the 8-d labels vs full-space, scored by rollout (*archived 2026-11-11*) |
-| `archive/scripts/wandb_clip_charts.py` | Per-clip eval charts for a run started before train_es logged them (*archived 2026-11-11*) |
-| `archive/scripts/compare_runs.py` | Per-category cost curves of several runs (*archived 2026-11-11*) |
-
-## 6. Evaluation and videos
-
-| Script | What it does |
-|---|---|
-| `archive/scripts/rollout_ckpt_on_body.py` | Roll a trained adapter out on a body (*archived 2026-11-11*) |
-| `rollout_z_on_body.py`, `rollout_z_trace.py` | Drive the frozen policy with a z (sequence) from disk; watch a search learn |
-| `render_panels.py`, `render_seed_bests.py` | Side-by-side videos (`archive/scripts/compare_videos.py`, *archived 2026-11-11*) |
-| `test_exact_obs.py` | z0 and targets under raw / multiplier / exact observations |
-| `archive/scripts/compare_noscale.py`, `archive/scripts/compare_exact_search.py` | The same search without obs scaling / with exact observations (*archived 2026-11-11*) |
-
-## 7. Analyses (current line, 2026-10-01 to 10-04)
-
-| Script | Question |
-|---|---|
-| `archive/scripts/controlled_pairs.py`, `archive/scripts/natural_pairs.py`, `archive/scripts/analyze_latent_transfer.py` (*archived 2026-11-11*) | Do latents that are close stay close after the search on the child? |
-| `plot_seed_pca.py`, `plot_pair_distances.py`, `plot_joint_pca.py`, `archive/scripts/z_sensitivity.py` (*archived 2026-11-11*) | Spread of the searched latents; which directions the policy uses |
-| `archive/scripts/analyze_anchor.py` (*archived 2026-11-11*), `plot_anchor_pca.py` | Does an anchor penalty keep nearby starts nearby? |
-| `archive/scripts/plot_b500_pca.py` (*archived 2026-11-11*) | Do the searched latents keep the motion categories' structure? |
-| `archive/scripts/plot_correction_orthogonality.py` (*archived 2026-11-11*), `plot_correction_learnability.py` | Why corrections from search labels cannot be learned |
-| `archive/scripts/analyze_lowdim_search.py` (*archived 2026-11-11*), `plot_lowdim_trend.py` | Does a k-d subspace make corrections consistent, and at what cost? |
+* Before 11/04 searches used antithetic pairs (`--sampling antithetic`) and positions in the body's own metres (`--pos-unit body`),
+  and before the corrected alignment (child_52_rerun) `--frame-offset 0`; the flags still reproduce those runs. Some defaults are
+  older than the Task-page settings (`--obs-scale auto`, `--init-vel-scale` unset, `lso_search.py --scale`), so the drivers pass
+  every setting explicitly.
+* The adapter-training line (Sep-Oct: an adapter (beta, z0) -> z trained by ES on the rollout cost, `model/simple/train_es.py`,
+  `scripts/run_b500_subspace.sh`, `run_balanced500_global_anchor.sh`, `run_headstand_global_anchor.sh`, supervised adapters on
+  search labels) ended when the per-clip optimum turned out not to be a function of z0. The scripts nothing uses any more are in
+  `archive/` (archive/README.md lists each with the reason): that line's trainers and label builders, the analyses of that period
+  (b500 labels, low-dimensional subspaces, latent transfer, anchors, the multi-body corrections) and the G1-only code (`g1_*.py`,
+  model/g1_map.py, g1_env.py, merged into robot_*.py in step 7). An archived script finds the repository from its own path:
+  `git mv` it back before running it.
+* Reports of that period (in Chinese): research_journey.md, morphology_latent_report.md.

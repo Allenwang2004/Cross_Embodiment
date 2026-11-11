@@ -34,6 +34,7 @@ import numpy as np
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
 from crossenbodiment import paths   # noqa: E402
 from crossenbodiment.experiment import ClipSet, Experiment, parse_flag, workers   # noqa: E402
+from crossenbodiment.methods import experiment_keys   # noqa: E402
 from crossenbodiment.metrics import MetricSuite, metric_body, world_positions   # noqa: E402
 from crossenbodiment.paths import CHILD_52_TASK, read_clips   # noqa: E402  configs/clips/child_52_task.txt = outputs/child_52/clips.txt (refactor step 4)
 from crossenbodiment.reroll import EvalRollouts, Reroller, read_best_so_far   # noqa: E402
@@ -47,16 +48,20 @@ BODIES = dict(payload=dict(label="adult_heavyRWristHand_x80", xml="assets/robots
                            kpkd="heavy_arm_kp1_kd1"),
               limit_leg=dict(label="adult_lockRleg_bent_lim", xml="assets/robots/adult_lockRleg_bent_lim/robot.xml",
                              ref="data/adult_lockRleg_bent_lim/retargeting_motion/{c}.npz", kpkd="limit_leg_kp1_kd1"))
-SEQ = dict(lso="", lsor="--rank --heading-weight 0.05 --pos-weight 0.005", ta="--method ta --objective phc")
-W_SEQ = dict(lso=dict(method="lso", objective="bfm", rank=False, heading_weight=0.0, pos_weight=0.0),
-             lsor=dict(method="lso", objective="bfm", rank=True, heading_weight=0.05, pos_weight=0.005),
-             ta=dict(method="ta", objective="phc", rank=False, heading_weight=0.0, pos_weight=0.0))
-NAMES = dict(frozen="Frozen (z0)", random="Random Search", cem="CEM (BFM-Zero)", cmaes="CMA-ES", native="Native BFM Tracking Inference", lso="LSO (BFMTrack)", lsor="LSOR (our method)",
-             ta="Trajectory Adaptation (BFM-Zero)", es="LOES (our method)")
-ORDER = ("frozen", "random", "cem", "cmaes", "native", "lso", "lsor", "ta", "es")   # cem added 11/10, random / cmaes 11/10 (algocommands --algos ...);
-SINGLE = ("es", "random", "cem", "cmaes")                                # analyse keeps the methods whose latents were re-rolled for every motion
-ALGOS = ["es", "cem"]                                                    # --algos a,b (main)
-EXP = Experiment("outputs/body_52", clips=ClipSet(CLIPS), methods=("es", *SEQ), seeds=SEEDS, bodies=tuple(BODIES), budgets=G,
+# the run-directory key of each method here (crossenbodiment/methods.py RUNS "outputs/body_52/<body>"; also results.json's method keys,
+# "<key>_best" / "<key>_centre"): LOES with the anchor "es", BFM-Zero's CEM "cem", LSOR (0.05 heading, 0.005 position) "lsor"
+K = experiment_keys("outputs/body_52/<body>")
+LOES, RANDOM, CEM, CMAES, LSO, LSOR, TA = (K[m] for m in ("loes_anchor", "random", "cem_phc", "cmaes", "lso", "lsor_w005", "ta"))
+SEQ = {LSO: "", LSOR: "--rank --heading-weight 0.05 --pos-weight 0.005", TA: "--method ta --objective phc"}
+W_SEQ = {LSO: dict(method="lso", objective="bfm", rank=False, heading_weight=0.0, pos_weight=0.0),
+         LSOR: dict(method="lso", objective="bfm", rank=True, heading_weight=0.05, pos_weight=0.005),
+         TA: dict(method="ta", objective="phc", rank=False, heading_weight=0.0, pos_weight=0.0)}
+NAMES = {"frozen": "Frozen (z0)", RANDOM: "Random Search", CEM: "CEM (BFM-Zero)", CMAES: "CMA-ES", "native": "Native BFM Tracking Inference",
+         LSO: "LSO (BFMTrack)", LSOR: "LSOR (our method)", TA: "Trajectory Adaptation (BFM-Zero)", LOES: "LOES (our method)"}
+ORDER = ("frozen", RANDOM, CEM, CMAES, "native", LSO, LSOR, TA, LOES)   # cem added 11/10, random / cmaes 11/10 (algocommands --algos ...);
+SINGLE = (LOES, RANDOM, CEM, CMAES)                                # analyse keeps the methods whose latents were re-rolled for every motion
+ALGOS = [LOES, CEM]                                                    # --algos a,b (main)
+EXP = Experiment("outputs/body_52", clips=ClipSet(CLIPS), methods=(LOES, *SEQ), seeds=SEEDS, bodies=tuple(BODIES), budgets=G,
                  name="{body}/{stem}_{method}_s{seed}", order=("seed", "clip", "body", "method"))
 REROLL = Reroller(GENS, G, best="budgets")                              # the best and the centre latent at each budget
 body = None
@@ -66,12 +71,12 @@ def stem(c):
     return c.split("/")[1]
 
 
-def zcmd(b, c, k="es"):
+def zcmd(b, c, k=LOES):
     """LOES (es) and, with our cost and LOES's settings, random search and CMA-ES (--algo random / cmaes; user, 11/10)"""
     B = BODIES[b]
     return (f"uv run python scripts/single_z_search.py --clip {c} --body {B['label']} --xml {B['xml']} --ref {B['ref'].format(c=c)} --objective bfm "
             f"--evals {EVALS} --pairs 8 --sigma 0.05 --lr 0.03 --obs-scale exact --heading-weight 1.0 --pos-weight 0.1 --anchor data/origin_z/{c}.npy "
-            f"--anchor-weight 0.3 --eval-every 0 --init-vel-scale 1" + ("" if k == "es" else f" --algo {k}"))
+            f"--anchor-weight 0.3 --eval-every 0 --init-vel-scale 1" + ("" if k == LOES else f" --algo {k}"))
 
 
 def lcmd(b, c, k):
@@ -92,25 +97,25 @@ def longest_first():
 
 
 def cemcommands():
-    EXP.print_commands(lambda r: f"{ccmd(r.body, r.clip)} --seed {r.seed} --out {r.dir}", clip=longest_first(), method=("cem",))
+    EXP.print_commands(lambda r: f"{ccmd(r.body, r.clip)} --seed {r.seed} --out {r.dir}", clip=longest_first(), method=(CEM,))
 
 
 def algocommands(algos=None):
     """--algos random,cmaes (or cem): those single-latent searches, longest clips first, the two bodies interleaved"""
-    EXP.print_commands(lambda r: f"{ccmd(r.body, r.clip) if r.method == 'cem' else zcmd(r.body, r.clip, r.method)} --seed {r.seed} --out {r.dir}",
+    EXP.print_commands(lambda r: f"{ccmd(r.body, r.clip) if r.method == CEM else zcmd(r.body, r.clip, r.method)} --seed {r.seed} --out {r.dir}",
                        clip=longest_first(), method=algos or ALGOS)
 
 
 def commands():
     def cmd(r):
-        if r.method == "es":
+        if r.method == LOES:
             return f"{zcmd(r.body, r.clip)} --seed {r.seed} --out {r.dir}"
         return " ".join(f"{lcmd(r.body, r.clip, r.method)} --seed {r.seed} --out {r.dir}".split())
     EXP.print_commands(cmd, clip=longest_first())
 
 
 def rname(c, k):
-    return stem(c) + ("" if k == "es" else f"_{k}")                     # LOES's latents in rollouts/<stem>, CEM's in rollouts/<stem>_cem
+    return stem(c) + ("" if k == LOES else f"_{k}")                     # LOES's latents in rollouts/<stem>, CEM's in rollouts/<stem>_cem
 
 
 def rdir(b, c, k):
@@ -131,7 +136,7 @@ def evalcmds(algos=None):
     for b in BODIES:
         for c in CLIPS:
             for k in algos or ALGOS:            # each latent rolled out and scored with its own search's cost
-                d = EXP.rollouts_dir(rname(c, k), body=b); print(EXP.eval_line(d, ccmd(b, c) if k == 'cem' else zcmd(b, c, k)))
+                d = EXP.rollouts_dir(rname(c, k), body=b); print(EXP.eval_line(d, ccmd(b, c) if k == CEM else zcmd(b, c, k)))
 
 
 def world(Q):
@@ -147,11 +152,11 @@ def stats(q, ref, Pw, Dr):
 
 def settings_bad(b, c, k, S_, s):
     B = BODIES[b]
-    if k == "cem":
+    if k == CEM:
         want = dict(evals=EVALS, pairs=8, sigma=0.05, lr=0.03, sampling="independent", fitness="rank", init="reference", frame_offset=1, obs_scale="exact",
                     pos_div=1.0, pos_unit="adult", heading_weight=0.0, pos_weight=0.0, anchor=None, anchor_weight=0.0, init_vel_scale=1.0,
                     objective="phc", algo="cem", xml=B["xml"], ref=B["ref"].format(c=c), body=B["label"], seed=s)
-    elif k in ("es", "random", "cmaes"):
+    elif k in (LOES, RANDOM, CMAES):
         want = dict(evals=EVALS, pairs=8, sigma=0.05, lr=0.03, sampling="independent", fitness="rank", init="reference", frame_offset=1, obs_scale="exact",
                     pos_div=1.0, pos_unit="adult", heading_weight=1.0, pos_weight=0.1, anchor=f"data/origin_z/{c}.npy", anchor_weight=0.3, init_vel_scale=1.0,
                     objective="bfm", algo=k, xml=B["xml"], ref=B["ref"].format(c=c), body=B["label"], seed=s)
@@ -169,7 +174,7 @@ def clip(job):
         body = metric_body(str(REPO / B["xml"]), True); body.xml = B["xml"]
     ref = np.load(REPO / B["ref"].format(c=c))["qpos"].astype(np.float64)[1:]; Pw = world(ref); _, Dr = body.part_floor(ref)
     R = {}; chk = Checks(("native_diff", "reroll_cost", "reroll_best_qpos", "seq_reroll", "cem_z0"), ("bad",))
-    R["frozen"] = np.array([stats(np.load(D / f"{st}_es_s0/origin_z.npz")["qpos"], ref, Pw, Dr)])
+    R["frozen"] = np.array([stats(np.load(D / f"{st}_{LOES}_s0/origin_z.npz")["qpos"], ref, Pw, Dr)])
     for k in [k for k in SINGLE if (rdir(b, c, k) / "eval_qpos.npz").exists()]:   # the single-latent searches: best and centre latents re-rolled
         ev = EvalRollouts(rdir(b, c, k), G, GENS); ix = ev.index; Q = ev.qpos
         cost = np.array(ev.cost); Bm = np.zeros((len(SEEDS), len(G), len(KEYS))); Cm = np.zeros_like(Bm)
@@ -181,9 +186,9 @@ def clip(job):
             for j in range(len(G)):
                 Bm[i, j] = stats(Q[bi[j]], ref, Pw, Dr); Cm[i, j] = stats(Q[ci[j]], ref, Pw, Dr)
         R[f"{k}_best"], R[f"{k}_centre"] = Bm, Cm
-    z0 = np.load(D / f"{st}_es_s0/origin_z.npz")["qpos"]                # every single-latent search starts from the same z0 rollout
-    chk["cem_z0"] = max(float(np.abs(np.load(D / f"{st}_{k}_s0/origin_z.npz")["qpos"] - z0).max()) for k in SINGLE if f"{k}_best" in R and k != "es")
-    nat = np.load(D / f"{st}_lso_s0/rollouts.npz")["q_ER8"]; R["native"] = np.array([stats(nat, ref, Pw, Dr)])
+    z0 = np.load(D / f"{st}_{LOES}_s0/origin_z.npz")["qpos"]                # every single-latent search starts from the same z0 rollout
+    chk["cem_z0"] = max(float(np.abs(np.load(D / f"{st}_{k}_s0/origin_z.npz")["qpos"] - z0).max()) for k in SINGLE if f"{k}_best" in R and k != LOES)
+    nat = np.load(D / f"{st}_{LSO}_s0/rollouts.npz")["q_ER8"]; R["native"] = np.array([stats(nat, ref, Pw, Dr)])
     for k in SEQ:
         Bm = np.zeros((len(SEEDS), len(G), len(KEYS))); Cm = np.zeros_like(Bm)
         for i, s in enumerate(SEEDS):
@@ -194,7 +199,7 @@ def clip(job):
                 Bm[i, j] = stats(X[f"q_best_it{g}"], ref, Pw, Dr); Cm[i, j] = stats(X[f"q_mean_it{g}"], ref, Pw, Dr)
         R[f"{k}_best"], R[f"{k}_centre"] = Bm, Cm
     kp = paths.output(f"kpkd/{B['kpkd']}/{st}_s0/z_trace.npz")
-    chk["loes_vs_kpkd"] = (float(np.abs(np.load(D / f"{st}_es_s0/z_trace.npz")["z_best"][:65] - np.load(kp)["z_best"]).max()) if kp.exists() else None)
+    chk["loes_vs_kpkd"] = (float(np.abs(np.load(D / f"{st}_{LOES}_s0/z_trace.npz")["z_best"][:65] - np.load(kp)["z_best"]).max()) if kp.exists() else None)
     return b, st, R, chk
 
 
@@ -252,7 +257,7 @@ def per_motion(T, order, key, w, j):
 
 def main(argv):
     global ALGOS
-    ALGOS = parse_flag(argv, "--algos", "es,cem").split(",")
+    ALGOS = parse_flag(argv, "--algos", f"{LOES},{CEM}").split(",")
     A = {"commands": commands, "cemcommands": cemcommands, "algocommands": algocommands, "prepare": prepare, "evalcmds": evalcmds,
          "analyse": lambda: analyse([argv[argv.index("--body") + 1]] if "--body" in argv else None)}
     A[[x for x in argv[1:] if x in A][0]]()

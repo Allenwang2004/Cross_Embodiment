@@ -275,10 +275,46 @@ def test_method_keys():
     assert method_of("outputs/noanchor/<body>", "es").key == "loes" and method_of("outputs/child_52_rerun", "es").key == "loes_anchor"
     assert ("outputs/tall_body_52", "cem") in run_keys("cem_phc")
     src = (REPO / "scripts/body_52_test.py").read_text()               # the flags are the drivers' own
-    for k in ("lso", "lsor", "ta"):
-        flags = re.search(rf'{k}="([^"]*)"', src.split("SEQ = dict(")[1]).group(1)
+    if str(REPO / "scripts") not in sys.path:
+        sys.path.insert(0, str(REPO / "scripts"))
+    import body_52_test as B
+    assert list(B.SEQ) == ["lso", "lsor", "ta"], list(B.SEQ)
+    for k, flags in B.SEQ.items():
         assert flags == METHODS[method_of("outputs/body_52/<body>", k).key].flags, (k, flags)
     assert "--objective phc --algo cem" in src and METHODS["cem_phc"].flags == "--objective phc --algo cem"
+
+
+def test_step11_names():
+    """step 11: one name per method / root scale in the code, the old names still read (run keys, yaml keys, palette keys)"""
+    from crossenbodiment.methods import AMBIGUOUS, RUNS, canonical, experiment_keys, key_in, method_of
+    for experiment, (_, keys) in RUNS.items():                          # key_in inverts method_of; experiment_keys lists them
+        for k, m in keys.items():
+            assert method_of(experiment, k).key == m and key_in(experiment, m) == k, (experiment, k, m)
+        assert dict(experiment_keys(experiment)) == {m: k for k, m in keys.items()}, experiment
+    for m in METHODS.values():                                          # run_key: the key most experiments give the method
+        ks = {k for _, (_, keys) in RUNS.items() for k, mm in keys.items() if mm == m.key and k}
+        assert (m.run_key is None) == (m.key in ("native", "frozen")) and (not ks or m.run_key in ks), (m.key, m.run_key, ks)
+    assert canonical("z0") == "frozen" and canonical("cem_phc") == "cem_phc"
+    for k in AMBIGUOUS:
+        try:
+            canonical(k)
+            raise AssertionError(f"canonical({k!r}) did not raise")
+        except KeyError:
+            pass
+    assert experiment_keys("outputs/tall_body_52")["cem_phc"] == "cem" and key_in("outputs/child_52_lso", "lsor_w005") == "lsor_w005"
+    from crossenbodiment.experiment import Experiment
+    assert Experiment("outputs/body_52").key("lsor_w005") == "lsor" and Experiment("outputs/child_52_rerun").key("cem_ours") == "cem"
+    for b in BODIES:                                                    # BodySpec's root-scale fields and their yaml-key aliases
+        assert (b.s, b.s_rule, b.s_default) == (b.scale, b.scale_rule, b.scale_default), b.name
+    from crossenbodiment.palette import OLD_KEYS, OLD_VARIANT_KEYS, Palette
+    for old, new in OLD_KEYS.items():
+        assert Palette.method(old) is Palette.method(new) and Palette.method(new).key == new
+    for (old, v), new in OLD_VARIANT_KEYS.items():
+        assert Palette.method(old, v) is Palette.method(*new)
+    assert Palette.hex("z0", "k_scale") == Palette.hex("frozen", "k_scale") == "#eb6834"
+    from crossenbodiment import costs, obs, paths as P
+    assert costs.Position(None, 2.5).pos_div == 2.5 and obs.CHILD_EXACT_S == obs.CHILD_SCALE == BODIES.scale("child")
+    assert P.origin_z is P.task_z0 and P.z0_rollout("x") == "x/origin_z.npz" and P.Z0_KEY == "origin_z"
 
 
 # --------------------------------------------------------------------------

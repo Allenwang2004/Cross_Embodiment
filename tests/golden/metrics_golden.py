@@ -119,7 +119,7 @@ def main(label):
             ref = R[f"ref__{name}__{s}"].astype(np.float64); r1 = ref[1:]
             Pw = world(body, r1); _, Dr = body.part_floor(r1)
             if name == "child":
-                SD.body = body; SD.S = ExactObs(REPO / E.XML["child"], REPO / "assets/robots/adult/robot.xml").s
+                SD.body = body; SD.S = ExactObs(REPO / E.XML["child"], REPO / "assets/robots/adult/robot.xml").scale
                 Rsd = (SD.world(r1), body.local(r1)[0])
                 FD.body = body; names, Drf = body.part_floor(r1); d = mujoco.MjData(body.m); hid = body.m.body("Head").id; hr = np.empty(len(r1))
                 for t in range(len(r1)):

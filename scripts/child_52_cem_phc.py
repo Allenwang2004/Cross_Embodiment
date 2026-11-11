@@ -21,6 +21,7 @@ import numpy as np
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
 from crossenbodiment import paths   # noqa: E402
 from crossenbodiment.experiment import ClipSet, Experiment, workers   # noqa: E402
+from crossenbodiment.methods import key_in   # noqa: E402
 from crossenbodiment.metrics import metric_body   # noqa: E402  one Body per (xml, smpl) and process (refactor step 3)
 from crossenbodiment.paths import CHILD_52_TASK   # noqa: E402
 from crossenbodiment.reroll import EvalRollouts, Reroller, read_best_so_far   # noqa: E402
@@ -28,6 +29,10 @@ from crossenbodiment.results import Checks, ResultsTable, save_npz, write_json  
 # refactor step 8: runs are read under paths.outputs_root() ($CE_OUTPUTS_ROOT), results written under paths.results_root()
 # ($CE_RESULTS_ROOT); both REPO/outputs by default. prepare writes the schema-2 index (crossenbodiment/reroll.py), analyse reads any.
 SRC = paths.output("child_52"); OLD = paths.output("child_52_rerun"); OUT = paths.output("child_52_cem_phc"); ROLL = OUT / "rollouts"
+# run-directory keys (crossenbodiment/methods.py RUNS): BFM-Zero's CEM here is "cem"; in OLD (child_52_rerun), "cem" is CEM with our cost
+# (its settings are compared, SAME) and "es" LOES with the anchor (whose z0 rollout is compared)
+CEM = key_in("outputs/child_52_cem_phc", "cem_phc")
+OLD_CEM, OLD_LOES = key_in("outputs/child_52_rerun", "cem_ours"), key_in("outputs/child_52_rerun", "loes_anchor")
 RES = paths.result("child_52_cem_phc")
 SEEDS = range(5); G = (4, 8, 16, 32, 64); XML = "assets/robots_torque/child/robot_torque_full.xml"
 SAME = ("evals", "generations", "pairs", "sigma", "lr", "steps", "fitness", "sampling", "init_vel_scale", "pos_unit", "pos_div",
@@ -41,7 +46,7 @@ def clips():
     return read_clips(CHILD_52_TASK)
 
 
-EXP = Experiment("outputs/child_52_cem_phc", clips=ClipSet.named(CHILD_52_TASK), methods=("cem",), seeds=SEEDS, budgets=G,
+EXP = Experiment("outputs/child_52_cem_phc", clips=ClipSet.named(CHILD_52_TASK), methods=(CEM,), seeds=SEEDS, budgets=G,
                  order=("clip", "seed", "method"), sep=" ")
 REROLL = Reroller(64, G, best="every")
 
@@ -58,7 +63,7 @@ def commands():
 def prepare():
     for c in clips():
         stem = c.split("/")[1]
-        REROLL.prepare(RES / "rollouts" / stem, [(f"{stem}_cem_s{s}", OUT / f"{stem}_cem_s{s}") for s in SEEDS], clip=c)
+        REROLL.prepare(RES / "rollouts" / stem, [(f"{stem}_{CEM}_s{s}", OUT / f"{stem}_{CEM}_s{s}") for s in SEEDS], clip=c)
     print("prepared")
 
 
@@ -80,14 +85,14 @@ def clip(c):
         return V[i]
     B = np.zeros((5, 64, len(KEYS))); C = np.zeros((5, len(G), len(KEYS))); worst = 0.0; bad = []
     for s in SEEDS:
-        r = f"{stem}_cem_s{s}"; old = json.load(open(OLD / r / "summary.json")); new = json.load(open(OUT / r / "summary.json"))
+        r = f"{stem}_{CEM}_s{s}"; old = json.load(open(OLD / f"{stem}_{OLD_CEM}_s{s}" / "summary.json")); new = json.load(open(OUT / r / "summary.json"))
         bad += [(r, k, old.get(k), new.get(k)) for k in SAME if old.get(k) != new.get(k)] + [(r, k, new.get(k)) for k in Checks.settings(WANT, new)]
         for j, i in enumerate(ix.best_generations(r)):
             B[s, j] = m(i)
         for j, i in enumerate(ix.centre(r)):
             C[s, j] = m(i)
         worst = max(worst, ix.check_vs_curve(r, cost, read_best_so_far(OUT / r)))
-    z0q = np.load(OUT / f"{stem}_cem_s0/origin_z.npz")["qpos"]; same_z0 = float(np.abs(z0q - np.load(OLD / f"{stem}_es_s0/origin_z.npz")["qpos"]).max())
+    z0q = np.load(OUT / f"{stem}_{CEM}_s0/origin_z.npz")["qpos"]; same_z0 = float(np.abs(z0q - np.load(OLD / f"{stem}_{OLD_LOES}_s0/origin_z.npz")["qpos"]).max())
     return stem, B, C, worst, bad, same_z0
 
 
@@ -105,8 +110,8 @@ def analyse():
     m = lambda A: ResultsTable.pooled(A, KEYS)                          # every motion x seed at once
     test = lambda X, Y: ResultsTable.paired(X, Y, KEYS)                 # per-motion means over seeds, paired Wilcoxon
     rep = dict(z0=m(old["z0"]), best={str(g * 16): m(B[:, :, g - 1]) for g in G}, centre={str(g * 16): m(C[:, :, j]) for j, g in enumerate(G)},
-               loes_vs_cem_phc=dict(best=test(old["best_es"][:, :, -1], B[:, :, -1]), centre=test(old["mean_es"][:, :, -1], C[:, :, -1])),
-               cem_phc_vs_cem_ours=dict(best=test(B[:, :, -1], old["best_cem"][:, :, -1]), centre=test(C[:, :, -1], old["mean_cem"][:, :, -1])))
+               loes_vs_cem_phc=dict(best=test(old[f"best_{OLD_LOES}"][:, :, -1], B[:, :, -1]), centre=test(old[f"mean_{OLD_LOES}"][:, :, -1], C[:, :, -1])),
+               cem_phc_vs_cem_ours=dict(best=test(B[:, :, -1], old[f"best_{OLD_CEM}"][:, :, -1]), centre=test(C[:, :, -1], old[f"mean_{OLD_CEM}"][:, :, -1])))
     write_json(RES / "means.json", rep); print("written")
 
 

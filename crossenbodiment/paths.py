@@ -66,9 +66,24 @@ def origin_motion(clip):
     return f"{ORIGIN_MOTION_REL}/{clip}.npz"
 
 
-def origin_z(clip):
-    """the task latent z0 of a task clip: data/origin_z/<task>/<stem>.npy"""
+def task_z0(clip):
+    """the task latent z0 of a task clip: data/origin_z/<task>/<stem>.npy (z0 in the code; "origin_z" is only its on-disk name)"""
     return f"{ORIGIN_Z_REL}/{clip}.npy"
+
+
+origin_z = task_z0                           # the name before step 11 (= the folder's)
+
+# ---------------------------------------------------------------- z0 in a run folder (on-disk names, unchanged; step 11)
+# A single-latent search writes z0's own rollout next to the best one and records it under the key "origin_z": the code calls
+# it z0 everywhere and spells the on-disk name through these constants.
+Z0_DIRNAME = "origin_z"                      # <data root>/origin_z/<task>/<stem>.npy (single_z_search.py --data-root)
+Z0_ROLLOUT = "origin_z.npz"                  # <run>/origin_z.npz: qpos (float32) of z0's rollout (+ the robots' qpos_smpl, fz)
+Z0_KEY = "origin_z"                          # summary.json key of z0's record; curve.csv z_start / best "source" value for z0
+
+
+def z0_rollout(run_dir):
+    """<run_dir>/origin_z.npz (a Path when run_dir is one, else the joined string)"""
+    return run_dir / Z0_ROLLOUT if isinstance(run_dir, Path) else f"{run_dir}/{Z0_ROLLOUT}"
 
 
 def retargeting_motion(body, clip):

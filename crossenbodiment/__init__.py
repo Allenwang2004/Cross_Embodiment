@@ -80,6 +80,11 @@ body_all Blender scripts, render_panels.py, body_overlay.py, robot_overlay.py, t
   sheet     ContactSheet (the overview pages), hcat / vcat / legend_strip, write_index_md
   paths     + read_path / write_path / own_path ($CE_OUTPUTS_ROOT / $CE_RESULTS_ROOT for the visualisation scripts), figures_root()
             ($CE_FIGURES_ROOT), FIGURE_CONFIGS (configs/figures: strobe_examples.yaml, teaser.yaml, method.yaml)
+Step 11 gives each concept one name in the code (docs/architecture.md, "Names"; nothing on disk renamed, old names still read):
+  methods   canonical keys (loes, loes_anchor, cem_phc, cem_ours, lso, lsor_bfm, lsor_w005, lsor_ours, ta, native, frozen,
+            random, cmaes), MethodSpec.run_key, key_in / experiment_keys / canonical; the drivers take their run keys from it
+  palette   keyed by those names (OLD_KEYS: z0, cem, lsor);  paths: task_z0, Z0_ROLLOUT / Z0_KEY for z0's on-disk "origin_z"
+  bodies    the root scale is `scale` (BodySpec, ExactObs, RobotMap, MetricSuite, Position; `.s` aliases), its names in one list
 Importing the package imports nothing heavy (no torch, mujoco or humenv); align_cost (model.losses -> mujoco), robot_rollout,
 eval_metrics (mujoco, ot), policy (torch), bodybuild's modules, blender and video (mujoco) import them when they are imported.
 """

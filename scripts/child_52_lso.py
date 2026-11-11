@@ -26,17 +26,22 @@ import numpy as np
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
 from crossenbodiment import paths   # noqa: E402
 from crossenbodiment.experiment import ClipSet, Experiment, workers   # noqa: E402
+from crossenbodiment.methods import experiment_keys, key_in   # noqa: E402
 from crossenbodiment.metrics import metric_body   # noqa: E402  one Body per (xml, smpl) and process (refactor step 3)
 from crossenbodiment.paths import CHILD_52_TASK   # noqa: E402
 from crossenbodiment.results import Checks, ResultsTable, save_npz, write_json   # noqa: E402
 # refactor step 8: runs are read under paths.outputs_root() ($CE_OUTPUTS_ROOT), results written under paths.results_root()
 # ($CE_RESULTS_ROOT); both REPO/outputs by default
 SRC = paths.output("child_52"); OUT = paths.output("child_52_lso"); RERUN = paths.output("child_52_rerun"); RES = paths.result("child_52_lso")
-METHODS = dict(lso="", lsor="--rank", ta="--method ta --objective phc", lsor_ours="--rank --heading-weight 1.0 --pos-weight 0.1", lsor_w005="--rank --heading-weight 0.05 --pos-weight 0.005"); SEEDS = range(5); G = (4, 8, 16, 32, 64)
+# the run-directory keys here (crossenbodiment/methods.py RUNS; also the per_run.npz / means.json keys): "lsor" is LSO + ranks with
+# BFMTrack's own cost (lsor_bfm) in this experiment, the 0.05 / 0.005 variant is "lsor_w005"; RERUN_LOES: child_52_rerun's LOES ("es")
+K = experiment_keys("outputs/child_52_lso"); RERUN_LOES = key_in("outputs/child_52_rerun", "loes_anchor")
+LSO, LSOR_BFM, TA, LSOR_OURS, LSOR_W005 = (K[m] for m in ("lso", "lsor_bfm", "ta", "lsor_ours", "lsor_w005"))
+METHODS = {LSO: "", LSOR_BFM: "--rank", TA: "--method ta --objective phc", LSOR_OURS: "--rank --heading-weight 1.0 --pos-weight 0.1", LSOR_W005: "--rank --heading-weight 0.05 --pos-weight 0.005"}; SEEDS = range(5); G = (4, 8, 16, 32, 64)
 OWN = dict(heading_weight=0.0, pos_weight=0.0); OURS = dict(heading_weight=1.0, pos_weight=0.1, pos_unit="adult"); OURS005 = dict(heading_weight=0.05, pos_weight=0.005, pos_unit="adult")     # BFMTrack's own cost; ours without the anchor
-WANT = dict(lso=dict(method="lso", objective="bfm", rank=False, **OWN), lsor=dict(method="lso", objective="bfm", rank=True, **OWN),
-            ta=dict(method="ta", objective="phc", rank=False, **OWN), lsor_ours=dict(method="lso", objective="bfm", rank=True, **OURS),
-            lsor_w005=dict(method="lso", objective="bfm", rank=True, **OURS005))
+WANT = {LSO: dict(method="lso", objective="bfm", rank=False, **OWN), LSOR_BFM: dict(method="lso", objective="bfm", rank=True, **OWN),
+        TA: dict(method="ta", objective="phc", rank=False, **OWN), LSOR_OURS: dict(method="lso", objective="bfm", rank=True, **OURS),
+        LSOR_W005: dict(method="lso", objective="bfm", rank=True, **OURS005)}
 COMMON = dict(n=16, iters=64, init_vel_scale=1.0, sample_rollouts=1024, antithetic=False, sigma=0.0125)
 EXP = Experiment("outputs/child_52_lso", clips=ClipSet.named(CHILD_52_TASK), methods=METHODS, seeds=SEEDS, budgets=G,
                  order=("clip", "method", "seed"), sep=" ")
@@ -60,7 +65,7 @@ def clip(c):
     body = body or metric_body(E.XML["child"], True); stem = c.split("/")[1]
     ref = np.load(REPO / f"data/child/retargeting_motion/{c}.npz")["qpos"].astype(np.float64)[1:]
     met = lambda q, ratio: [full(body, q.astype(np.float64), ref, ratio)[k] for k in KEYS]
-    nat = np.load(OUT / f"{stem}_lso_s0/rollouts.npz")["q_ER8"]; native = met(nat, 1.0); bad, nat_diff, reroll = [], 0.0, 0.0
+    nat = np.load(OUT / f"{stem}_{LSO}_s0/rollouts.npz")["q_ER8"]; native = met(nat, 1.0); bad, nat_diff, reroll = [], 0.0, 0.0
     B = {k: np.zeros((5, len(G), len(KEYS))) for k in METHODS}; C = {k: np.zeros((5, len(G), len(KEYS))) for k in METHODS}
     for k in METHODS:
         for s in SEEDS:
@@ -69,7 +74,7 @@ def clip(c):
             if S.get("best_src") == "mean" or list(S.get("budgets", [])) != list(G):
                 bad.append((d.name, "best_src / budgets", S.get("best_src"), S.get("budgets")))
             nat_diff = max(nat_diff, float(np.abs(R["q_ER8"] - nat).max())); reroll = max(reroll, float(np.abs(R["q_LSO_best"] - R["q_best_it64"]).max()))
-            start = S["results"]["B(g_t) (LSO start)" if k != "ta" else "ER L=8 (Motivo zero-shot)"]["cost"]
+            start = S["results"]["B(g_t) (LSO start)" if k != TA else "ER L=8 (Motivo zero-shot)"]["cost"]
             for j, g in enumerate(G):
                 B[k][s, j] = met(R[f"q_best_it{g}"], S["best_cost_at"][str(g)] / start); C[k][s, j] = met(R[f"q_mean_it{g}"], np.nan)
     return stem, native, B, C, bad, nat_diff, reroll
@@ -93,8 +98,8 @@ def analyse():
         return ResultsTable.paired(X, Y, KEYS, per_metric=False)
     rep = dict(native=m(nat), z0=m(old["z0"]), best={k: {str(g * 16): m(B[k][:, :, j]) for j, g in enumerate(G)} for k in METHODS},
                centre={k: {str(g * 16): m(C[k][:, :, j]) for j, g in enumerate(G)} for k in METHODS},
-               loes_best_vs={k: test(old["best_es"][:, :, -1], B[k][:, :, -1]) for k in METHODS},
-               loes_centre_vs={k: test(old["mean_es"][:, :, -1], C[k][:, :, -1]) for k in METHODS},
+               loes_best_vs={k: test(old[f"best_{RERUN_LOES}"][:, :, -1], B[k][:, :, -1]) for k in METHODS},
+               loes_centre_vs={k: test(old[f"mean_{RERUN_LOES}"][:, :, -1], C[k][:, :, -1]) for k in METHODS},
                best_vs_native={k: test(B[k][:, :, -1], nat) for k in METHODS})
     write_json(RES / "means.json", rep); print("written")
 

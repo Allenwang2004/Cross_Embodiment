@@ -56,10 +56,10 @@ def main():
     adult, _ = make_humenv(num_envs=1, task=None, xml=str(REPO / "assets/robots/adult/robot.xml"), state_init="Default")
     Bg = bfm_align.embed(model, bfm_align.obs_from_qpos(adult, ref), a.device)
     gref = np.load(target_path(a.robot, stem))["qpos"]
-    gm = RobotMap(a.robot); names = [gm.mg.joint(j).name.replace("_joint", "") for j in gm.g_jnt]
-    n_link, n_jnt = len(gm.pairs) - 1, len(gm.g_jnt)
+    gm = RobotMap(a.robot); names = [gm.m_robot.joint(j).name.replace("_joint", "") for j in gm.robot_jnt]
+    n_link, n_jnt = len(gm.pairs) - 1, len(gm.robot_jnt)
     ARM = [i for i, (b, _) in enumerate(gm.pairs[1:]) if b.split("_")[-1] in ("Shoulder", "Elbow", "Hand")]
-    lo, hi = gm.g_range[:, 0], gm.g_range[:, 1]
+    lo, hi = gm.robot_range[:, 0], gm.robot_range[:, 1]
     # z0 re-projected onto the sphere as g1_z_search does: the stored z0 can differ from it in the 7th digit, and the
     # G1 rollout is chaotic enough that this alone moves the end point by metres
     z0 = project_z(np.load(REPO / f"data/origin_z/{a.clip}.npy").reshape(-1).astype(np.float64))

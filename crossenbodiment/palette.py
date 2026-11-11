@@ -7,8 +7,10 @@ differently by their scripts (Blender's z0 (0.55, 0.545, 0.53) for #8c8b87), bot
 the forms of one entry are the same colour within that rounding, that render_blender.py's COLORS equal BLENDER, and that every
 script's colour table equals its 8e9dc99 literals.
 
-  Palette.method(key[, variant])   MethodColour(key, label, hex, video, blender): the method table, keys ref, adult, z0, cem
-                                   (BFM-Zero: CEM on PHC's reward), loes (ours), random, cmaes, lso, lsor, ta, native
+  Palette.method(key[, variant])   MethodColour(key, label, hex, video, blender): the method table, keyed by the canonical method
+                                   names of crossenbodiment/methods.py (step 11): frozen (z0), cem_phc (BFM-Zero: CEM on PHC's
+                                   reward), loes (ours), random, cmaes, lso, lsor_w005, ta, native; plus ref and adult. The keys
+                                   before step 11 still work (OLD_KEYS: z0 -> frozen, cem -> cem_phc, lsor -> lsor_w005)
   Palette.label / hex / rgb / video / blender_rgb(key[, variant])
   VARIANTS                         where scripts disagree today, each script's colour / label under a named variant (not unified:
                                    the user decides, see DISAGREEMENTS)
@@ -78,8 +80,8 @@ METHODS = _ro({m.key: m for m in (
                  "the grey ghost (GHOST) in the overlay videos"),
     MethodColour("adult", "Origin", None, GREY, "body", "the adult's original motion: the side-by-side videos' grey left panel; drawn "
                  "in the body colour in the strobe panels; 'reference (adult)' on the overview pages"),
-    MethodColour("z0", r"$z_0$", "#8c8b87", RED, "z0", "Motivo's own latent: dashed grey line in the plots, red in the videos"),
-    MethodColour("cem", "BFM-Zero", "#1baf7a", [0.11, 0.69, 0.48, 1.0], "bfmzero", "CEM on BFM-Zero's (PHC's) tracking reward; video "
+    MethodColour("frozen", r"$z_0$", "#8c8b87", RED, "z0", "Motivo's own latent z0: dashed grey line in the plots, red in the videos"),
+    MethodColour("cem_phc", "BFM-Zero", "#1baf7a", [0.11, 0.69, 0.48, 1.0], "bfmzero", "CEM on BFM-Zero's (PHC's) tracking reward; video "
                  "colour: outputs/tall_body_52/videos/_specs"),
     MethodColour("loes", "Ours", "#2a78d6", BLUE, "ours", "LOES; blue in the survey videos (BLUE), [0.16, 0.47, 0.84, 1.0] in "
                  "outputs/tall_body_52/videos (VARIANTS)"),
@@ -87,7 +89,7 @@ METHODS = _ro({m.key: m for m in (
     MethodColour("cmaes", "CMA-ES", "#eda100", None, None, "pycma (plot_child_convergence.py)"),
     MethodColour("lso", "LSO", None, BLUE, None, "BFMTrack's latent-sequence optimisation: the searched (blue) panel of lso_videos.py "
                  "and package_amass_lso_survey.py"),
-    MethodColour("lsor", "LSO with ranks", None, BLUE, None, "lso_videos.py's title for a --rank run; no plot colour"),
+    MethodColour("lsor_w005", "LSO with ranks", None, BLUE, None, "lso_videos.py's title for a --rank run; no plot colour"),
     MethodColour("ta", "Trajectory Adaptation (BFM-Zero)", None, None, None, "no figure or video colours it (tables only)"),
     MethodColour("native", "Motivo zero-shot tracking (window L=8)", None, RED, None, "Motivo's ER L = 8 rollout: the red panel of "
                  "lso_videos.py, package_amass_lso_survey.py's zero_shot.npz"),
@@ -95,28 +97,28 @@ METHODS = _ro({m.key: m for m in (
 
 # (key, variant) -> MethodColour: a script's own colour / label where it disagrees with the table above (kept, not unified)
 VARIANTS = _ro({
-    ("cem", "algo_compare"): MethodColour("cem", "CEM", "#eb6834", note="plot_algo_compare.py: CEM with our cost (cem_ours), orange"),
+    ("cem_ours", "algo_compare"): MethodColour("cem_ours", "CEM", "#eb6834", note="plot_algo_compare.py: CEM with our cost (cem_ours), orange"),
     ("random", "algo_compare"): MethodColour("random", "Random search", "#1baf7a", note="plot_algo_compare.py: random search green"),
     ("loes", "algo_compare"): MethodColour("loes", "ES (ours)", "#2a78d6", note="plot_algo_compare.py's label"),
-    ("z0", "k_scale"): MethodColour("z0", "z0", "#eb6834", note="plot_k_scale_bars.py: z0 orange (C_Z0), not grey"),
+    ("frozen", "k_scale"): MethodColour("frozen", "z0", "#eb6834", note="plot_k_scale_bars.py: z0 orange (C_Z0), not grey"),
     ("loes", "k_scale"): MethodColour("loes", "searched", "#2a78d6", note="plot_k_scale_bars.py C_BEST"),
-    ("cem", "video_tall"): MethodColour("cem", "CEM (BFM-Zero)", "#1baf7a", [0.11, 0.69, 0.48, 1.0],
+    ("cem_phc", "video_tall"): MethodColour("cem_phc", "CEM (BFM-Zero)", "#1baf7a", [0.11, 0.69, 0.48, 1.0],
                                         note="outputs/tall_body_52/videos/_specs (spec files only, no script)"),
     ("loes", "video_tall"): MethodColour("loes", "LOES (ours)", "#2a78d6", [0.16, 0.47, 0.84, 1.0],
                                          note="outputs/tall_body_52/videos/_specs: not the survey's BLUE"),
-    ("z0", "plain"): MethodColour("z0", "z0", "#8c8b87", None, "z0", "topdown_blender.py's legend / the pages: plain 'z0'"),
+    ("frozen", "plain"): MethodColour("frozen", "z0", "#8c8b87", None, "z0", "topdown_blender.py's legend / the pages: plain 'z0'"),
     ("adult", "pages"): MethodColour("adult", "reference (adult)", note="the overview pages' column titles"),
-    ("cem", "pages"): MethodColour("cem", "CEM (BFM-Zero)", note="child_all_blender.py's column title"),
+    ("cem_phc", "pages"): MethodColour("cem_phc", "CEM (BFM-Zero)", note="child_all_blender.py's column title"),
     ("loes", "pages"): MethodColour("loes", "LOES (ours)", note="child_all_blender.py's column title"),
     ("loes", "pages_best"): MethodColour("loes", "LOES (best latent)", note="export_strobe / body_all / payload_fall pages"),
 })
 
 # where scripts disagree today (each keeps its own colour through VARIANTS; for the user to decide)
 DISAGREEMENTS = (
-    "cem: green #1baf7a (BFM-Zero: plot_child_convergence, child_topview, topdown_blender, render_blender bfmzero) vs orange "
-    "#eb6834 (plot_algo_compare.py, CEM with our cost); video green [0.11, 0.69, 0.48] (tall_body_52 specs)",
+    "cem: green #1baf7a (cem_phc, BFM-Zero: plot_child_convergence, child_topview, topdown_blender, render_blender bfmzero) vs "
+    "orange #eb6834 (plot_algo_compare.py, whose CEM is cem_ours: CEM with our cost); video green [0.11, 0.69, 0.48] (tall_body_52 specs)",
     "random: orange #eb6834 (plot_child_convergence) vs green #1baf7a (plot_algo_compare)",
-    "z0: grey #8c8b87 (plots, top views; Blender z0 (0.55, 0.545, 0.53)) vs orange #eb6834 (plot_k_scale_bars) vs red "
+    "z0 (frozen): grey #8c8b87 (plots, top views; Blender z0 (0.55, 0.545, 0.53)) vs orange #eb6834 (plot_k_scale_bars) vs red "
     "[0.85, 0.22, 0.20] (every video)",
     "loes: video blue [0.18, 0.42, 0.85] (survey, lso videos) vs [0.16, 0.47, 0.84] (tall_body_52 videos, = #2a78d6); Blender: the "
     "single body colour (0.47, 0.61, 0.70) in the strobe panels vs 'ours' (0.165, 0.471, 0.839) in the top views",
@@ -150,13 +152,22 @@ def srgb_to_linear(c):
     return tuple(x / 12.92 if x <= 0.04045 else ((x + 0.055) / 1.055) ** 2.4 for x in c)
 
 
+# the palette's keys before step 11 -> the canonical method keys (crossenbodiment/methods.py); the old "cem" entry was BFM-Zero's
+# CEM, its "algo_compare" variant plot_algo_compare.py's CEM with our cost
+OLD_KEYS = _ro(z0="frozen", cem="cem_phc", lsor="lsor_w005")
+OLD_VARIANT_KEYS = _ro({("cem", "algo_compare"): ("cem_ours", "algo_compare")})
+
+
 class Palette:
-    """lookups over METHODS / VARIANTS: Palette.hex("cem") -> '#1baf7a'; Palette.hex("cem", "algo_compare") -> '#eb6834'"""
+    """lookups over METHODS / VARIANTS: Palette.hex("cem_phc") -> '#1baf7a'; Palette.hex("cem_ours", "algo_compare") -> '#eb6834'.
+    The keys before step 11 are accepted (OLD_KEYS, OLD_VARIANT_KEYS)."""
     methods, variants, accents, ink, blender, conditions = METHODS, VARIANTS, ACCENTS, INK, BLENDER, CONDITIONS
 
     @staticmethod
     def method(key, variant=None):
-        return METHODS[key] if variant is None else VARIANTS[(key, variant)]
+        if variant is None:
+            return METHODS[OLD_KEYS.get(key, key)]
+        return VARIANTS[OLD_VARIANT_KEYS.get((key, variant), (OLD_KEYS.get(key, key), variant))]
 
     @classmethod
     def label(cls, key, variant=None):

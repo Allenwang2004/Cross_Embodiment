@@ -135,7 +135,7 @@ def smpl_heading(m, qs, d=None, batched=False):
 
 def robot_yaw(xmat):
     """a robot root's yaw from its world rotation matrix (MjData.xmat row, 9 values or 3 x 3): arctan2(R[1, 0], R[0, 0])
-    (robot_z_search.py / g1_z_search.py g1_points, eval_metrics.Body.local on a robot)"""
+    (crossenbodiment.costs.RobotPoints, once g1_points of the archived g1_z_search.py; eval_metrics.Body.local on a robot)"""
     R = np.asarray(xmat).reshape(3, 3)
     return np.arctan2(R[1, 0], R[0, 0])
 

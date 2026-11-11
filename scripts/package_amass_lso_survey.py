@@ -90,11 +90,11 @@ def package(clip, force, body):
         from model.robots import ROBOTS
         sa = np.load(REPO / s["ref"])["qpos"].astype(np.float64)       # the adult's clip the search ran on
         assert np.allclose(sa, adult), clip
-        M = RobotMap(body, fill=s["fill"]); ref = np.zeros((len(sa), M.mg.nq)); q = None
+        M = RobotMap(body, fill=s["fill"]); ref = np.zeros((len(sa), M.m_robot.nq)); q = None
         for t in range(len(sa)):                                         # as scripts/robot_roundtrip.py
-            ref[t], _ = M.smpl_to_robot_qpos(sa[t], q); q = ref[t][M.g_qadr]
+            ref[t], _ = M.smpl_to_robot_qpos(sa[t], q); q = ref[t][M.robot_qadr]
         start = M.smpl_to_robot_qpos(sa[0])[0][None]                     # RobotEnv.reset's start pose
-        size = M.s / 0.8213
+        size = M.scale / 0.8213
         mdl = f"models/{body}/scene.xml"
         sbs_cam = survey_track(size * 1.32, 1.74).to_track()
         ovl = dict(model=mdl, root=ROBOTS[body]["root"], flat=False, camera=robot_overlay(size).to_track())

@@ -31,7 +31,7 @@ from crossenbodiment.strobe import around_fall, mid_falls, whole_clip   # noqa: 
 
 OUT_REL = "outputs/child_all52"; OUT = paths.write_path(OUT_REL); N, STEP, BEFORE, START, MINLEN, ROWS = 6, 15, 40, 45, 9, 9
 THREADS = int(sys.argv[sys.argv.index("--threads") + 1]) if "--threads" in sys.argv else 32
-LABELS = (("adult", Palette.label("adult", "pages")), ("z0", Palette.label("z0", "plain")), ("cem", Palette.label("cem", "pages")),
+LABELS = (("adult", Palette.label("adult", "pages")), ("z0", Palette.label("frozen", "plain")), ("cem", Palette.label("cem_phc", "pages")),
           ("zstar", Palette.label("loes", "pages")))
 
 

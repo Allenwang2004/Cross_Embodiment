@@ -38,9 +38,9 @@ part = lambda b: PART[b.split("_", 1)[-1]]
 def back_ideal(M, qs):
     """RobotMap.robot_to_smpl_qpos with the robot's paired link orientations replaced by the SMPL body's own (a perfect IK):
     what the back-map alone loses."""
-    M.ds.qpos[:] = qs; mujoco.mj_kinematics(M.ms, M.ds)
-    R = {b: M.ds.xmat[M.sid[b]].reshape(3, 3).copy() for b, _ in M.pairs}
-    clearance = M.low_s(M.ds)
+    M.d_smpl.qpos[:] = qs; mujoco.mj_kinematics(M.m_smpl, M.d_smpl)
+    R = {b: M.d_smpl.xmat[M.smpl_bid[b]].reshape(3, 3).copy() for b, _ in M.pairs}
+    clearance = M.low_smpl(M.d_smpl)
     rel = {}
     third = Rotation.from_rotvec(_rotvec(R["Pelvis"].T @ R["Chest"]) / 3).as_matrix()
     rel["Torso"] = rel["Spine"] = rel["Chest"] = third
@@ -53,16 +53,16 @@ def back_ideal(M, qs):
         rel[f"{S}_Wrist"] = np.eye(3)
         if M.has_hand:
             rel[f"{S}_Hand"] = R[f"{S}_Elbow"].T @ R[f"{S}_Hand"]
-    q = M.ms.qpos0.copy()
+    q = M.m_smpl.qpos0.copy()
     q[3:7] = _quat(R["Pelvis"])
     for body, v in M.fill.items():
-        q[[M.s_qadr[M.s_names.index(f"{body}_{ax}")] for ax in "xyz"]] = v
+        q[[M.smpl_qadr[M.smpl_names.index(f"{body}_{ax}")] for ax in "xyz"]] = v
     bodies = list(rel)
     ang = Rotation.from_matrix(np.stack([rel[b] for b in bodies])).as_euler("XYZ")
-    q[[M.s_qadr[M.s_names.index(f"{b}_{ax}")] for b in bodies for ax in "xyz"]] = ang.ravel()
+    q[[M.smpl_qadr[M.smpl_names.index(f"{b}_{ax}")] for b in bodies for ax in "xyz"]] = ang.ravel()
     q[:2] = qs[:2]; q[2] = 0.0
-    M.ds.qpos[:] = q; mujoco.mj_kinematics(M.ms, M.ds)
-    q[2] = clearance - M.low_s(M.ds)
+    M.d_smpl.qpos[:] = q; mujoco.mj_kinematics(M.m_smpl, M.d_smpl)
+    q[2] = clearance - M.low_smpl(M.d_smpl)
     return q
 
 
@@ -121,15 +121,15 @@ def main():
         env, _ = make_humenv(num_envs=1, task=None, xml=str(REPO / SMPL_XML), state_init="Default")
         model = FBcprModel.from_pretrained("facebook/metamotivo-M-1").to("cuda")
     for key, name, _ in ([] if res else ROBOTS):
-        M = RobotMap(key); ms = M.ms; ds = mujoco.MjData(ms)
+        M = RobotMap(key); ms = M.m_smpl; ds = mujoco.MjData(ms)
         names = [ms.body(i).name for i in range(1, ms.nbody)]
         links = [b for b, _ in M.pairs[1:]]
         ik, e1, bfm1, bfm14 = [], [], [], []
         for clip in clips:
             ref = np.load(REPO / f"data/origin_motion/{clip}.npz")["qpos"]
-            T = len(ref); qg = np.zeros((T, M.mg.nq)); resid = np.zeros((T, len(links))); q = None
+            T = len(ref); qg = np.zeros((T, M.m_robot.nq)); resid = np.zeros((T, len(links))); q = None
             for t in range(T):
-                qg[t], resid[t] = M.smpl_to_robot_qpos(ref[t], q); q = qg[t][M.g_qadr]
+                qg[t], resid[t] = M.smpl_to_robot_qpos(ref[t], q); q = qg[t][M.robot_qadr]
             rt = np.stack([M.robot_to_smpl_qpos(g) for g in qg])
             st1 = np.stack([back_ideal(M, r) for r in ref])
             ik.append(resid.mean(0))

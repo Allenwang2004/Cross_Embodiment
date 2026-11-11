@@ -29,6 +29,7 @@ from crossenbodiment.paths import AMASS_LOCOMOTION_5S, CHILD_XML_REL, read_clips
 from crossenbodiment.metrics import MetricSuite, metric_body, world_positions
 from crossenbodiment import paths
 from crossenbodiment.experiment import ClipSet, Experiment, workers
+from crossenbodiment.methods import experiment_keys
 from crossenbodiment.results import ReportWriter, ResultsTable, write_json
 # refactor step 8: runs are read under paths.outputs_root() ($CE_OUTPUTS_ROOT), results written under paths.results_root()
 # ($CE_RESULTS_ROOT); both REPO/outputs by default
@@ -36,7 +37,10 @@ OUT = paths.output("amass_baselines"); RES = paths.result("amass_baselines"); CL
 BODY = dict(child=dict(ref="amass_data/amass_retargeting_motion/ACCAD/{c}.npz", iters=64, G=(4, 8, 16, 32, 64), xml=CHILD_XML_REL),
             tall=dict(label="len1.4_wid0.8", ref="data/len1.4_wid0.8/amass_retargeting_motion/ACCAD/{c}.npz", iters=64, G=(4, 8, 16, 32, 64),
                       xml="assets/robots_torque/len1.4_wid0.8/robot_torque_full.xml"))
-METHODS = dict(lso="", lsor="--rank --heading-weight 0.05 --pos-weight 0.005", ta="--method ta --objective phc")
+# the run-directory keys (crossenbodiment/methods.py RUNS "outputs/amass_baselines/<body>"; also results.json's keys): LSOR here is the
+# 0.05 heading / 0.005 position variant (lsor_w005) under the key "lsor"
+K = experiment_keys("outputs/amass_baselines/<body>"); LSO, LSOR, TA = K["lso"], K["lsor_w005"], K["ta"]
+METHODS = {LSO: "", LSOR: "--rank --heading-weight 0.05 --pos-weight 0.005", TA: "--method ta --objective phc"}
 KEYS = ("mpjpe", "mmpjpe", "mpjae", "fall_s", "success", "drift")
 EXP = Experiment("outputs/amass_baselines", clips=ClipSet(CLIPS), methods=tuple(METHODS), bodies=tuple(BODY), name="{body}/{stem}_{method}_s{seed}",
                  order=("body", "clip", "method"))
@@ -78,9 +82,9 @@ def one(job):
     for k in METHODS:
         run = OUT / b / f"{c}_{k}_s0"; S = json.load(open(run / "summary.json")); z = np.load(run / "rollouts.npz")
         want = dict(n=16, iters=B["iters"], seed=0, init_vel_scale=1.0, antithetic=False, sigma=0.0125, beta=1.0,
-                    **dict(lso=dict(method="lso", objective="bfm", rank=False, heading_weight=0.0, pos_weight=0.0),
-                           lsor=dict(method="lso", objective="bfm", rank=True, heading_weight=0.05, pos_weight=0.005),
-                           ta=dict(method="ta", objective="phc", rank=False, heading_weight=0.0, pos_weight=0.0))[k])
+                    **{LSO: dict(method="lso", objective="bfm", rank=False, heading_weight=0.0, pos_weight=0.0),
+                       LSOR: dict(method="lso", objective="bfm", rank=True, heading_weight=0.05, pos_weight=0.005),
+                       TA: dict(method="ta", objective="phc", rank=False, heading_weight=0.0, pos_weight=0.0)}[k])
         chk["bad"] += [(b, c, k, x, S.get(x), v) for x, v in want.items() if S.get(x) != v]
         nat = z["q_ER8"] if nat is None else nat; chk["native_diff"] = max(chk["native_diff"], float(np.abs(z["q_ER8"] - nat).max()))
         R[k] = dict(best=np.array([stats(z[f"q_best_it{g}"]) for g in B["G"]]), centre=np.array([stats(z[f"q_mean_it{g}"]) for g in B["G"]]))
@@ -93,7 +97,7 @@ def analyse():
     with Pool(workers(16)) as p:
         res = p.map(one, jobs, chunksize=1)
     rep, L = {}, []
-    names = dict(native="Native tracking", lso="LSO (BFMTrack)", lsor="LSOR (ours)", ta="Trajectory Adaptation (BFM-Zero)")
+    names = {"native": "Native tracking", LSO: "LSO (BFMTrack)", LSOR: "LSOR (ours)", TA: "Trajectory Adaptation (BFM-Zero)"}
     for b, B in BODY.items():
         o = [x for x in res if x[0] == b]
         if not o:
@@ -109,7 +113,7 @@ def analyse():
                 mean[f"{k}_{w}"] = T.by_budget(f"{k}_{w}")
         rep[b] = dict(checks=chk, mean=mean, per_motion={x[1]: {k: (v.tolist() if isinstance(v, np.ndarray) else {w: a.tolist() for w, a in v.items()}) for k, v in x[2].items()} for x in o})
         n = str(16 * B["G"][-1]); L.append(f"\n## {b} ({len(o)} AMASS motions, seed 0), the best sequence after {int(n):,} rollouts\nchecks: {json.dumps(chk)}")
-        L += ResultsTable.markdown([(names[k], mean["native"] if k == "native" else mean[f"{k}_best"][n]) for k in ("native", "lso", "lsor", "ta")], COLUMNS)
+        L += ResultsTable.markdown([(names[k], mean["native"] if k == "native" else mean[f"{k}_best"][n]) for k in ("native", LSO, LSOR, TA)], COLUMNS)
     write_json(RES / "results.json", rep); ReportWriter("Latent-sequence methods on AMASS motions", __doc__).write(RES / "README.md", L)
     print("\n".join(L))
 

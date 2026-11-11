@@ -104,9 +104,9 @@ def evaluate(body, max_steps):
                 worst = max(worst, float(np.abs(cand - Zb[t + 1]).max(1).min()))
             cands.append(returns(cand))
         env.close()
-        curve[stem] = dict(returns=best, run=str(run.relative_to(REPO)), steps=steps, scale=exact.s, n_rolled=len(uniq))
+        curve[stem] = dict(returns=best, run=str(run.relative_to(REPO)), steps=steps, scale=exact.scale, n_rolled=len(uniq))
         explore[stem] = dict(candidate_returns=cands, new_best_vs_candidates_max_dz=worst)
-        print(f"[{body}] {stem:20s} ({Path(curve[stem]['run']).name}, s {exact.s:.6f}) best so far {best[0]:.1f} -> {best[-1]:.1f} | "
+        print(f"[{body}] {stem:20s} ({Path(curve[stem]['run']).name}, s {exact.scale:.6f}) best so far {best[0]:.1f} -> {best[-1]:.1f} | "
               f"new-best match {worst:.1e} | tried: min {np.min(cands):.1f} max {np.max(cands):.1f}", flush=True)
         (out / "return_curve.json").write_text(json.dumps(curve, indent=1))
         (out / "return_explore.json").write_text(json.dumps(explore))

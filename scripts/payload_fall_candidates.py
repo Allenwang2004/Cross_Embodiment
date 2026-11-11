@@ -64,7 +64,7 @@ def blender():
 
 
 def overview(plan, kind):
-    sheet = ContactSheet((Palette.label("adult", "pages"), Palette.label("z0", "plain"), Palette.label("loes", "pages_best")), col_width=640, label_h=40, font_size=22, quality=90)
+    sheet = ContactSheet((Palette.label("adult", "pages"), Palette.label("frozen", "plain"), Palette.label("loes", "pages_best")), col_width=640, label_h=40, font_size=22, quality=90)
     for i, c in enumerate(CLIPS):
         ims = [glob.glob(str(OUT / "strobe" / f"heavy_arm_{c}_fixed_{k}_strobe.png"))[0] for k in ("adult", "z0", "zstar")] if kind == "mujoco" else \
               [OUT / "blender/renders" / f"heavy_arm_{c}_{k}.png" for k in ("adult", "z0", "zstar")]

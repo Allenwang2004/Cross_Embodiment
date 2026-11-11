@@ -186,3 +186,9 @@ tests/test_moves.py runs every helper step 4 moved against its 68c95f4 source.
   - tests/test_vis.py: the palette against render_blender.py's COLORS and every script's 8e9dc99 colour table, the figure helpers
     (SVG bytes), project / presets, StrobeLayout, pose_spec, BlenderScene, ClipBundle, ContactSheet, the frame bands, VideoRenderer vs
     the survey's replay.py.
+* Step 11 (naming: crossenbodiment/methods.py run keys, palette keys, the root scale `scale`, RobotMap / RobotEnv attribute names,
+  z0's on-disk names behind paths constants; docs/architecture.md "Names") renamed identifiers only; nothing on disk, no flag. The
+  golden cases and metrics.json must stay identical, and so must verify_analyses.py (the ported drivers now take their run keys from
+  the registry; their docstrings, copied into README.md, are unchanged) and verify_vis.py (the figure scripts ask the palette by the
+  new keys). tests/test_registry.py test_step11_names checks the lookups and every old name still read (palette OLD_KEYS, BodySpec
+  s / s_rule / s_default, obs.CHILD_EXACT_S, Position.pos_div, paths.origin_z); tests/test_g1_generic.py the RobotMap aliases.

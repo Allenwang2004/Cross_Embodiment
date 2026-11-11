@@ -102,7 +102,7 @@ class ClipBundle:
         n = len(q["reference_body"])
         if same_length:
             assert len(q["reference_adult"]) == n
-        for k, f in (("z0", "origin_z.npz"), ("best", "best.npz")):
+        for k, f in (("z0", paths.Z0_ROLLOUT), ("best", "best.npz")):
             x = np.load(paths.read_path(run) / f)["qpos"]
             if at_least:
                 assert len(x) >= n, (clip, k, len(x), n)

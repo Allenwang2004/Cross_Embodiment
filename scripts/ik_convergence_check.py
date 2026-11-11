@@ -25,12 +25,12 @@ LOG = []
 def counting_solve(self, Rt, root, q0, iters, damping, tol):
     """RobotMap._solve, line for line, plus a record of how it stopped."""
     q = np.array(q0, dtype=float)
-    lo, hi = self.g_range[:, 0], self.g_range[:, 1]
+    lo, hi = self.robot_range[:, 0], self.robot_range[:, 1]
     used, stopped, last, moved, obj = iters, False, 0.0, 0.0, []
     for k in range(iters):
         e = self._link_err(Rt, root, q).ravel()
-        ax = self.dg.xaxis[self.g_jnt]
-        J = (self.anc[:, None, :] * ax.T[None]).reshape(-1, len(self.g_jnt))
+        ax = self.d_robot.xaxis[self.robot_jnt]
+        J = (self.anc[:, None, :] * ax.T[None]).reshape(-1, len(self.robot_jnt))
         J, e = J * self.w[:, None], e * self.w
         obj.append(float(e @ e))
         dq = np.linalg.solve(J.T @ J + damping * np.eye(len(q)), J.T @ e)
@@ -58,7 +58,7 @@ def main():
     for key in ("g1", "h1", "apollo"):
         M = RobotMap(key)
         M._solve = types.MethodType(counting_solve, M)
-        lo, hi = M.g_range[:, 0], M.g_range[:, 1]
+        lo, hi = M.robot_range[:, 0], M.robot_range[:, 1]
         LOG.clear()
         n_frames = n_limit = n_swap = 0
         better, gain_deg, n_rs = 0, [], 0
@@ -73,12 +73,12 @@ def main():
                 if len(calls) > 1:                      # a joint ended at a limit: re-solved from the nominal pose
                     n_limit += 1
                     n_swap += len(calls) == 3           # the polish runs only when the nominal re-solve won somewhere
-                q = qg[M.g_qadr]
+                q = qg[M.robot_qadr]
                 if t % 10 == 0:                         # random restarts: is there a clearly better answer?
-                    M.ds.qpos[:] = ref[t]
+                    M.d_smpl.qpos[:] = ref[t]
                     import mujoco
-                    mujoco.mj_kinematics(M.ms, M.ds)
-                    Rt = [M.ds.xmat[M.sid[b]].reshape(3, 3) @ M.C[b].T for b, _ in M.pairs]
+                    mujoco.mj_kinematics(M.m_smpl, M.d_smpl)
+                    Rt = [M.d_smpl.xmat[M.smpl_bid[b]].reshape(3, 3) @ M.C[b].T for b, _ in M.pairs]
                     from model.robot_map import _quat
                     root = _quat(Rt[0])
                     n_log = len(LOG)

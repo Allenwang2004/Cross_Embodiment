@@ -7,7 +7,8 @@ those facts once:
   out        the experiment folder as the command lines spell it ("outputs/child_52_cem_phc"); read under paths.outputs_root(),
              results written under paths.results_root() (crossenbodiment/paths.py)
   clips      a ClipSet (file order, or longest_first() as the drivers sorted them)
-  methods    run-directory keys (crossenbodiment/methods.py RUNS says which MethodSpec each one is in which experiment)
+  methods    run-directory keys (crossenbodiment/methods.py RUNS says which MethodSpec each one is in which experiment; the drivers
+             take them from methods.experiment_keys(experiment)[canonical method]; method_spec(key) / key(method) convert)
   seeds, bodies, budgets (generations), gens, evals, frame_offset: the experiment's grid and budget
   name       the run folder's name: a pattern ("{stem}_{method}_s{seed}", "{body}/{stem}_{method}_s{seed}") or a function of the RunSpec
   order      the loop order of commands() ("seed", "clip", "body", "method"; the first is the outermost)
@@ -163,6 +164,15 @@ class Experiment:
         for e in (self.out, f"{self.out}/<body>", f"{self.out}/<body>_<cond>"):
             if e in RUNS:
                 return method_of(e, key)
+        raise KeyError(f"{self.out} is not in crossenbodiment/methods.py RUNS")
+
+    def key(self, method):
+        """the run-directory key of canonical `method` in this experiment (crossenbodiment/methods.py key_in, the inverse of
+        method_spec): Experiment("outputs/tall_body_52", ...).key("cem_phc") -> "cem" """
+        from .methods import RUNS, key_in
+        for e in (self.out, f"{self.out}/<body>", f"{self.out}/<body>_<cond>"):
+            if e in RUNS:
+                return key_in(e, method)
         raise KeyError(f"{self.out} is not in crossenbodiment/methods.py RUNS")
 
     # ------------------------------------------------------------------ the grid

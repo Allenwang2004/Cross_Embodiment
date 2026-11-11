@@ -122,7 +122,7 @@ def test_palette_forms_agree():
     for m in list(METHODS.values()) + list(VARIANTS.values()):
         if m.hex and m.blender and m.blender != "body":
             assert np.abs(np.array(m.blender_rgb) - np.array(hex_rgb(m.hex)) / 255).max() <= 0.0051, m
-        if m.hex and m.video is not None and m.key in ("cem", "loes") and m.video in ([0.11, 0.69, 0.48, 1.0], [0.16, 0.47, 0.84, 1.0]):
+        if m.hex and m.video is not None and m.key in ("cem_phc", "loes") and m.video in ([0.11, 0.69, 0.48, 1.0], [0.16, 0.47, 0.84, 1.0]):
             assert np.abs(np.array(m.video[:3]) - np.array(hex_rgb(m.hex)) / 255).max() <= 0.0051, m
 
 
@@ -141,7 +141,7 @@ def test_palette_script_tables():
     assert (ac.INK, ac.MUTED, ac.GRID, ac.SURF, ac.ALGOS) == (old["INK"], old["MUTED"], old["GRID"], old["SURF"], old["ALGOS"])
     old = old_literals("scripts/plot_k_scale_bars.py", ["INK", "MUTED", "GRID", "SURF", "C_Z0", "C_BEST"])   # runs at import: values via the palette
     assert (P.INK["dataviz"]["ink"], P.INK["dataviz"]["muted"], P.INK["dataviz"]["grid"], P.INK["dataviz"]["surface"],
-            P.Palette.hex("z0", "k_scale"), P.Palette.hex("loes", "k_scale")) == tuple(old[k] for k in ("INK", "MUTED", "GRID", "SURF", "C_Z0", "C_BEST"))
+            P.Palette.hex("frozen", "k_scale"), P.Palette.hex("loes", "k_scale")) == tuple(old[k] for k in ("INK", "MUTED", "GRID", "SURF", "C_Z0", "C_BEST"))
     old = old_literals("scripts/plot_teaser.py", ["FRAMES", "INK", "MUTED", "RULE", "AMBER", "RED", "BLUE", "GREEN", "U_PER_M", "WALK2", "WALK4"])
     t = import_script("plot_teaser")
     assert (t.FRAMES, t.INK_, t.MUTED, t.RULE, t.AMBER, t.RED, t.U_PER_M, t.WALK2, t.WALK4) == tuple(old[k] for k in ("FRAMES", "INK", "MUTED", "RULE", "AMBER", "RED", "U_PER_M", "WALK2", "WALK4"))

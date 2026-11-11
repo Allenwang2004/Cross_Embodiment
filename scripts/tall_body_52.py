@@ -32,13 +32,16 @@ REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sy
 from crossenbodiment.metrics import MetricSuite, metric_body, world_positions   # noqa: E402
 from crossenbodiment import paths   # noqa: E402
 from crossenbodiment.experiment import ClipSet, Experiment, workers   # noqa: E402
+from crossenbodiment.methods import experiment_keys   # noqa: E402
 from crossenbodiment.results import ReportWriter, ResultsTable, write_json   # noqa: E402
 # refactor step 8: runs are read under paths.outputs_root() ($CE_OUTPUTS_ROOT; OUT, read by one() when called), results written
 # under paths.results_root() ($CE_RESULTS_ROOT; RES); both REPO/outputs by default
 B = "len1.4_wid0.8"; XML = f"assets/robots_torque/{B}/robot_torque_full.xml"; OUT = paths.output("tall_body_52"); RES = paths.result("tall_body_52")
 from crossenbodiment.paths import CHILD_52_TASK, read_clips   # noqa: E402  configs/clips/child_52_task.txt = outputs/child_52/clips.txt (refactor step 4)
 CLIPS = read_clips(CHILD_52_TASK)
-EXP = Experiment("outputs/tall_body_52", clips=ClipSet(CLIPS), methods=("es", "cem"), order=("clip", "method"))
+# the run-directory keys of the two methods (crossenbodiment/methods.py RUNS): LOES without the anchor "es", BFM-Zero's CEM "cem"
+K = experiment_keys("outputs/tall_body_52"); LOES, CEM = K["loes"], K["cem_phc"]
+EXP = Experiment("outputs/tall_body_52", clips=ClipSet(CLIPS), methods=(LOES, CEM), order=("clip", "method"))
 KEYS = ("mpjpe", "mmpjpe", "mpjae", "fall_s", "success", "phc", "drift")
 
 
@@ -49,8 +52,8 @@ def st_(c):
 def commands():
     base = lambda c: (f"uv run python scripts/single_z_search.py --clip {c} --body {B} --xml {XML} --evals 1024 --pairs 8 --sigma 0.05 --lr 0.03 "
                       f"--obs-scale exact --eval-every 0 --init-vel-scale 1 --seed 0")
-    own = dict(es=lambda c: f"--objective bfm --heading-weight 1.0 --pos-weight 0.1 --anchor data/origin_z/{c}.npy --anchor-weight 0",
-               cem=lambda c: "--objective phc --algo cem")
+    own = {LOES: lambda c: f"--objective bfm --heading-weight 1.0 --pos-weight 0.1 --anchor data/origin_z/{c}.npy --anchor-weight 0",
+           CEM: lambda c: "--objective phc --algo cem"}
     EXP.print_commands(lambda r: f"{base(r.clip)} {own[r.method](r.clip)} --out {r.dir}", clip=EXP.clips.longest_first())
 
 
@@ -63,20 +66,21 @@ def one(c):
         _ctx["body"] = metric_body(XML, True)
     body = _ctx["body"]; m, d = body.m, body.d; st = st_(c)
     ref_all = np.load(REPO / f"data/{B}/retargeting_motion/{c}.npz")["qpos"].astype(np.float64); ref = ref_all[1:]
-    S = {a: json.load(open(OUT / f"{st}_{a}_s0/summary.json")) for a in ("es", "cem")}; s = S["es"]["pos_div"]
-    chk = dict(bad=[k for k, v in dict(es=dict(algo="es", objective="bfm", heading_weight=1.0, pos_weight=0.1, anchor_weight=0.0),
-                                       cem=dict(algo="cem", objective="phc", heading_weight=0.0, pos_weight=0.0, anchor_weight=0.0)).items()
+    S = {a: json.load(open(OUT / f"{st}_{a}_s0/summary.json")) for a in (LOES, CEM)}; s = S[LOES]["pos_div"]
+    chk = dict(bad=[k for k, v in {LOES: dict(algo="es", objective="bfm", heading_weight=1.0, pos_weight=0.1, anchor_weight=0.0),
+                                   CEM: dict(algo="cem", objective="phc", heading_weight=0.0, pos_weight=0.0, anchor_weight=0.0)}.items()
                     for x, w in v.items() if S[k].get(x) != w]
                + [k for k in S if (S[k]["evals"], S[k]["pairs"], S[k]["sigma"], S[k]["lr"], S[k]["obs_scale"], S[k]["body"], S[k]["seed"]) != (1024, 8, 0.05, 0.03, "exact", B, 0)],
-               pos_div=s, z0_same=float(np.abs(np.load(OUT / f"{st}_es_s0/origin_z.npz")["qpos"] - np.load(OUT / f"{st}_cem_s0/origin_z.npz")["qpos"]).max()))
+               pos_div=s, z0_same=float(np.abs(np.load(OUT / f"{st}_{LOES}_s0/origin_z.npz")["qpos"] - np.load(OUT / f"{st}_{CEM}_s0/origin_z.npz")["qpos"]).max()))
     phc = PHCCost(m, ref_all[0], ref, scale=s)
 
     Pr = world_positions(m, d, ref); _, Dr = body.part_floor(ref)
     # {mpjpe, mmpjpe, mpjae, fall_s, success (PHC, 0.5 m x s), phc (PHC's tracking reward), drift (adult-equivalent m)} per rollout
     stats = MetricSuite(body, ("mpjpe", "mmpjpe", "mpjae", "fall_s", "success", ("phc", lambda x: 1.0 - float(phc(x.q[None], ref_all[0])[0])), "drift"),
                         s, drift_unit="adult").reference(ref, Pr, Dr)
-    res = dict(z0=stats(np.load(OUT / f"{st}_es_s0/origin_z.npz")["qpos"]), cem=stats(np.load(OUT / f"{st}_cem_s0/best.npz")["qpos"]),
-               ours=stats(np.load(OUT / f"{st}_es_s0/best.npz")["qpos"]))
+    # results.json keys (unchanged): z0 (frozen), cem (cem_phc), ours (loes)
+    res = dict(z0=stats(np.load(OUT / f"{st}_{LOES}_s0/origin_z.npz")["qpos"]), cem=stats(np.load(OUT / f"{st}_{CEM}_s0/best.npz")["qpos"]),
+               ours=stats(np.load(OUT / f"{st}_{LOES}_s0/best.npz")["qpos"]))
     return st, res, chk
 
 

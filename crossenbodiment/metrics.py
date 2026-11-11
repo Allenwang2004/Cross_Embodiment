@@ -13,7 +13,7 @@ Task-page definitions (since 11/08)
                       0.5 m adult-equivalent, i.e. threshold 0.5 x s on a body of root scale s (0.31 m on the child)
   drift               mean pelvis x, y distance to the reference: unit "body" (the body's own metres) or "adult" (/ s)
   heading_error       mean |facing - the reference's facing|, degrees (facing = root yaw - 90 deg; drift_success_child.py)
-  MPJPE, MMPJPE (cm) and MPJAE (m/s^2: the per-joint ACCELERATION error, not an angle) stay in eval_metrics.py (the package's)
+  MPJPE, MMPJPE (cm) and MPJAE (per-joint acceleration error (m/s^2), not an angle) stay in eval_metrics.py (the package's)
   tracking_metrics; the suite calls it.
 Legacy definitions (the Task page until 11/08; outputs/child_52*/per_run.npz, eval_metrics.metrics, kpkd means.json)
   root_success        the root never more than 1.5 m (horizontal) or 45 deg (geodesic rotation) from the reference
@@ -24,7 +24,7 @@ Legacy definitions (the Task page until 11/08; outputs/child_52*/per_run.npz, ev
 Other: pose_similarity (mse_vs_align_test.metrics, step 4): joint-angle, local / world MPJPE and heading similarity.
 
 MetricSuite: an ordered list of named metric functions + one clip's reference (its world body positions and floor distances,
-computed once). MetricSuite.task_page(body, s) gives the Task page's (fall_s, success, mpjpe, mmpjpe, mpjae, drift):
+computed once). MetricSuite.task_page(body, scale) gives the Task page's (fall_s, success, mpjpe, mmpjpe, mpjae, drift):
 
     suite = MetricSuite.task_page(body, s).reference(ref[1:])          # Pw, Dr computed here (or pass the caller's)
     suite.values(q)  -> [fall_s, success, mpjpe, mmpjpe, mpjae, drift]   suite(q) -> the same as a dict
@@ -215,11 +215,11 @@ class Rollout:
 # name -> f(rollout): the named metrics a suite can list (a suite also takes (name, f) pairs for its own)
 METRICS = {
     "fall_s": lambda x: contact_fall_time(x.floor, x.suite.Dr[:x.T]),
-    "success": lambda x: phc_success(x.world_error, x.suite.s),
+    "success": lambda x: phc_success(x.world_error, x.suite.scale),
     "mpjpe": lambda x: x.tracking["mpjpe"],
     "mmpjpe": lambda x: x.tracking["mmpjpe"],
     "mpjae": lambda x: x.tracking["mpjae"],
-    "drift": lambda x: drift(x.q, x.r, x.suite.drift_unit, x.suite.s),
+    "drift": lambda x: drift(x.q, x.r, x.suite.drift_unit, x.suite.scale),
     "heading": lambda x: heading_error(x.q, x.r),
 }
 TASK_PAGE = ("fall_s", "success", "mpjpe", "mmpjpe", "mpjae", "drift")   # the stats() tuple of the Task-page drivers
@@ -228,17 +228,19 @@ TASK_PAGE = ("fall_s", "success", "mpjpe", "mmpjpe", "mpjae", "drift")   # the s
 class MetricSuite:
     """Named metrics, in order, of rollouts against one clip's reference on one body (module docstring)."""
 
-    def __init__(self, body, metrics=TASK_PAGE, s=1.0, drift_unit="body"):
-        """metrics: names from METRICS or (name, f(rollout)) pairs; s: the body's root scale (success threshold 0.5 x s, drift
-        / s with drift_unit "adult")"""
-        self.body, self.s, self.drift_unit = body, s, drift_unit
+    def __init__(self, body, metrics=TASK_PAGE, scale=1.0, drift_unit="body"):
+        """metrics: names from METRICS or (name, f(rollout)) pairs; scale: the body's root scale s (success threshold 0.5 x s,
+        drift / s with drift_unit "adult"; crossenbodiment/bodies.py lists its other names)"""
+        self.body, self.scale, self.drift_unit = body, scale, drift_unit
         self.metrics = tuple((m, METRICS[m]) if isinstance(m, str) else tuple(m) for m in metrics)
         self.ref = self._Pw = self._Dr = None
 
+    s = property(lambda self: self.scale, doc="read-only alias of scale (the name before step 11)")
+
     @classmethod
-    def task_page(cls, body, s, drift_unit="body"):
+    def task_page(cls, body, scale, drift_unit="body"):
         """the Task page's (fall_s, success, mpjpe, mmpjpe, mpjae, drift); drift in the body's metres as the drivers' stats()"""
-        return cls(body, TASK_PAGE, s, drift_unit)
+        return cls(body, TASK_PAGE, scale, drift_unit)
 
     @property
     def names(self):

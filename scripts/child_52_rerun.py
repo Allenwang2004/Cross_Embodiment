@@ -13,12 +13,16 @@ import numpy as np
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
 from crossenbodiment import paths   # noqa: E402
 from crossenbodiment.experiment import workers   # noqa: E402
+from crossenbodiment.methods import experiment_keys   # noqa: E402
 from crossenbodiment.metrics import metric_body   # noqa: E402  one Body per (xml, smpl) and process (refactor step 3)
 from crossenbodiment.reroll import EvalRollouts, Reroller, read_best_so_far   # noqa: E402
 from crossenbodiment.results import ResultsTable, save_npz, write_json   # noqa: E402
 # refactor step 8: runs are read under paths.outputs_root() ($CE_OUTPUTS_ROOT), results written under paths.results_root()
 # ($CE_RESULTS_ROOT); both REPO/outputs by default. prepare writes the schema-2 index (crossenbodiment/reroll.py), analyse reads any.
-SRC = paths.output("child_52"); OLD_CMA = paths.output("child_52_cmaes"); OUT = paths.output("child_52_rerun"); ROLL = OUT / "rollouts"; ALGOS = ("es", "cem", "random", "cmaes"); SEEDS = range(5); G = (4, 8, 16, 32, 64)
+# the run-directory keys here (crossenbodiment/methods.py RUNS; also the per_run.npz / means.json keys): LOES with the anchor "es", CEM
+# with OUR cost "cem" (cem_ours: Comparison A's, not BFM-Zero's), random search, CMA-ES
+K = experiment_keys("outputs/child_52_rerun"); LOES, CEM, RANDOM, CMAES = (K[m] for m in ("loes_anchor", "cem_ours", "random", "cmaes"))
+SRC = paths.output("child_52"); OLD_CMA = paths.output("child_52_cmaes"); OUT = paths.output("child_52_rerun"); ROLL = OUT / "rollouts"; ALGOS = (LOES, CEM, RANDOM, CMAES); SEEDS = range(5); G = (4, 8, 16, 32, 64)
 RES = paths.result("child_52_rerun"); REROLL = Reroller(64, G, best="every")   # each run's distinct best per generation, centres at G
 SAME = ("evals", "generations", "pairs", "sigma", "lr", "steps", "fitness", "sampling", "objective", "init_vel_scale", "heading_weight", "pos_weight", "pos_unit", "pos_div", "anchor_weight", "obs_scale", "init", "bfm_zero_vel", "fall_weight", "seed", "algo")
 body = None
@@ -49,7 +53,7 @@ def clip(c):
     B = {a: np.zeros((5, 64, len(KEYS))) for a in ALGOS}; C = {a: np.zeros((5, len(G), len(KEYS))) for a in ALGOS}; worst = 0.0; bad = []
     for a in ALGOS:
         for s in SEEDS:
-            r = f"{stem}_{a}_s{s}"; old = json.load(open((OLD_CMA if a == "cmaes" else SRC) / r / "summary.json")); new = json.load(open(OUT / r / "summary.json")); bad += [(r, k, old.get(k), new.get(k)) for k in SAME if old.get(k) != new.get(k)]
+            r = f"{stem}_{a}_s{s}"; old = json.load(open((OLD_CMA if a == CMAES else SRC) / r / "summary.json")); new = json.load(open(OUT / r / "summary.json")); bad += [(r, k, old.get(k), new.get(k)) for k in SAME if old.get(k) != new.get(k)]
             if new.get("frame_offset") != 1:
                 bad.append((r, "frame_offset", new.get("frame_offset")))
             for j, i in enumerate(ix.best_generations(r)):
@@ -57,7 +61,7 @@ def clip(c):
             for j, i in enumerate(ix.centre(r)):
                 C[a][s, j] = m(i)
             worst = max(worst, ix.check_vs_curve(r, cost, read_best_so_far(OUT / r)))
-    v = full(body, np.load(OUT / f"{stem}_es_s0/origin_z.npz")["qpos"].astype(np.float64), ref, 1.0)
+    v = full(body, np.load(OUT / f"{stem}_{LOES}_s0/origin_z.npz")["qpos"].astype(np.float64), ref, 1.0)
     return stem, [v[k] for k in KEYS], B, C, worst, bad
 
 
@@ -68,13 +72,13 @@ def analyse():
         res = p.map(clip, cl)
     T = ResultsTable(KEYS, [r[0] for r in res], G, SEEDS); z0 = T.add("z0", np.array([r[1] for r in res]))
     B = {a: T.add(f"best_{a}", np.stack([r[2][a] for r in res])) for a in ALGOS}; C = {a: T.add(f"mean_{a}", np.stack([r[3][a] for r in res])) for a in ALGOS}; bad = [x for r in res for x in r[5]]
-    same = max(float(np.abs(np.load(OUT / f"headstand_4_es_s{s}/best_z.npy") - np.load(paths.output(f"loes_aligned/headstand_4_s{s}/best_z.npy"))).max()) for s in SEEDS)
+    same = max(float(np.abs(np.load(OUT / f"headstand_4_{LOES}_s{s}/best_z.npy") - np.load(paths.output(f"loes_aligned/headstand_4_s{s}/best_z.npy"))).max()) for s in SEEDS)
     print("largest rollout vs search best_so_far:", max(r[4] for r in res), "| settings differing from the old runs:", len(bad), bad[:6], "| headstand_4 LOES against outputs/loes_aligned, largest z difference:", same, flush=True)
     save_npz(RES / "per_run.npz", clips=np.array(cl), keys=np.array(KEYS), gens_mean_z=np.array(G), z0=z0, **{f"best_{a}": B[a] for a in ALGOS}, **{f"mean_{a}": C[a] for a in ALGOS})
     m = lambda A: ResultsTable.pooled(A, KEYS)                          # every motion x seed at once
     test = lambda X, Y: ResultsTable.paired(X, Y, KEYS)                 # per-motion means over seeds, paired Wilcoxon
     rep = dict(z0=m(z0), best={a: {str(g * 16): m(B[a][:, :, g - 1]) for g in G} for a in ALGOS}, centre={a: {str(g * 16): m(C[a][:, :, j]) for j, g in enumerate(G)} for a in ALGOS},
-               loes_vs=dict(best={a: test(B["es"][:, :, -1], B[a][:, :, -1]) for a in ALGOS[1:]}, centre={a: test(C["es"][:, :, -1], C[a][:, :, -1]) for a in ALGOS[1:]}))
+               loes_vs=dict(best={a: test(B[LOES][:, :, -1], B[a][:, :, -1]) for a in ALGOS[1:]}, centre={a: test(C[LOES][:, :, -1], C[a][:, :, -1]) for a in ALGOS[1:]}))
     write_json(RES / "means.json", rep); print("written")
 
 
