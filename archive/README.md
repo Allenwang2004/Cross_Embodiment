@@ -109,6 +109,17 @@ history of a removed route). Two files archived together import each other only 
 | scripts/ik_action_from_qpos.py | ctrl stream that commands a pose-only clip | its route (ik_z_from_action.py) was removed (docs/new_body.md); no references |
 | utils/read_npy.py | np.load wrapper with a hard-coded path | its path data/retargeting_z gone; no references |
 
+## Step 6 (search scripts as thin CLIs, 2026-11-11)
+
+| file | what it was | why archived (2026-11-11) |
+|---|---|---|
+| scripts/batch_z_search.py | one antithetic ES search per (clip, body) of a datasets/crossenbodiment-10bodies split in one process (sigma 0.25, lr 0.5, L_align; outputs/batch_z_search{,_seed777}) | an older driver, superseded by single_z_search.py and the experiment drivers; no .py / .sh of the worktree imports or launches it, no queue script of the main tree (`outputs/**/*.sh`) names it, nothing reads its targets.npz; its dataset (datasets/) is not even in the worktree. It imported `rollout` / `project_z` / `rank_normalize` / `device_arg` from scripts.single_z_search, which still exports them |
+
+Kept although step 6 listed it for retirement: **scripts/g1_z_search.py**. `robot_z_search.py --robot g1 --sampling antithetic
+--frame-offset 0` reproduces it for the per-joint gains, but its `--gains mass` (model/g1_env.py's first, pre-10/20 gains: kp x
+the mass ratio x s, no json) has no other path: model/robot_env.py takes a gains json only. Whether the mass gains stay is the
+user's decision in step 7 (PLAN.md: merge g1_map / g1_env into robot_map / robot_env); until then g1_z_search.py is unchanged.
+
 ## Candidates kept (PLAN.md list, 2026-11-11)
 
 model/bodies.py (imported by strength_rollout.py and write_body_splits.py), write_body_splits.py (docs/new_body.md Step 1 tells
@@ -124,6 +135,6 @@ crossenbodiment/align_cost.py (model/simple/train.py re-exports it; rollout_z_tr
 use the package too), but model/simple, model/dataset.py, model/networks.py and scripts/build_dataset.py stay: still live are
 scripts/dump_heldout_clips.py (KEEP list: model.dataset and model.simple.train_es.clip_index), scripts/test_exact_obs.py
 (model.dataset, model.simple.train make_body_ctx, train_es.set_init_qpos, and unpickling checkpoints' TrainConfig / ESConfig),
-scripts/batch_z_search.py (model.dataset, ESConfig; retired in step 6) and the launchers scripts/run_b500_subspace.sh,
+(scripts/batch_z_search.py, model.dataset and ESConfig, until it was archived in step 6) and the launchers scripts/run_b500_subspace.sh,
 run_balanced500_global_anchor.sh, run_headstand_global_anchor.sh (`python -m model.simple.train_es`); model/simple/train.py
 imports model/networks.py; build_dataset.py writes the manifest model/dataset.py reads.

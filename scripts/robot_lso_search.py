@@ -30,27 +30,24 @@ after k updates (q_mean_it<k>) for k in --budgets.
 usage: CUDA_VISIBLE_DEVICES=2 uv run python scripts/robot_lso_search.py --robot g1 \
            --ref amass_data/amass_origin_motion_grounded/ACCAD/<clip>.npz --out outputs/g1/lso/<clip> \
            [--n 128 --iters 64 --rank --heading-weight 1 --pos-weight 0.1 --ik-weight 1 --fill ridge]"""
-import argparse, csv, json, os, sys, time
+import argparse, os, sys
 from pathlib import Path
 os.environ.setdefault("OMP_NUM_THREADS", "1")
-import mujoco
-import numpy as np
-import torch
+import mujoco  # noqa: F401  (imported first, as before)
+import numpy as np  # noqa: F401
+import torch  # noqa: F401
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
-from lso_search import colored_noise                                # noqa: E402
-from crossenbodiment.geometry import rank_normalize_steps, smpl_heading, unit_sphere   # noqa: E402
-from crossenbodiment.obs import RawObs                             # noqa: E402  the simulation layer (refactor step 5)
-from crossenbodiment.policy import MotivoPolicy                     # noqa: E402
-from crossenbodiment.rollout import BatchRollout                    # noqa: E402
-from crossenbodiment.sim import RobotSim                            # noqa: E402
-from model import bfm_align                                         # noqa: E402
-from model.robot_map import RobotMap                                # noqa: E402
-from model.robots import ROBOTS, target_path                        # noqa: E402
+from crossenbodiment.optim import colored_noise                     # noqa: E402,F401  (lso_search's, as before)
+from model.robots import ROBOTS                                     # noqa: E402
+# OOP refactor step 6: the search lives in the package (crossenbodiment/problems.py RobotSequenceProblem: robot, reference,
+# simulator, policy, per-step reward; costs.py the terms; optim.py LSO / TrajectoryAdaptation; search.py SequenceSearchLoop;
+# records.py RunRecorder).
 
 
-def main():
+def build_parser():
+    """the CLI (flags, defaults and help as they were)"""
     ap = argparse.ArgumentParser()
     ap.add_argument("--robot", required=True, choices=sorted(ROBOTS))
     ap.add_argument("--ref", required=True, help="the adult's SMPL clip (.npz with qpos)")
@@ -82,154 +79,27 @@ def main():
     ap.add_argument("--gains", default=None, help="gains json (default: ROBOTS[robot]['gains_json'])")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--device", default="cuda")
-    a = ap.parse_args()
-    out = Path(a.out); out.mkdir(parents=True, exist_ok=True)
-    ref = np.load(REPO / a.ref)["qpos"].astype(np.float64); T = len(ref); S = T - 1
-    n_envs = a.n + 1
-    sim = RobotSim(a.robot, n_envs, fill=a.fill, gains=a.gains)          # spawn the workers before CUDA is touched
-    rm = RobotMap(a.robot, fill=a.fill); n_link = len(rm.pairs) - 1
-    from humenv import make_humenv
-    policy = MotivoPolicy.load(device=a.device); model = policy.model    # facebook/metamotivo-M-1, eval()
-    adult, _ = make_humenv(num_envs=1, task=None, xml=str(REPO / "assets/robots/adult/robot.xml"), state_init="Default")
-    fk = adult.unwrapped.model; dk = mujoco.MjData(fk)
-    Bg = policy.embed(bfm_align.obs_from_qpos(adult, ref))[1:]                          # (S, 256): goal of step t = frame t+1
-    Bg_t = torch.as_tensor(Bg, device=a.device)
-    unit = unit_sphere                                                   # x / |x| along the last axis
-    phc = None
-    if a.objective == "phc":
-        from model.phc_reward import PHCCost
-        tgt = Path(a.target) if a.target else target_path(a.robot, Path(a.ref).stem)
-        gref = np.load(tgt if tgt.is_absolute() else REPO / tgt)["qpos"].astype(np.float64)
-        assert len(gref) == T, (len(gref), T)
-        mg = mujoco.MjModel.from_xml_path(str(REPO / ROBOTS[a.robot]["xml"]))
-        phc = PHCCost(mg, gref[0], gref[1:], scale=rm.s)
-        print(f"phc: {mg.nbody - 1} robot bodies against {tgt}, lengths / s = {rm.s:.6f}", flush=True)
+    return ap
 
-    def heading_xy(qs):
-        return smpl_heading(fk, qs, dk), qs[..., :2]                     # humenv's heading, frame by frame
-    ref_h, ref_xy = heading_xy(ref[1:])
 
-    # n + 1 robots (slot 0: the mean sequence) from ref[0] mapped onto the robot, S steps, latent z_t = 16 * Z[:, t]
-    batch = BatchRollout(policy, sim, RawObs(), n_envs, S, z_scale=16.0, record=("obs", "qpos_smpl", "qpos", "fz"))
+def main():
+    """parse -> RobotSequenceProblem (crossenbodiment/problems.py) -> LSO / TrajectoryAdaptation (optim.py) ->
+    SequenceSearchLoop (search.py) -> RunRecorder (records.py)"""
+    a = build_parser().parse_args()
+    from crossenbodiment.problems import RobotSequenceProblem
+    from crossenbodiment.records import RunRecorder
+    from crossenbodiment.search import SequenceSearchLoop
 
-    @torch.no_grad()
-    def rollout(Z):
-        """Z: (n_envs, S, 256) on the unit sphere -> per-step reward (n_envs, S); keeps the trajectories in rollout.keep"""
-        ro = batch.run(Z, init_qpos=ref[0], init_next=ref[1] if a.init_vel == "reference" else None)
-        O, QS, QG, FZ, qg0 = ro.obs, ro.qpos_smpl, ro.qpos, ro.fz, ro.start.qpos
-        Bs = torch.as_tensor(bfm_align.embed(model, O.astype(np.float32).reshape(n_envs * S, -1), a.device),
-                             device=a.device).reshape(n_envs, S, -1)
-        cos = torch.nn.functional.cosine_similarity(Bs, Bg_t[None], dim=-1).cpu().numpy()
-        h, xy = heading_xy(QS)
-        hd = (1 - np.cos(h - ref_h[None])) / 2; ps = np.linalg.norm(xy - ref_xy[None], axis=-1)
-        ik = np.radians(FZ[:, :, :n_link].mean(-1))                      # (n_envs, S) rad
-        main = cos
-        if phc is not None:                                               # every slot starts from the same pose (checked)
-            assert np.abs(qg0 - qg0[:1]).max() == 0
-            main = np.stack([phc.parts(QG[k], qg0[0])[0] for k in range(n_envs)])
-        r = main - a.heading_weight * hd - a.pos_weight * ps - a.ik_weight * ik
-        rollout.parts = dict(bfm=1 - cos.mean(1), head=hd.mean(1), pos=ps.mean(1), ik_deg=np.degrees(ik.mean(1)),
-                             atlim=FZ[:, :, n_link].mean(1) / len(rm.g_jnt), pelvis_min=QG[:, :, 2].min(1),
-                             **({"phc": 1 - main.mean(1)} if phc is not None else {}))
-        rollout.keep = dict(qg=QG, qs=QS, fz=FZ)
-        return r
-
-    def terms(r, i):
-        return dict(cost=float(1 - r[i].sum() / S), **{k: float(v[i]) for k, v in rollout.parts.items()})
-
-    def line(k, v):
-        return (f"  {k:28s} cost {v['cost']:.4f} (bfm {v['bfm']:.4f}" + (f", phc {v['phc']:.4f}" if "phc" in v else "")
-                + f", heading {v['head']:.3f}, pos {v['pos']:.2f} m, "
-                f"ik {v['ik_deg']:.1f} deg, at limit {100 * v['atlim']:.1f}%, pelvis min {v['pelvis_min']:.2f} m)")
-
-    keep = {}
-
-    def store(tag, i):
-        for k, v in rollout.keep.items():
-            keep[f"{'q' if k == 'qg' else k}_{tag}"] = v[i].astype(np.float32)
-
-    # ---- zero-shot references: B(g_t) (the LSO start) and Motivo's ER window 8 ------------------------------------
-    mu = unit(Bg.astype(np.float64))
-    er8 = unit(np.stack([Bg[t:t + 8].mean(0) for t in range(S)]).astype(np.float64))
-    Z = batch.copies(mu, n_envs); Z[1] = er8
-    t0 = time.time(); r = rollout(Z)
-    res = {"B(g_t) (LSO start)": terms(r, 0), "ER L=8 (Motivo zero-shot)": terms(r, 1)}
-    q_start = {"B(g_t) (LSO start)": rollout.keep["qg"][0].copy(), "ER L=8 (Motivo zero-shot)": rollout.keep["qg"][1].copy()}
-    store("Bg", 0); store("ER8", 1)
-    print(f"{ROBOTS[a.robot]['name']} {a.method.upper()} on {a.ref}: {T} frames, {S} steps, {a.n} sequences per iteration, {a.iters} iterations "
-          f"({time.time() - t0:.0f} s per batch)")
-    for k, v in res.items():
-        print(line(k, v), flush=True)
-
-    # ---- LSO / trajectory adaptation (lso_search.py's optimisers) --------------------------------------------------
-    rng = np.random.default_rng(a.seed)
-    start_key = "B(g_t) (LSO start)" if a.method == "lso" else "ER L=8 (Motivo zero-shot)"
-    if a.method == "ta":
-        assert not a.rank, "--method ta: no --rank"
-        mu = er8.copy()
-    m, v = np.zeros_like(mu), np.zeros_like(mu); b1, b2 = a.betas
-    disc = a.gamma ** np.arange(S)
-    curve, trace = [], [mu.astype(np.float32)]
-    best = dict(cost=res[start_key]["cost"], z=mu.copy(), it=-1, src="start", q=q_start[start_key])
-    budget_cost = {}
-    ta_h = np.exp(-(S - np.arange(1, S + 1)) / (a.ta_beta2 * S))                      # horizon factor, 1 at the last step
-    for it in range(a.iters):
-        if a.method == "ta":
-            sig = a.sigma * np.exp(-(a.iters - (a.iters - it)) / (a.ta_beta1 * a.iters)) * ta_h   # i = M - it counts down from M
-            eps = rng.standard_normal((a.n, S, 256))
-            Z = batch.with_mean(mu, unit(mu[None] + sig[None, :, None] * eps))
-        else:
-            eps = colored_noise(a.beta, (a.n, 256, S), rng).transpose(0, 2, 1)       # (n, S, 256), coloured over time
-            Z = batch.with_mean(mu, unit(mu[None] + a.sigma * eps))
-        r = rollout(Z)
-        if it in a.budgets:                                                            # slot 0: the mean after `it` updates
-            keep[f"q_mean_it{it}"] = rollout.keep["qg"][0].astype(np.float32)
-        costs = 1 - r.sum(1) / S
-        i = int(np.argmin(costs)) if a.best_from == "all" else 1 + int(np.argmin(costs[1:]))
-        if costs[i] < best["cost"]:
-            best = dict(cost=float(costs[i]), z=Z[i].copy(), it=it, src="mean" if i == 0 else "sample", q=rollout.keep["qg"][i].copy())
-        if it + 1 in a.budgets:
-            keep[f"q_best_it{it + 1}"] = best["q"].astype(np.float32); budget_cost[it + 1] = best["cost"]
-        p = rollout.parts
-        if a.method == "ta":                                                           # softmax over the z-scored costs of the samples
-            c = costs[1:]; zc = (c - c.mean()) / (c.std() + 1e-12); w = np.exp(-(zc - zc.min()) / a.ta_temp); w /= w.sum()
-            mu = unit((w[:, None, None] * Z[1:]).sum(0))
-        else:
-            R = np.stack([np.convolve(x[::-1], disc)[:S][::-1] for x in r[1:]])       # discounted return-to-go
-            if a.rank:
-                R = rank_normalize_steps(R)                                            # R has a.n rows
-            A = R - (R.sum(0, keepdims=True) - R) / (a.n - 1)
-            g = (A[:, :, None] * eps).mean(0) / a.sigma
-            m = b1 * m + (1 - b1) * g; v = b2 * v + (1 - b2) * g * g
-            mu = unit(mu + a.lr * (m / (1 - b1 ** (it + 1))) / (np.sqrt(v / (1 - b2 ** (it + 1))) + 1e-8))
-        row = dict(iter=it, mean_seq_cost=float(costs[0]), mean_seq_bfm=float(p["bfm"][0]), mean_seq_ik_deg=float(p["ik_deg"][0]),
-                   best_sample_cost=float(costs[1:].min()), sample_mean_cost=float(costs[1:].mean()), best_so_far=best["cost"],
-                   mu_move=float(np.linalg.norm(16 * (mu - trace[-1]), axis=1).mean()), sec=time.time() - t0)
-        curve.append(row); trace.append(mu.astype(np.float32))
-        print(f"  iter {it:3d}  mean sequence cost {costs[0]:.4f} (bfm {p['bfm'][0]:.4f}, ik {p['ik_deg'][0]:.1f} deg)  "
-              f"samples best {costs[1:].min():.4f} mean {costs[1:].mean():.4f}  |d mu_t| {row['mu_move']:.3f}  [{row['sec'] / 60:.1f} min]", flush=True)
-        with open(out / "curve.csv", "w", newline="") as f:                       # written every iteration: a stop keeps the curve
-            w_ = csv.DictWriter(f, fieldnames=list(curve[0])); w_.writeheader(); w_.writerows(curve)
-    r = rollout(batch.copies(mu, n_envs)); res["LSO final mean"] = terms(r, 0); store("LSO", 0)
-    if a.iters in a.budgets:
-        keep[f"q_mean_it{a.iters}"] = rollout.keep["qg"][0].astype(np.float32)
-    r = rollout(batch.copies(best["z"], n_envs))
-    res["LSO best (re-rolled)"] = dict(**terms(r, 0), it=best["it"], src=best["src"]); store("LSO_best", 0)
-    sim.close()
-    its = list(range(len(trace))) if a.trace == "all" else [0] + [k for k in a.budgets if k < len(trace)]
-    np.savez_compressed(out / "mu_trace.npz", mu=np.stack([trace[k] for k in its]), mu_iters=np.array(its), best=best["z"].astype(np.float32))
-    np.savez_compressed(out / "rollouts.npz", ref=ref.astype(np.float32), **keep)
-    (out / "summary.json").write_text(json.dumps(dict(robot=a.robot, ref=a.ref, frames=T, n=a.n, iters=a.iters, sigma=a.sigma,
-                                                      lr=a.lr, betas=list(a.betas), gamma=a.gamma, beta=a.beta, rank=a.rank, seed=a.seed,
-                                                      heading_weight=a.heading_weight, pos_weight=a.pos_weight, ik_weight=a.ik_weight,
-                                                      objective=a.objective, target=str(a.target) if a.target else None, method=a.method,
-                                                      ta_beta1=a.ta_beta1, ta_beta2=a.ta_beta2, ta_temp=a.ta_temp, init_vel=a.init_vel,
-                                                      best_from=a.best_from, budgets=a.budgets, best_cost_at=budget_cost,
-                                                      best_it=best["it"], best_src=best["src"], sample_rollouts=a.iters * a.n,
-                                                      fill=a.fill, gains=a.gains or ROBOTS[a.robot].get("gains_json"), results=res,
-                                                      minutes=(time.time() - t0) / 60), indent=1))
-    print("\n" + "\n".join(line(k, v) for k, v in res.items()))
-    print(f"-> {out}  ({(time.time() - t0) / 60:.1f} min)")
+    P = RobotSequenceProblem(a)                        # spawns the robot workers before CUDA is touched, as before
+    rec = RunRecorder(P.out)
+    P.baseline()                                       # the zero-shot references B(g_t) and ER L=8, one batch
+    opt, best = P.start()                              # LSO from B(g_t), or TA from ER L=8
+    # curve.csv is written after every iteration: a stop keeps the curve
+    loop = SequenceSearchLoop(opt, P.score, a.iters, P.S, best, budgets=a.budgets, keep=P.keep, best_from=a.best_from,
+                              row=P.curve_row, report=P.report, on_iter=lambda lp, it: rec.curve(lp.curve))
+    loop.run()
+    P.finish(loop)                                     # the final mean and the best sequence, re-rolled
+    P.save(rec, loop)                                  # mu_trace.npz, rollouts.npz, summary.json
 
 
 if __name__ == "__main__":

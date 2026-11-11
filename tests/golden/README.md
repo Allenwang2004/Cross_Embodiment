@@ -130,3 +130,14 @@ tests/test_moves.py runs every helper step 4 moved against its 68c95f4 source.
   tests/test_rollout.py also runs every replaced loop from its 37ed139 source (single_z_search.rollout in its four modes,
   lso_search's / robot_z_search's / robot_lso_search's loops, child_reward_eval.rollout, rank_initial_cost.rollout_multi,
   test_exact_obs's loop) against BatchRollout on 20-step, 4-slot rollouts of the child and the G1 (np.array_equal; ~20 s on GPU 2).
+* Step 6 (costs, optimisers, search loops, run records: crossenbodiment/costs.py, optim.py, problems.py, search.py, records.py)
+  turned the four search scripts into thin CLIs; every case above now runs through them. tests/test_optim.py runs each script's
+  old loop (from its fa6c5f9 source) against the new optimiser + loop on a toy cost (every scored batch, iterate and best
+  np.array_equal; ES --resume through state.npz); tests/test_records.py checks RunRecorder (round trips; the baseline's
+  summary.json / curve.csv / eval_base.json / best_z.npy rewritten byte-identical, its npz files array- and order-identical);
+  tests/test_cli.py checks the four parsers against their fa6c5f9 versions (every flag, default, type, help; --help text).
+  Flag paths no case covers (mean-z rollouts --eval-every, --z-start / --best-from-start, --subspace, antithetic / raw fitness,
+  objectives align / both / mse / dtw on the human body, zero-velocity B, --init default, obs multiplier / raw, robot dtw / mse /
+  cmaes + phc / random with --frame-offset 0, --resume without state.npz, LSO --dtw / --steps-scale / --init-pace / mse /
+  antithetic / phc / white noise, robot LSO phc --best-from all) were run once with the fa6c5f9 scripts and the new ones
+  (20 short cases, outputs/refactor_tests/step6_extra, compared with compare.py's cmp_dirs): identical.

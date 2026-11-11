@@ -61,7 +61,7 @@ are run by small schedulers next to their outputs (`outputs/b500_targets/schedul
 | Script | What it does |
 |---|---|
 | `score_z_matrix.py` | Roll arbitrary latents out on arbitrary (clip, body) and score them like training does |
-| `batch_z_search.py` | One search per (clip, body) in a single process (older driver) |
+| `archive/scripts/batch_z_search.py` | One search per (clip, body) in a single process (older driver; *archived 2026-11-11*, see archive/README.md) |
 
 ## 4. Labels for supervised learning
 

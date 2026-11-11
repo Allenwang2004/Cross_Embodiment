@@ -28,6 +28,18 @@ Step 5 adds the simulation layer, the one rollout loop every search and evaluati
   sim       HumenvSim (humenv's async vector env) and RobotSim (model/robot_env.RobotVecEnv): reset / step -> SimStep
   rollout   BatchRollout: a fixed number of slots, run(Z) for one latent per slot (n, 256) or a sequence (n, T, 256),
             recording qpos / qvel / actions / obs / SMPL qpos / IK residuals; the batch compositions (copies, padded, with_mean)
+Step 6 adds the searches themselves; scripts/single_z_search.py, robot_z_search.py, lso_search.py and robot_lso_search.py
+are thin CLIs over them (same flags, defaults and output files):
+  costs     CostTerm objects (BFMSimilarity incl. zero-velocity / plain, Heading, Position, Anchor, IKResidual, TrackingMSE,
+            RobotMSE, PHCReward, SlowDTW, DTW012, DTWUnfinished, AlignedHeading, Fall, AlignPhys) with their single-latent
+            (batch) and per-step forms, and CompositeCost: (cost, parts), the terms summed in the scripts' order
+  optim     ask / tell optimisers ES, CEM, CMAES, RandomSearch (single latent), LSO, TrajectoryAdaptation (sequences), Adam;
+            each owns its RNG; ES.state_dict() for --resume; colored_noise, return_to_go
+  problems  the four searches' problems (HumanLatentProblem, RobotLatentProblem, HumanSequenceProblem, RobotSequenceProblem):
+            the parts above put together from a script's parsed arguments, score(), the best records, rows and outputs
+  search    SearchLoop (generation loop, best so far, mean-z rollouts, curve rows, z trace, resume) and SequenceSearchLoop
+            (iterations, budgets, kept rollouts, mu trace)
+  records   RunRecorder: every output file of a search, written (and read back) exactly as the scripts did
 Importing the package imports nothing heavy (no torch, mujoco or humenv); align_cost (model.losses -> mujoco), robot_rollout
 and policy (torch) import them when they are imported.
 """
