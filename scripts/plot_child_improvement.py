@@ -28,6 +28,10 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 
 REPO = Path(__file__).resolve().parent.parent; OUT = REPO / "docs/figures"
+# --loes-dir: where LOES's runs are (default the anchored outputs/child_52_rerun; outputs/noanchor/child = LOES without the anchor term,
+# user 11/11); z0 and CEM stay the same runs. The PHC cache is written next to LOES's runs.
+import sys as _sys
+LOES = REPO / (_sys.argv[_sys.argv.index("--loes-dir") + 1] if "--loes-dir" in _sys.argv else "outputs/child_52_rerun")
 BLUE, TINT, INK, MUTED, GRID = "#2a78d6", "#d4e4f7", "#0b0b0b", "#52514e", "#e6e6e3"
 GAP = 1.5                                                    # pt between adjacent rotated labels
 SIN = math.sin(math.radians(45))
@@ -50,7 +54,7 @@ def phc_one(c):
     st = c.split("/")[1]; m = mujoco.MjModel.from_xml_path(str(REPO / "assets/robots_torque/child/robot_torque_full.xml"))
     ref = np.load(REPO / f"data/child/retargeting_motion/{c}.npz")["qpos"].astype(np.float64); S0 = json.load(open(REPO / f"outputs/child_52_cem_phc/{st}_cem_s0/summary.json"))
     cost = PHCCost(m, ref[0], ref[1:], scale=S0["pos_div"])
-    loes = [1 - float(cost(np.load(REPO / f"outputs/child_52_rerun/{st}_es_s{s}/best.npz")["qpos"].astype(np.float64)[None], ref[0])[0]) for s in range(5)]
+    loes = [1 - float(cost(np.load(LOES / f"{st}_es_s{s}/best.npz")["qpos"].astype(np.float64)[None], ref[0])[0]) for s in range(5)]
     cem = [1 - json.load(open(REPO / f"outputs/child_52_cem_phc/{st}_cem_s{s}/summary.json"))["best"]["cost"] for s in range(5)]
     z0 = 1 - float(cost(np.load(REPO / f"outputs/child_52_rerun/{st}_es_s0/origin_z.npz")["qpos"].astype(np.float64)[None], ref[0])[0])
     assert abs(z0 - (1 - S0["origin_z"]["cost"])) < 1e-6, (c, z0, S0["origin_z"]["cost"])          # same z0 rollout and scoring as CEM's search
@@ -59,7 +63,7 @@ def phc_one(c):
 
 def phc_data():
     import json
-    f = REPO / "outputs/child_52_rerun/phc_reward.json"
+    f = LOES / "phc_reward.json"
     if not f.exists():
         from multiprocessing import Pool
         clips = [l.strip() for l in open(REPO / "outputs/child_52/clips.txt")]
@@ -103,7 +107,7 @@ def layout(fig, labels, fs, W, n, rot=45):
 def main():
     a = argparse.ArgumentParser(); a.add_argument("--width", type=float, default=5.5); a.add_argument("--font", type=float, default=10.0)
     a.add_argument("--n", type=int, default=None); a.add_argument("--metric", choices=["mpjpe", "phc"], default="mpjpe")
-    a.add_argument("--short", action="store_true"); a.add_argument("--rot", type=float, default=45.0); a = a.parse_args()
+    a.add_argument("--short", action="store_true"); a.add_argument("--rot", type=float, default=45.0); a.add_argument("--loes-dir", default="outputs/child_52_rerun"); a = a.parse_args()
     plt.rcParams.update({"font.family": "STIXGeneral", "mathtext.fontset": "stix", "font.size": a.font, "pdf.fonttype": 42, "ps.fonttype": 42,
                          "axes.edgecolor": MUTED, "xtick.color": MUTED, "ytick.color": MUTED, "axes.labelcolor": INK, "hatch.linewidth": 0.8})
     labels, z0, es = data(a.metric); W = a.width; phc = a.metric == "phc"

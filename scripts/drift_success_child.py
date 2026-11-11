@@ -20,6 +20,8 @@ import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
 RR, LS = REPO / "outputs/child_52_rerun", REPO / "outputs/child_52_lso"; S = 0.611036; SEEDS = range(5)
+# --loes-dir outputs/noanchor/child (user 11/11): LOES from the runs without the anchor term -> outputs/drift_success_child_noanchor.json
+RL = REPO / sys.argv[sys.argv.index("--loes-dir") + 1] if "--loes-dir" in sys.argv else None; SUFFIX = "_noanchor" if "--loes-dir" in sys.argv else ""   # None: RR, read at call time
 SEQ = dict(lso="q_best_it64", lsor_w005="q_best_it64", ta="q_best_it64")
 _b = {}
 
@@ -52,7 +54,7 @@ def one(c):
     out = {k: [] for k in ("z0", "native", "es", *SEQ)}
     out["z0"].append(stats(np.load(RR / f"{st}_es_s0/origin_z.npz")["qpos"]))
     out["native"].append(stats(np.load(LS / f"{st}_lso_s0/rollouts.npz")["q_ER8"]))
-    ix = json.load(open(RR / "rollouts" / st / "index.json"))["map"]; Q = np.load(RR / "rollouts" / st / "eval_qpos.npz")["qpos"]
+    L_ = RL or RR; ix = json.load(open(L_ / "rollouts" / st / "index.json"))["map"]; Q = np.load(L_ / "rollouts" / st / "eval_qpos.npz")["qpos"]
     for s in SEEDS:
         out["es"].append(stats(Q[ix[f"{st}_es_s{s}"]["best"][-1]]))
         for k, key in SEQ.items():
@@ -73,7 +75,7 @@ def main():
     per = {st: {k: {m: float(np.mean([x[m] for x in o[k]])) for m in ("mpjpe", "drift", "heading", "success")} for k in o} for st, o in res}
     lso_lower = sum(per[st]["lso"]["mpjpe"] < per[st]["es"]["mpjpe"] for st in per); es_less_drift = sum(per[st]["es"]["drift"] < per[st]["lso"]["drift"] for st in per)
     print(f"motions where LSO's MPJPE < LOES's: {lso_lower}/52; LOES drifts less than LSO: {es_less_drift}/52")
-    (REPO / "outputs/drift_success_child.json").write_text(json.dumps(dict(mean=rep, per_motion=per, lso_lower_mpjpe=lso_lower, loes_less_drift=es_less_drift), indent=1))
+    (REPO / f"outputs/drift_success_child{SUFFIX}.json").write_text(json.dumps(dict(mean=rep, per_motion=per, lso_lower_mpjpe=lso_lower, loes_less_drift=es_less_drift), indent=1))
 
 
 if __name__ == "__main__":

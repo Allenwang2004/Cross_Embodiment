@@ -17,6 +17,10 @@ import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
 OUT = REPO / "outputs/success_definitions"; RERUN = REPO / "outputs/child_52_rerun"; CEMP = REPO / "outputs/child_52_cem_phc"; LSO = REPO / "outputs/child_52_lso"
+# --loes-dir outputs/noanchor/child (user 11/11): LOES ("es") from LOES without the anchor term, everything else unchanged;
+# the result goes to task_motions_noanchor.json next to the anchored one
+LOESD = REPO / sys.argv[sys.argv.index("--loes-dir") + 1] if "--loes-dir" in sys.argv else None       # None: RERUN, read at call time
+SUFFIX = "_noanchor" if "--loes-dir" in sys.argv else ""
 DEFS = ("root", "global", "global_raw", "local"); THR = 0.5
 body = None; S = None
 
@@ -49,7 +53,7 @@ def clip(c):
     stem = c.split("/")[1]; ref = np.load(REPO / f"data/child/retargeting_motion/{c}.npz")["qpos"].astype(np.float64)[1:]
     R = (world(ref), body.local(ref)[0]); res = {"frozen": tests(np.load(RERUN / f"{stem}_es_s0/origin_z.npz")["qpos"], ref, R)}
     self_check = tests(ref, ref, R)
-    for src, algos in ((RERUN, ("es", "random", "cmaes")), (CEMP, ("cem",))):
+    for src, algos in ((LOESD or RERUN, ("es",)), (RERUN, ("random", "cmaes")), (CEMP, ("cem",))):            # LOES from --loes-dir (default RERUN)
         ix = json.load(open(src / f"rollouts/{stem}/index.json"))["map"]; Q = np.load(src / f"rollouts/{stem}/eval_qpos.npz")["qpos"]
         for a in algos:
             key = "cem_phc" if src == CEMP else a
@@ -78,7 +82,7 @@ def main():
             for d, k in keys.items():
                 L, X = motion("es_best", k), motion(m, k); diff = L - X
                 summ[m]["vs_loes_best"][d] = dict(loes_higher=int((diff > 0).sum()), loes_lower=int((diff < 0).sum()), p=float(wilcoxon(L, X).pvalue) if (diff != 0).any() else 1.0)
-    OUT.mkdir(parents=True, exist_ok=True); (OUT / "task_motions.json").write_text(json.dumps(dict(per_clip=per, mean=summ), indent=1))
+    OUT.mkdir(parents=True, exist_ok=True); (OUT / f"task_motions{SUFFIX}.json").write_text(json.dumps(dict(per_clip=per, mean=summ), indent=1))
     print(f"{'method':16s}" + "".join(f"{d:>11s}" for d in keys))
     for m, v in summ.items():
         print(f"{m:16s}" + "".join(f"{100 * v[d]:10.1f}%" for d in keys))

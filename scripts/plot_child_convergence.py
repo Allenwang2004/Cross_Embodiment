@@ -27,6 +27,12 @@ RR, CP = REPO / "outputs/child_52_rerun", REPO / "outputs/child_52_cem_phc"; OUT
 METHODS = (("es", "Ours", "#2a78d6"), ("random", "Random", "#eb6834"), ("cem", "BFM-Zero", "#1baf7a"), ("cmaes", "CMA-ES", "#eda100"))   # legend names (user, 11/10): LOES -> Ours, CEM -> BFM-Zero
 SEEDS, GENS = range(5), 64
 NOCEM = "--no-cem-cost" in sys.argv
+# --loes-dir outputs/noanchor/child (user 11/11: LOES without the anchor term): LOES's runs and re-rolls from there, and the cost panel
+# shows the TRACKING cost of every method's best latent so far (BFM term + 1.0 heading + 0.1 position, no anchor; from the re-rolls'
+# eval.csv parts), since the searches' own costs no longer share a definition (LOES without the anchor, random / CMA-ES with it)
+RL = REPO / sys.argv[sys.argv.index("--loes-dir") + 1] if "--loes-dir" in sys.argv else RR; TRACK = RL != RR
+if TRACK:
+    OUT = REPO / "outputs/child_convergence_noanchor"
 
 
 def col(f, k):
@@ -40,20 +46,23 @@ def one(c):
     m = mujoco.MjModel.from_xml_path(str(REPO / "assets/robots_torque/child/robot_torque_full.xml"))
     pos_div = json.load(open(CP / f"{st}_cem_s0/summary.json"))["pos_div"]; phc = PHCCost(m, ref[0], ref[1:], scale=pos_div)
     cost, rew, chk = {}, {}, {}
-    ix = json.load(open(RR / "rollouts" / st / "index.json"))["map"]; Q = np.load(RR / "rollouts" / st / "eval_qpos.npz")["qpos"].astype(np.float64)
-    used = sorted({i for a in ("es", "random", "cmaes") for s in SEEDS for i in ix[f"{st}_{a}_s{s}"]["best"]})
-    R = {i: 1 - float(phc(Q[i][None], ref[0])[0]) for i in used}
+    track = lambda f: col(f, "bfm") + 1.0 * col(f, "head") + 0.1 * col(f, "pos")          # our tracking cost, no anchor (eval.csv parts)
     for a in ("es", "random", "cmaes"):
-        cost[a] = np.stack([col(RR / f"{st}_{a}_s{s}/curve.csv", "best_so_far") for s in SEEDS])
-        rew[a] = np.stack([[R[i] for i in ix[f"{st}_{a}_s{s}"]["best"]] for s in SEEDS])
-    P = json.load(open(RR / "phc_reward.json"))[st]; chk["loes_reward_vs_best_npz"] = float(np.abs(rew["es"][:, -1] - np.array(P["loes"])).max())
+        D_ = RL if a == "es" else RR
+        ix = json.load(open(D_ / "rollouts" / st / "index.json"))["map"]; Q = np.load(D_ / "rollouts" / st / "eval_qpos.npz")["qpos"].astype(np.float64)
+        rew[a] = np.stack([[1 - float(phc(Q[i][None], ref[0])[0]) for i in ix[f"{st}_{a}_s{s}"]["best"]] for s in SEEDS])
+        if TRACK:
+            T = track(D_ / "rollouts" / st / "eval.csv"); cost[a] = np.stack([T[ix[f"{st}_{a}_s{s}"]["best"]] for s in SEEDS])
+        else:
+            cost[a] = np.stack([col(RR / f"{st}_{a}_s{s}/curve.csv", "best_so_far") for s in SEEDS])
+    P = json.load(open(RL / "phc_reward.json"))[st]; chk["loes_reward_vs_best_npz"] = float(np.abs(rew["es"][:, -1] - np.array(P["loes"])).max())
     rew["cem"] = 1 - np.stack([col(CP / f"{st}_cem_s{s}/curve.csv", "best_so_far") for s in SEEDS])
     ic = json.load(open(CP / "rollouts" / st / "index.json"))["map"]; Qc = np.load(CP / "rollouts" / st / "eval_qpos.npz")["qpos"].astype(np.float64)
     chk["cem_reroll_vs_curve"] = float(max(abs(1 - float(phc(Qc[ic[f"{st}_cem_s{s}"]["best"][-1]][None], ref[0])[0]) - rew["cem"][s, -1]) for s in SEEDS))
     z0c = json.load(open(RR / f"{st}_es_s0/summary.json"))["origin_z"]["cost"]
     e = CP / "rollouts_ourcost" / st / "eval.csv"
     if e.exists():
-        ce = col(e, "cost"); cost["cem"] = np.stack([ce[ic[f"{st}_cem_s{s}"]["best"]] for s in SEEDS])
+        ce = track(e) if TRACK else col(e, "cost"); cost["cem"] = np.stack([ce[ic[f"{st}_cem_s{s}"]["best"]] for s in SEEDS])
         chk["ourcost_z0"] = abs(json.load(open(CP / "rollouts_ourcost" / st / "eval_base.json"))["cost"] - z0c)
     else:
         cost["cem"] = np.full((len(SEEDS), GENS), np.nan)
@@ -65,7 +74,7 @@ def plot_mean(D, x):
     plt.rcParams.update({"font.family": "STIXGeneral", "mathtext.fontset": "stix", "font.size": 10, "pdf.fonttype": 42, "axes.edgecolor": "#52514e",
                          "xtick.color": "#52514e", "ytick.color": "#52514e"})
     fig, axs = plt.subplots(1, 2, figsize=(5.5, 2.3)); fig.subplots_adjust(left=0.1, right=0.965, bottom=0.2, top=0.8, wspace=0.32)
-    for ax, key, lab in ((axs[0], "cost", "Cost (ours)"), (axs[1], "reward", "Reward")):
+    for ax, key, lab in ((axs[0], "cost", "Tracking cost" if TRACK else "Cost (ours)"), (axs[1], "reward", "Reward")):
         z = np.mean([D[st]["z0"][key] for st in D]); ax.axhline(z, color="#8c8b87", lw=1.2, ls="--", zorder=2)
         for a, name, c in METHODS:
             Y = np.stack([D[st][key][a].mean(0) for st in D])                 # motions x generations (seed means)
@@ -117,7 +126,7 @@ def main():
     if missing and not NOCEM:
         raise SystemExit("CEM's re-scoring has not finished (pass --no-cem-cost to draw without it)")
     x = 16 * np.arange(1, GENS + 1)
-    plot_mean(D, x); plot_grid(D, x, "cost", "Cost (ours)"); plot_grid(D, x, "reward", "Reward")
+    plot_mean(D, x); plot_grid(D, x, "cost", "Tracking cost" if TRACK else "Cost (ours)"); plot_grid(D, x, "reward", "Reward")
     np.savez_compressed(OUT / "data.npz", clips=np.array(sorted(D)), rollouts=x, **{f"{k}_{a}": np.stack([D[st][k][a] for st in sorted(D)]) for k in ("cost", "reward") for a, _, _ in METHODS},
                         z0_cost=np.array([D[st]["z0"]["cost"] for st in sorted(D)]), z0_reward=np.array([D[st]["z0"]["reward"] for st in sorted(D)]))
     for k in ("cost", "reward"):

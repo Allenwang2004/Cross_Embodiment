@@ -19,6 +19,10 @@ import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
 OUT = REPO / "outputs/fall_definitions"; RERUN = REPO / "outputs/child_52_rerun"; CEMP = REPO / "outputs/child_52_cem_phc"; LSO = REPO / "outputs/child_52_lso"
+# --loes-dir outputs/noanchor/child (user 11/11): LOES ("es") from LOES without the anchor term, everything else unchanged;
+# the result goes to task_motions_noanchor.json next to the anchored one
+LOESD = REPO / sys.argv[sys.argv.index("--loes-dir") + 1] if "--loes-dir" in sys.argv else None       # None: RERUN, read at call time
+SUFFIX = "_noanchor" if "--loes-dir" in sys.argv else ""
 DEFS = ("height", "hand_mot", "hand_frm", "contact", "head"); TOUCH, NEAR = 0.01, 0.05
 body = None
 
@@ -51,7 +55,7 @@ def clip(c):
         d.qpos[:] = ref[t]; mujoco.mj_kinematics(body.m, d); hr[t] = d.xpos[hid][2]
     R = (names, Dr, hr); res = {"frozen": falls(np.load(RERUN / f"{stem}_es_s0/origin_z.npz")["qpos"], ref, R)}
     self_check = falls(ref, ref, R)
-    for src, algos in ((RERUN, ("es", "random", "cem", "cmaes")), (CEMP, ("cem",))):
+    for src, algos in ((LOESD or RERUN, ("es",)), (RERUN, ("random", "cem", "cmaes")), (CEMP, ("cem",))):            # LOES from --loes-dir (default RERUN)
         ix = json.load(open(src / f"rollouts/{stem}/index.json"))["map"]; Q = np.load(src / f"rollouts/{stem}/eval_qpos.npz")["qpos"]
         for a in algos:
             key = "cem_phc" if src == CEMP else a
@@ -78,7 +82,7 @@ def main():
         rows = [per[s][m] if isinstance(per[s][m], list) else [per[s][m]] for s in per]
         summ[m] = {k: float(np.nanmean([np.nanmean([r[k] for r in rr]) if not all(np.isnan(r[k]) for r in rr) else np.nan for rr in rows])) for k in DEFS}
         summ[m]["motions_with_fall"] = {k: int(sum(np.nanmean([r[k] for r in rr]) > 0 for rr in rows if not all(np.isnan(r[k]) for r in rr))) for k in DEFS}
-    OUT.mkdir(parents=True, exist_ok=True); (OUT / "task_motions.json").write_text(json.dumps(dict(per_clip=per, mean=summ), indent=1))
+    OUT.mkdir(parents=True, exist_ok=True); (OUT / f"task_motions{SUFFIX}.json").write_text(json.dumps(dict(per_clip=per, mean=summ), indent=1))
     print(f"{'method':16s}" + "".join(f"{k:>10s}" for k in DEFS))
     for m, v in summ.items():
         print(f"{m:16s}" + "".join(f"{v[k]:10.3f}" for k in DEFS))
