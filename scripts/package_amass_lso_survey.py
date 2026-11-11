@@ -18,18 +18,24 @@ outputs/g1/lso/<clip>_it<n>_rank) as user-survey entries, in the format of outpu
 The rollouts hold the states after each of the clip's T-1 control steps; the start state (the reference's frame 0 --
 on the G1, frame 0 mapped onto it -- at rest) is put in front so every trajectory has the reference's T frames. Runs without a summary.json
 (still running) are skipped; packaged clips are skipped unless --force.
+OOP refactor step 10: colours crossenbodiment.palette, cameras crossenbodiment.camera, the clip folder crossenbodiment.clips.ClipBundle;
+runs are read through crossenbodiment.paths.read_path ($CE_OUTPUTS_ROOT), the survey folder written under $CE_RESULTS_ROOT.
 usage: uv run python scripts/package_amass_lso_survey.py [clip ...] [--body child|g1] [--force]"""
 import argparse, glob, json, os, shutil, subprocess, sys, tempfile
 from pathlib import Path
 import numpy as np
 
-REPO = Path(__file__).resolve().parent.parent; TOP = REPO / "outputs/user_survey"
+REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO))
+from crossenbodiment import paths                                         # noqa: E402
+from crossenbodiment.camera import BODY_OVERLAY_DEFAULT, robot_overlay, survey_track   # noqa: E402
+from crossenbodiment.clips import ClipBundle                              # noqa: E402
+from crossenbodiment.palette import BLUE, GHOST, GREY, RED                # noqa: E402
+TOP = paths.write_path("outputs/user_survey")
 CLIPS = ["Male2MartialArtsStances__D9_-_warm_up_to_ready_to_warm_up", "Male2MartialArtsExtended__Extended_1",
          "Male2MartialArtsExtended__Form_1", "Male2General__A12-_Crawl_Backwards", "Male2MartialArtsStances__D9_-_victory_1",
          "MartialArtsWalksTurns__E5_-_retreat", "MartialArtsWalksTurns__E8_-_bounce", "Male2Walking__B15_-__Walk_turn_around",
          "Male2Walking__B19_-__Walk_to_pickup_box", "MartialArtsWalksTurns__E3_-_advance", "Male2Walking__B24_-__walk_to_crouch",
          "MartialArtsWalksTurns__E6_-_quick_retreat", "MartialArtsWalksTurns__E4_-_quick_advance"]
-GREY, GHOST, RED, BLUE = [0.55, 0.57, 0.62, 1.0], [0.55, 0.57, 0.62, 0.35], [0.85, 0.22, 0.20, 1.0], [0.18, 0.42, 0.85, 1.0]
 README_NOTE = """
 ## child_amass: AMASS clips with a latent sequence (LSO)
 
@@ -56,16 +62,12 @@ the overlay's ghost, as in `g1/`.
 """
 
 
-def save(q, dst):
-    np.savez_compressed(dst, qpos=np.asarray(q, dtype=np.float32), fps=np.float32(30)); return len(q)
-
-
 def package(clip, force, body):
     OUT = TOP / f"{body}_amass"
     if body == "child":
-        runs = [REPO / f"outputs/lso/{clip}_global_it{n}_rank" for n in (256, 128)]     # 256 iterations, or 128 (later clips)
+        runs = [paths.read_path(f"outputs/lso/{clip}_global_it{n}_rank") for n in (256, 128)]     # 256 iterations, or 128 (later clips)
     else:
-        runs = sorted((Path(p) for p in glob.glob(str(REPO / f"outputs/{body}/lso/{clip}_it*_rank"))),
+        runs = sorted((Path(p) for p in glob.glob(str(paths.read_path(f"outputs/{body}/lso") / f"{clip}_it*_rank"))),
                       key=lambda p: -int(p.name.rsplit("_it", 1)[1].split("_")[0]))
     run = next((r for r in runs if (r / "summary.json").exists()), None)
     if run is None:
@@ -80,8 +82,8 @@ def package(clip, force, body):
     if body == "child":
         ref = np.load(REPO / f"amass_data/amass_retargeting_motion/ACCAD/{clip}.npz")["qpos"]; start = ref[:1]
         mdl = "models/child.xml"
-        sbs_cam = dict(distance=3.87, elevation=-12, azimuth=140, lookat_z=0.76)
-        ovl = dict(model=mdl, root="Pelvis", flat=True, camera=dict(distance=3.1, elevation=-12, azimuth=140, lookat_z=0.5))
+        sbs_cam = survey_track(1.26).to_track()                                       # the child survey's cameras (3.87 m / 0.76 m)
+        ovl = dict(model=mdl, root="Pelvis", flat=True, camera=BODY_OVERLAY_DEFAULT.to_track())
     else:
         sys.path.insert(0, str(REPO))
         from model.robot_map import RobotMap
@@ -92,26 +94,25 @@ def package(clip, force, body):
         for t in range(len(sa)):                                         # as scripts/robot_roundtrip.py
             ref[t], _ = M.smpl_to_robot_qpos(sa[t], q); q = ref[t][M.g_qadr]
         start = M.smpl_to_robot_qpos(sa[0])[0][None]                     # RobotEnv.reset's start pose
-        size = M.s / 0.8213; k = max(size * 1.32, 1.74) / 1.26
+        size = M.s / 0.8213
         mdl = f"models/{body}/scene.xml"
-        sbs_cam = dict(distance=round(2.8 * k, 2), elevation=-12, azimuth=140, lookat_z=round(0.55 * k, 2))
-        ovl = dict(model=mdl, root=ROBOTS[body]["root"], flat=False,
-                   camera=dict(distance=3.3 * size, elevation=-12, azimuth=140, lookat_z=0.7 * size))
+        sbs_cam = survey_track(size * 1.32, 1.74).to_track()
+        ovl = dict(model=mdl, root=ROBOTS[body]["root"], flat=False, camera=robot_overlay(size).to_track())
     assert len(adult) == len(ref) == s["frames"] == len(r["q_LSO_best"]) + 1, clip
-    n = {"reference_adult": save(adult, d / "reference_adult.npz"), "reference_body": save(ref, d / "reference_body.npz"),
-         "zero_shot": save(np.concatenate([start, r["q_ER8"]]), d / "zero_shot.npz"),
-         "lso_best": save(np.concatenate([start, r["q_LSO_best"]]), d / "lso_best.npz")}
+    b = ClipBundle(clip, body, dict(reference_adult=np.asarray(adult), reference_body=np.asarray(ref), zero_shot=np.concatenate([start, r["q_ER8"]]),
+                                    lso_best=np.concatenate([start, r["q_LSO_best"]])))
+    b.save_npz(d); n = {k: len(v) for k, v in b.qpos.items()}
     res = s["results"]
     ovl.update(width=1920, height=1080, layers=[dict(qpos="reference_body.npz", rgba=GHOST), dict(qpos="zero_shot.npz", rgba=RED),
                                                dict(qpos="lso_best.npz", rgba=BLUE)])
-    spec = dict(clip=clip, body=body, fps=30, frames=n, search_run=str(run.relative_to(REPO)),
-                bfm=dict(zero_shot=res["ER L=8 (Motivo zero-shot)"]["bfm"], lso_best=res["LSO best (re-rolled)"]["bfm"]),
-                side_by_side=dict(size=1080, camera=sbs_cam,
-                                  panels=[dict(model="models/adult.xml", qpos="reference_adult.npz", rgba=GREY),
-                                          dict(model=mdl, qpos="zero_shot.npz", rgba=RED),
-                                          dict(model=mdl, qpos="lso_best.npz", rgba=BLUE)]),
-                overlay=ovl)
-    (d / "video.json").write_text(json.dumps(spec, indent=1))
+    b.meta.update(search_run=f"outputs/{run.relative_to(paths.outputs_root())}",
+                  bfm=dict(zero_shot=res["ER L=8 (Motivo zero-shot)"]["bfm"], lso_best=res["LSO best (re-rolled)"]["bfm"]),
+                  side_by_side=dict(size=1080, camera=sbs_cam,
+                                    panels=[dict(model="models/adult.xml", qpos="reference_adult.npz", rgba=GREY),
+                                            dict(model=mdl, qpos="zero_shot.npz", rgba=RED),
+                                            dict(model=mdl, qpos="lso_best.npz", rgba=BLUE)]),
+                  overlay=ovl)
+    b.save_json(d); spec = b.video_json()
     env = {**os.environ, "MUJOCO_GL": "egl", "MUJOCO_EGL_DEVICE_ID": "2", "CUDA_VISIBLE_DEVICES": "2"}
     with tempfile.TemporaryDirectory(dir=OUT) as tmp:
         p = subprocess.run(["uv", "run", "--project", str(REPO), "python", "replay.py", f"{body}_amass/trajectories/{clip}",

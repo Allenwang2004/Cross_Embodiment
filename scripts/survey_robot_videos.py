@@ -19,6 +19,7 @@ sys.path.insert(0, str(REPO))
 from model.robots import ROBOTS, target_path                                 # noqa: E402
 from crossenbodiment.survey import ADULT, ADULT_H, CLIPS   # noqa: E402  survey_body_videos' (refactor step 4)
 from crossenbodiment.palette import BLUE, GREY, RED   # noqa: E402  survey_body_videos' (refactor step 4)
+from crossenbodiment.camera import survey_track   # noqa: E402  the survey's side-by-side camera (refactor step 10)
 ENV = {**os.environ, "MUJOCO_GL": "egl", "MUJOCO_EGL_DEVICE_ID": "2", "CUDA_VISIBLE_DEVICES": "2"}
 
 
@@ -27,12 +28,11 @@ def render(r, stem, only, search=None, name=None):
     outputs/user_survey (default <robot>), e.g. g1_ridge for the ridge-fill searches."""
     task = stem.rsplit("_", 1)[0]; tgt = target_path(r, stem)
     size = json.loads((tgt.parent / "summary.json").read_text())["s"] / 0.8213
-    k = max(size * 1.32, ADULT_H) / 1.26                              # side by side: frame the taller of adult and robot
     run = f"{search or f'outputs/user_survey_search/{r}'}/{stem}_s0"; xml = ROBOTS[r]["scene"]
     root = REPO / "outputs/user_survey" / (name or r)
     sbs, ovl = root / "side_by_side" / f"{stem}.mp4", root / "overlay" / f"{stem}.mp4"
     spec = dict(out=str(sbs.relative_to(REPO)), cols=3, size=1080, captions=False,
-                track=dict(distance=round(2.8 * k, 2), elevation=-12, azimuth=140, lookat_z=round(0.55 * k, 2)),
+                track=survey_track(size * 1.32, ADULT_H).to_track(),      # side by side: frame the taller of adult and robot
                 panels=[dict(xml=ADULT, qpos=f"data/origin_motion/{task}/{stem}.npz", rgba=GREY),
                         dict(xml=xml, qpos=f"{run}/origin_z.npz", rgba=RED),
                         dict(xml=xml, qpos=f"{run}/best.npz", rgba=BLUE)])

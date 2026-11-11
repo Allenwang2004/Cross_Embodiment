@@ -11,26 +11,24 @@
   models/                      every XML the videos use; the G1's with its meshes at their relative paths
   replay.py, README.md
 Every .npz holds qpos (frames x nq) and fps (30). Cameras and colours are the ones the survey videos were made with
-(outputs/survey_preview/spec_*.json, scripts/body_overlay.py, scripts/robot_overlay.py).
+(outputs/survey_preview/spec_*.json, scripts/body_overlay.py, scripts/robot_overlay.py): crossenbodiment.palette (GHOST / RED / BLUE),
+crossenbodiment.camera (robot_overlay, body_overlay); the clip folders are crossenbodiment.clips.ClipBundle's (OOP refactor step 10).
 usage: uv run python scripts/package_survey.py
 """
 import json, re, shutil, sys
 from pathlib import Path
-import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
 from model.robots import ROBOTS, target_path                     # noqa: E402
 from crossenbodiment.survey import ADULT, BODY, CLIPS, run_of   # noqa: E402  survey_body_videos' (refactor step 4)
+from crossenbodiment.camera import body_overlay, robot_overlay   # noqa: E402  (refactor step 10)
+from crossenbodiment.clips import ClipBundle                     # noqa: E402
+from crossenbodiment import paths                                # noqa: E402
+from crossenbodiment.palette import BLUE, GHOST, RED             # noqa: E402
 
-TOP = REPO / "outputs/user_survey"; PREV = REPO / "outputs/survey_preview"
-GHOST, RED, BLUE = [0.55, 0.57, 0.62, 0.35], [0.85, 0.22, 0.20, 1.0], [0.18, 0.42, 0.85, 1.0]
+TOP = paths.write_path("outputs/user_survey"); PREV = paths.read_path("outputs/survey_preview")
 G1_SEARCH = "outputs/user_survey_search/g1_ridge"
-
-
-def save(src, dst):
-    q = np.load(REPO / src)["qpos"].astype(np.float32)
-    np.savez_compressed(dst, qpos=q, fps=np.float32(30)); return len(q)
 
 
 def models():
@@ -62,8 +60,8 @@ def clip(body, stem, mdl):
     adult = f"data/origin_motion/{task}/{stem}.npz"
     # the side-by-side spec must be the one the video was drawn from
     assert [p["qpos"] for p in spec["panels"]] == [adult, f"{run}/origin_z.npz", f"{run}/best.npz"], (body, stem)
-    n = {k: save(s, d / f"{k}.npz") for k, s in (("reference_adult", adult), ("reference_body", ref_body),
-                                                  ("z0", f"{run}/origin_z.npz"), ("best", f"{run}/best.npz"))}
+    b = ClipBundle.from_files(stem, body, dict(reference_adult=adult, reference_body=ref_body, z0=f"{run}/origin_z.npz", best=f"{run}/best.npz"))
+    n = {k: len(v) for k, v in b.qpos.items()}
     tr = spec["track"]
     sbs = dict(size=spec["size"], camera=dict(distance=tr["distance"], elevation=tr["elevation"], azimuth=tr["azimuth"],
                                               lookat_z=tr["lookat_z"]),
@@ -72,17 +70,12 @@ def clip(body, stem, mdl):
                        dict(model=mdl[body], qpos="best.npz", rgba=spec["panels"][2]["rgba"])])
     if body == "g1":         # scripts/robot_overlay.py (track camera): framed by the G1's size, materials kept
         size = json.loads((target_path("g1", stem).parent / "summary.json").read_text())["s"] / 0.8213
-        ovl = dict(model=mdl["g1"], root=ROBOTS["g1"]["root"], flat=False,
-                   camera=dict(distance=3.3 * size, elevation=-12, azimuth=140, lookat_z=0.7 * size))
+        ovl = dict(model=mdl["g1"], root=ROBOTS["g1"]["root"], flat=False, camera=robot_overlay(size).to_track())
     else:                    # scripts/body_overlay.py as survey_body_videos.py calls it
-        ko = BODY[body]["h"] / 1.26
-        ovl = dict(model=mdl[body], root="Pelvis", flat=True,
-                   camera=dict(distance=float(f"{3.1 * ko:.2f}"), elevation=-12, azimuth=140, lookat_z=float(f"{0.5 * ko:.2f}")))
+        ovl = dict(model=mdl[body], root="Pelvis", flat=True, camera=body_overlay(BODY[body]["h"]).to_track())
     ovl.update(width=1920, height=1080, layers=[dict(qpos="reference_body.npz", rgba=GHOST), dict(qpos="z0.npz", rgba=RED),
                                                dict(qpos="best.npz", rgba=BLUE)])
-    meta = dict(clip=stem, body=body, fps=30, frames=n, search_run=run,
-                side_by_side=sbs, overlay=ovl)
-    (d / "video.json").write_text(json.dumps(meta, indent=1))
+    b.meta.update(search_run=run, side_by_side=sbs, overlay=ovl); b.save(d)
     return n
 
 

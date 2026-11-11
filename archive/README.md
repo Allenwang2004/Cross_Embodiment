@@ -173,6 +173,20 @@ the other scripts name them). One file is archived:
 |---|---|---|
 | scripts/torque_scale_actuators.py | the library of the torque calibration (choose_k, symmetrize_k, mirror checks, scale_line, verify, joint_targets, closed_loop, write_scaled_xml) plus a CLI writing robots_torque.xml from ONE clip's k (outputs/torque_ratio_per_joint/<clip>/_ratios.csv) | the library moved verbatim to crossenbodiment/bodybuild/torque.py (TorqueCalibrator; robot_torque_full.xml of len0.8_wid1.2 and the child re-made byte-identical, tests/golden/verify_bodies.py); the one-clip CLI is the route torque_aggregate_motion_k.py replaced (the aggregate over every motion), its robots_torque.xml / robots_torque_move_only.xml are stale (docs/new_body.md); its only importer, torque_aggregate_motion_k.py, uses the package; no .sh / queue script launches it |
 
+## Step 10: the visualisation layer (2026-11-12)
+
+The Blender / video / figure scripts are built on crossenbodiment's palette, figstyle, camera, clips, blender, strobe, video and sheet
+modules now (tests/golden/verify_vis.py, tests/test_vis.py). One file is archived:
+
+| file | what it was | why archived (2026-11-12) |
+|---|---|---|
+| scripts/export_strobe_blender.py | Blender panels of the 12 user-survey picks (outputs/strobe_task52_blender_picks, from the strobe_figures recipes) + their overview pages; its `clip_panels` was the recipe -> panels code body_all_blender.py and payload_fall_candidates.py imported | superseded by strobe_final_blender.py (outputs/strobe_task52_blender, the user's final picks, 11/10); `clip_panels` / `path_heading` / `DX` moved to crossenbodiment/strobe.py (recipe_panels, path_heading, RECIPE_DX: limit_leg_all52/blender/scene.json re-made identical), its overview to crossenbodiment/sheet.py ContactSheet; no .py / .sh of the worktree and no queue script of the main tree (`outputs/**/*.sh`, `*.cmds`) launches it; its only importers were body_all_blender.py, payload_fall_candidates.py (ported) and archive/scripts/payload_all_blender.py |
+
+Kept, not generated from the package: scripts/survey_replay.py (the survey's standalone replay.py, copied into outputs/user_survey by
+package_survey.py; it needs only mujoco, numpy and imageio): tests/test_vis.py shows crossenbodiment.video.VideoRenderer draws the same
+scenes as its side_by_side / overlay. scripts/render_blender.py stays one standalone file (it renders a scene folder without the
+repository); it ignores scene.json's new "version" field. strobe_figures/ (its own replay) unchanged.
+
 ## Candidates kept (PLAN.md list, 2026-11-11)
 
 model/bodies.py (imported by strength_rollout.py and write_body_splits.py), write_body_splits.py (docs/new_body.md Step 1 tells
@@ -181,7 +195,7 @@ kept with model/simple, see below), rollout_z_on_body.py (single_z_search.py's d
 select_clips.py (writes top_clips.json, read by package_survey_picks.py), strobe_figures/replay.py (part of the self-contained
 strobe_figures bundle, listed in its README), scripts/survey_replay.py (package_survey.py copies it into the survey),
 model/networks.py (removing its unused heads is a code edit, not a move); g1_overlay.py, g1_amass_video.py and the rest of the
-G1 line (step 7: archived, above), export_strobe_blender.py (step 10).
+G1 line (step 7: archived, above), export_strobe_blender.py (step 10: archived, above).
 
 Step 4 (2026-11-11) moved `compute_batch_cost` and the settings single_z_search.py read from model/simple into
 crossenbodiment/align_cost.py (model/simple/train.py re-exports it; rollout_z_trace.py, rank_initial_cost.py and score_z_matrix.py

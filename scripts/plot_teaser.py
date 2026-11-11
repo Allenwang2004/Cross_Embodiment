@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """plot_teaser.py -- the paper's teaser (single-column page, 5.5 in wide): one adult motion, one latent space, a searched latent per physical condition. The search paths on the sphere are schematic.
 Rollouts are the survey's recorded ones (outputs/user_survey), nothing is re-simulated. Payload walks move-ego-0-2_4, the others move-ego-0-2_2: same task, different clip.
+The panels (conditions, titles, clips, frames, scale) are in configs/figures/teaser.yaml, the colours in crossenbodiment/palette.py
+(CONDITIONS, INK["paper"]), the style and canvas in crossenbodiment/figstyle.py (OOP refactor step 10). Figures are written to
+$CE_FIGURES_ROOT (default docs/figures); the renders and cut-outs they draw are read from docs/figures.
 
   render   bodies as cut-outs on one scale: docs/figures/teaser_parts/<name>_<frame>.png
   draw     docs/figures/teaser_figure.{pdf,svg,png}
@@ -9,28 +12,36 @@ Rollouts are the survey's recorded ones (outputs/user_survey), nothing is re-sim
 
 usage: MUJOCO_EGL_DEVICE_ID=2 MUJOCO_GL=egl uv run python scripts/plot_teaser.py render | draw | band | band_grey"""
 import json, sys
+from functools import partial
 from pathlib import Path
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
+import yaml
 from matplotlib.colors import to_rgb
 from matplotlib.patches import Arc, Circle, FancyArrowPatch, FancyBboxPatch
 from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from figure_bodies import BG, BODY_RGBA, place, poses                # noqa: E402
+sys.path.insert(1, str(Path(__file__).resolve().parent.parent))
+from crossenbodiment import paths                                     # noqa: E402
+from crossenbodiment.figstyle import FigureStyle, box as _box, txt as _txt   # noqa: E402
+from crossenbodiment.palette import ACCENTS, CONDITIONS, INK, hex_rgba01   # noqa: E402
 
-REPO = Path(__file__).resolve().parent.parent; OUT = REPO / "docs/figures"; PARTS = OUT / "teaser_parts"; RENDERS = OUT / "blender_renders"; S = REPO / "outputs/user_survey"
-FRAMES = (100, 112, 124); INK, MUTED, RULE = "#22252a", "#62666e", "#a4a7ad"
-AMBER, RED, BLUE, GREEN = "#e39a00", "#d6322e", "#2a78d6", "#1baf7a"
-WALK2, WALK4 = "move-ego-0-2_2", "move-ego-0-2_4"
-PANELS = [("payload", "Payload (+38 kg)", "heavy_arm", WALK4, AMBER), ("joint", "Restricted joint", "limit_leg", WALK2, RED), ("child", "Reshaped body", "child", WALK2, BLUE), ("g1", "Robot (G1)", "g1", WALK2, GREEN)]
-U_PER_M = 55.0
+REPO = Path(__file__).resolve().parent.parent; FIG = paths.FIGURES; PARTS = FIG / "teaser_parts"; RENDERS = FIG / "blender_renders"; S = paths.read_path("outputs/user_survey")
+CFG = yaml.safe_load((paths.FIGURE_CONFIGS / "teaser.yaml").read_text())
+FRAMES = tuple(CFG["frames"]); INK_, MUTED, RULE = INK["paper"]["ink"], INK["paper"]["muted"], INK["paper"]["rule"]
+AMBER, RED = ACCENTS["payload"]["hex"], ACCENTS["locked_leg"]["hex"]
+WALK2, WALK4 = CFG["walk2"], CFG["walk4"]
+PANELS = [(p["key"], p["title"], p["body"], CFG[p["clip"]], CONDITIONS[p["key"]]) for p in CFG["panels"]]
+U_PER_M = CFG["units_per_m"]
+STYLE = FigureStyle.paper()
 
 
 def to_rgba(h):
-    return tuple(int(h[i:i + 2], 16) / 255 for i in (1, 3, 5)) + (1,)
+    return hex_rgba01(h)
 
 
 def cutouts(name, xml, qpos, payload=False, red_leg=False):
@@ -45,7 +56,7 @@ def cutouts(name, xml, qpos, payload=False, red_leg=False):
         m.geom_rgba[m.ngeom - 1] = to_rgba(AMBER); painted.append(m.ngeom - 1)
     if red_leg:
         for g in range(m.ngeom):
-            if m.body(m.geom_bodyid[g]).name in ("R_Hip", "R_Knee", "R_Ankle", "R_Toe"):
+            if m.body(m.geom_bodyid[g]).name in ACCENTS["locked_leg"]["bodies"]:
                 m.geom_rgba[g] = to_rgba(RED); painted.append(g)
     return poses(m, q, FRAMES, PARTS, name, painted=painted)
 
@@ -68,23 +79,19 @@ def search_path(seed, bow, m=15):
 
 def draw():
     meta = json.loads((PARTS / "meta.json").read_text())
-    plt.rcParams.update({"font.family": "STIXGeneral", "mathtext.fontset": "stix", "pdf.fonttype": 42, "svg.fonttype": "none"})
-    W, H = 550, 312; fig = plt.figure(figsize=(W / 100, H / 100)); ax = fig.add_axes([0, 0, 1, 1]); ax.set_xlim(0, W); ax.set_ylim(0, H); ax.axis("off"); FS, SM = 9.5, 8.0
-
-    def txt(x, y, s, size=FS, color=INK, ha="center", va="center", **k):
-        ax.text(x, y, s, fontsize=size, color=color, ha=ha, va=va, zorder=8, **k)
-
-    def box(x0, y0, x1, y1, ec=INK, lw=0.9, z=1, r=6):
-        ax.add_patch(FancyBboxPatch((x0, y0), x1 - x0, y1 - y0, boxstyle=f"round,pad=0,rounding_size={r}", fc="none", ec=ec, lw=lw, zorder=z))
+    STYLE.apply()
+    W, H = 550, 312; fig, ax = FigureStyle.canvas(W, H); FS, SM = 9.5, 8.0
+    txt = partial(_txt, ax, size=FS, color=INK_, zorder=8)
+    box = partial(_box, ax, ec=INK_)
 
     def frame(x0, y0, x1, y1, title, ec, name, base):
         """a grey frame, its label as in ReActor, three poses of the walk getting darker, the last at the true colour."""
-        bg = FancyBboxPatch((x0, y0), x1 - x0, y1 - y0, boxstyle="round,pad=0,rounding_size=6", fc=BG, ec=ec, lw=1.0, zorder=2); ax.add_patch(bg); cx, dx = (x0 + x1) / 2, 33
+        bg = FancyBboxPatch((x0, y0), x1 - x0, y1 - y0, boxstyle="round,pad=0,rounding_size=6", fc=BG, ec=ec, lw=1.0, zorder=2); ax.add_patch(bg); cx, dx = (x0 + x1) / 2, CFG["pose_dx_u"]
         png = RENDERS / f"teaser_{name}.png"
         if png.exists():                       # the Blender render, when there is one (scripts/export_blender_package.py)
             ax.imshow(np.asarray(Image.open(png).convert("RGB")), extent=(x0, x1, y0, y1), zorder=2.2, interpolation="lanczos", aspect="auto").set_clip_path(bg)
         else:
-            for i, (t, k) in enumerate(zip(FRAMES, (0.58, 0.3, 0.0))):
+            for i, (t, k) in enumerate(zip(FRAMES, CFG["tints"])):
                 place(ax, PARTS, meta, name, t, cx + (i - 1) * dx, base, U_PER_M, tint=k, z=4 + i * 0.1, clip=bg)
         txt(x0 + 8, y1 - 11, title, size=SM + 0.5, ha="left", bbox=dict(boxstyle="round,pad=0.28,rounding_size=0.5", fc="white", ec="none", alpha=0.8))
 
@@ -95,11 +102,11 @@ def draw():
     cx, cy, R = 340, 234, 60
     n = 900; yy, xx = np.mgrid[1:-1:n * 1j, -1:1:n * 1j]; rr = np.hypot(xx + 0.28, yy - 0.3); shade = np.clip(0.99 - 0.17 * rr ** 2, 0, 1); al = (np.hypot(xx, yy) <= 1).astype(float)
     ax.imshow(np.dstack([shade, shade, shade * 1.005, al]).clip(0, 1), extent=(cx - R, cx + R, cy - R, cy + R), zorder=1.5, aspect="auto", interpolation="bilinear")
-    ax.add_patch(Circle((cx, cy), R, fc="none", ec=INK, lw=0.9, zorder=2))
+    ax.add_patch(Circle((cx, cy), R, fc="none", ec=INK_, lw=0.9, zorder=2))
     dash = dict(ec=RULE, lw=0.55, ls=(0, (1.5, 2)), zorder=2.1)
     ax.add_patch(Arc((cx, cy), 2 * R, 2 * R * 0.34, theta1=180, theta2=360, **dash)); ax.add_patch(Arc((cx, cy), 2 * R * 0.42, 2 * R, theta1=-90, theta2=90, **dash)); ax.add_patch(Arc((cx, cy + 28), 2 * R * 0.87, 2 * R * 0.28, theta1=180, theta2=360, **dash))
-    z0 = np.array([cx - 6, cy + 30.0]); ax.add_patch(Circle(z0, 3.4, fc=INK, ec="white", lw=0.5, zorder=7)); txt(z0[0] + 2, z0[1] + 10, r"$z_0$", size=FS + 0.5)
-    ax.add_patch(FancyArrowPatch((170, 240), (z0[0] - 4, z0[1] - 0.5), arrowstyle="-|>", mutation_scale=8, lw=1.0, color=INK, shrinkA=0, shrinkB=0, zorder=6))
+    z0 = np.array([cx - 6, cy + 30.0]); ax.add_patch(Circle(z0, 3.4, fc=INK_, ec="white", lw=0.5, zorder=7)); txt(z0[0] + 2, z0[1] + 10, r"$z_0$", size=FS + 0.5)
+    ax.add_patch(FancyArrowPatch((170, 240), (z0[0] - 4, z0[1] - 0.5), arrowstyle="-|>", mutation_scale=8, lw=1.0, color=INK_, shrinkA=0, shrinkB=0, zorder=6))
     ends = {"payload": ((cx - 40, cy - 16), 0.22), "joint": ((cx - 15, cy - 38), 0.16), "child": ((cx + 13, cy - 40), -0.16), "g1": ((cx + 40, cy - 13), -0.24)}; xs = {"payload": 73, "joint": 208, "child": 342, "g1": 477}; TOP = 150; base = 34
     for i, (key, _, _, _, c) in enumerate(PANELS):
         e, side = ends[key]; e = np.array(e, float); d = e - z0; n = np.array([d[1], -d[0]]) * np.sign(side)
@@ -116,31 +123,28 @@ def draw():
     box(6, 6, 544, 162, ec=RULE, lw=0.8, z=0.5, r=7); txt(275, 15, "Target (changed physical conditions)")
     for key, title, _, _, c in PANELS:
         frame(xs[key] - 64, 25, xs[key] + 64, TOP, title, c, key, base)
-    for f in ("pdf", "svg", "png"):                                # dpi sets the resolution of the bodies in the PDF and SVG too
-        fig.savefig(OUT / f"teaser_figure.{f}", facecolor="white", dpi=600)
-    print(OUT / "teaser_figure.png")
+    FigureStyle.save(fig, paths.figures_root() / "teaser_figure", facecolor="white", dpi=600)   # dpi sets the resolution of the bodies in the PDF and SVG too
+    print(paths.figures_root() / "teaser_figure.png")
 
 
 def draw_band():
     """the teaser as one band, as in ReActor's Fig. 1: the Blender render of panel teaser_band with a label over each body. docs/figures/teaser_band.{pdf,svg,png}."""
-    p = json.loads((REPO / "outputs/blender_package/scene.json").read_text())["panels"]["teaser_band"]
-    plt.rcParams.update({"font.family": "STIXGeneral", "mathtext.fontset": "stix", "pdf.fonttype": 42, "svg.fonttype": "none"})
-    W, LAB = 550, 13; IM = W * p["height_m"] / p["width_m"]; fig = plt.figure(figsize=(W / 100, (IM + LAB) / 100)); ax = fig.add_axes([0, 0, 1, 1]); ax.set_xlim(0, W); ax.set_ylim(0, IM + LAB); ax.axis("off")
+    p = json.loads(paths.read_path("outputs/blender_package/scene.json").read_text())["panels"]["teaser_band"]
+    STYLE.apply()
+    W, LAB = 550, 13; IM = W * p["height_m"] / p["width_m"]; fig, ax = FigureStyle.canvas(W, IM + LAB)
     im = np.asarray(Image.open(RENDERS / "teaser_band.png").convert("RGB")).copy(); im[im.min(2) >= 251] = 255; im[[0, -1]] = 255; im[:, [0, -1]] = 255          # the denoiser leaves specks on the white
     ax.imshow(im, extent=(0, W, 0, IM), zorder=1, interpolation="lanczos", aspect="auto")
     for g in p["groups"]:
-        ax.text(W / 2 + g["x_m"] / p["width_m"] * W, IM + LAB / 2 - 1, g["label"], fontsize=8.0, color=INK, ha="center", va="center", zorder=2)
-    for f in ("pdf", "svg", "png"):
-        fig.savefig(OUT / f"teaser_band.{f}", facecolor="white", dpi=600)
-    print(OUT / "teaser_band.pdf")
+        ax.text(W / 2 + g["x_m"] / p["width_m"] * W, IM + LAB / 2 - 1, g["label"], fontsize=8.0, color=INK_, ha="center", va="center", zorder=2)
+    FigureStyle.save(fig, paths.figures_root() / "teaser_band", facecolor="white", dpi=600)
+    print(paths.figures_root() / "teaser_band.pdf")
 
 
 def draw_band_grey():
     """the band on ReActor's grey floor, no labels, nothing but the render: docs/figures/teaser_band_grey.{pdf,svg,png}."""
     im = np.asarray(Image.open(RENDERS / "teaser_band_grey.png").convert("RGB")); W, H = 5.5, 5.5 * im.shape[0] / im.shape[1]; fig = plt.figure(figsize=(W, H)); ax = fig.add_axes([0, 0, 1, 1]); ax.axis("off"); ax.imshow(im, interpolation="lanczos", aspect="auto")
-    for f in ("pdf", "svg", "png"):
-        fig.savefig(OUT / f"teaser_band_grey.{f}", facecolor="white", dpi=600)
-    print(OUT / "teaser_band_grey.pdf")
+    FigureStyle.save(fig, paths.figures_root() / "teaser_band_grey", facecolor="white", dpi=600)
+    print(paths.figures_root() / "teaser_band_grey.pdf")
 
 
 if __name__ == "__main__":

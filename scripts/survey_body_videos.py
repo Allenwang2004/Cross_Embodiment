@@ -22,6 +22,7 @@ from pathlib import Path
 # run lookup use it); the package is found from this file.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from crossenbodiment import survey as _survey                                                    # noqa: E402
+from crossenbodiment.camera import body_overlay as overlay_view, survey_track                    # noqa: E402  (step 10)
 from crossenbodiment.palette import BLUE, GREY, RED                                              # noqa: E402,F401
 from crossenbodiment.survey import ADULT, ADULT_H, BODY, CLIPS, SUFFIXES                         # noqa: E402,F401
 
@@ -37,18 +38,17 @@ def render(name, stem, only):
     b = BODY[name]; task = stem.rsplit("_", 1)[0]; run = run_of(name, stem)
     root = REPO / "outputs/user_survey" / name
     sbs, ovl = root / "side_by_side" / f"{stem}.mp4", root / "overlay" / f"{stem}.mp4"
-    k = max(b["h"], ADULT_H) / 1.26                                   # side by side: frame the taller of adult and body
     spec = dict(out=str(sbs.relative_to(REPO)), cols=3, size=1080, captions=False,
-                track=dict(distance=round(2.8 * k, 2), elevation=-12, azimuth=140, lookat_z=round(0.55 * k, 2)),
+                track=survey_track(b["h"], ADULT_H).to_track(),              # side by side: frame the taller of adult and body
                 panels=[dict(xml=ADULT, qpos=f"data/origin_motion/{task}/{stem}.npz", rgba=GREY),
                         dict(xml=b["xml"], qpos=f"{run}/origin_z.npz", rgba=RED),
                         dict(xml=b["xml"], qpos=f"{run}/best.npz", rgba=BLUE)])
     sp = PREV / f"spec_{name}_{stem}.json"; sp.write_text(json.dumps(spec, indent=1))
-    ko = b["h"] / 1.26
+    ov = overlay_view(b["h"])                                          # the child's 3.1 m / 0.5 m scaled by stature
     jobs = {"side_by_side": (["uv", "run", "python", "scripts/render_panels.py", str(sp)], sbs),
             "overlay": (["uv", "run", "python", "scripts/body_overlay.py", "--xml", b["xml"], "--clean", "--out", str(ovl),
                          "--traj", f"reference={b['ref']}/{task}/{stem}.npz", "--traj", f"z0={run}/origin_z.npz",
-                         "--traj", f"search={run}/best.npz", "--distance", f"{3.1 * ko:.2f}", "--lookat-z", f"{0.5 * ko:.2f}"], ovl)}
+                         "--traj", f"search={run}/best.npz", "--distance", f"{ov.distance:.2f}", "--lookat-z", f"{ov.lookat_z:.2f}"], ovl)}
     msgs = []
     for kind, (cmd, out) in jobs.items():
         if only and kind != only:

@@ -11,8 +11,9 @@ import numpy as np
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
 from crossenbodiment.geometry import sphere16   # noqa: E402  16 z / |z| (refactor step 3)
 import eval_metrics as E                                                  # noqa: E402
-INK, MUTED, GRID, SURF = "#1f1e1c", "#6b6a64", "#e4e3de", "#fcfcfb"
-ALGOS = [("es", "ES (ours)", "#2a78d6"), ("cem", "CEM", "#eb6834"), ("random", "Random search", "#1baf7a")]
+from crossenbodiment.palette import INK as _INK, Palette                 # noqa: E402  (refactor step 10: this figure's own colours, VARIANTS "algo_compare")
+INK, MUTED, GRID, SURF = (_INK["dataviz"][k] for k in ("ink", "muted", "grid", "surface"))
+ALGOS = [(a, Palette.label(k, "algo_compare"), Palette.hex(k, "algo_compare")) for a, k in (("es", "loes"), ("cem", "cem"), ("random", "random"))]
 
 
 def main():

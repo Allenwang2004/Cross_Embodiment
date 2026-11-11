@@ -1,5 +1,5 @@
-"""draw.py -- small PIL / MuJoCo-camera drawing helpers shared by the render scripts (OOP refactor step 4, unchanged; step 10 builds
-the visualisation layer on them).
+"""draw.py -- small PIL / MuJoCo-camera drawing helpers shared by the render scripts (OOP refactor step 4; step 10 builds the
+visualisation layer on them: project is crossenbodiment.camera.project now, frame_label is VideoRenderer's bitmap title band).
 
 From scripts/rollout_z_trace.py (render_panels.py and render_seed_bests.py imported it from there):
   frame_label(frame, text, sub=None)   rollout_z_trace.label: a 26 px light title band with PIL's bitmap font burnt into a video
@@ -59,16 +59,10 @@ def font(size):
 
 
 def project(r, pts, W, H):
-    """world points -> pixel (u, v) through the renderer's current camera (pinhole, symmetric frustum)."""
-    c = r.scene.camera[0]
-    f, up = np.array(c.forward), np.array(c.up); right = np.cross(f, up)
-    k = c.frustum_near / c.frustum_top
-    out = []
-    for p in pts:
-        v = np.asarray(p) - np.array(c.pos)
-        z = v @ f
-        out.append((W / 2 + (v @ right) / z * k * H / 2, H / 2 - (v @ up) / z * k * H / 2))
-    return out
+    """world points -> pixel (u, v) through the renderer's current camera (pinhole, symmetric frustum): crossenbodiment.camera.project
+    since step 10 (the one copy of this formula)"""
+    from .camera import project as _project
+    return _project(r, pts, W, H)
 
 
 def label(img, lines, size=22):

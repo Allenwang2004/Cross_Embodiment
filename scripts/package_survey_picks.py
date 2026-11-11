@@ -11,18 +11,20 @@ best = its best latent's rollout after 2,048 rollouts (outputs/g1_52/<clip>_es_s
 reference_body: the G1 target (the clip mapped onto the G1), the adult's motion (payload), the motion with the right leg
 bent (limited leg) -- each body's search target. Frames are aligned as the evaluation aligns them (rollout frame t against
 the reference's frame t + 1): the references start at their second frame and every file has the reference's frame count
-minus one. Models, colours and cameras: those of the body's earlier survey folder (g1/, heavy_arm/, limit_leg/).
+minus one (crossenbodiment.clips.ClipBundle.from_run, OOP refactor step 10). Models, colours and cameras: those of the body's earlier
+survey folder (g1/, heavy_arm/, limit_leg/).
 usage: uv run python scripts/package_survey_picks.py [--no-render]
 """
 import hashlib, json, subprocess, sys
 from pathlib import Path
-import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 from model.robots import target_path                                  # noqa: E402
+from crossenbodiment.clips import ClipBundle                          # noqa: E402
+from crossenbodiment import paths                                     # noqa: E402
 
-TOP = REPO / "outputs/user_survey"
+TOP = paths.write_path("outputs/user_survey")
 BODIES = dict(  # folder: (earlier survey folder, results dir, run dir, reference_body, the run's model, the survey's copy)
     g1_task52=("g1", "outputs/g1_52", "outputs/g1_52/{c}_es_s0", None, "assets/robots/g1/g1.xml", "models/g1/g1.xml"),
     heavy_arm_task52=("heavy_arm", "outputs/body_52/payload", "outputs/body_52/payload/{c}_es_s0", "data/origin_motion/{t}/{c}.npz",
@@ -40,27 +42,19 @@ def package(folder):
     old, res, run_t, ref_t, xml, copy = BODIES[folder]
     assert md5(REPO / xml) == md5(TOP / copy), (folder, "the survey's model copy differs from the run's model")
     template = json.loads(next((TOP / old / "trajectories").glob("*/video.json")).read_text())
-    top = json.loads((REPO / res / "top_clips.json").read_text())
+    top = json.loads((paths.read_path(res) / "top_clips.json").read_text())
     out = []
     for rank, r in enumerate(top["top5"], 1):
         c = r["clip"]; t = c.rsplit("_", 1)[0]; run = run_t.format(c=c)
-        refs = dict(reference_adult=f"data/origin_motion/{t}/{c}.npz",
-                    reference_body=str(target_path("g1", c).relative_to(REPO)) if ref_t is None else ref_t.format(t=t, c=c))
-        q = {k: np.load(REPO / v)["qpos"][1:] for k, v in refs.items()}
-        n = len(q["reference_body"]); assert len(q["reference_adult"]) == n
-        for k, f in (("z0", "origin_z.npz"), ("best", "best.npz")):
-            q[k] = np.load(REPO / run / f)["qpos"]; assert len(q[k]) >= n, (c, k, len(q[k]), n); q[k] = q[k][:n]
-        d = TOP / folder / "trajectories" / c; d.mkdir(parents=True, exist_ok=True)
-        for k, v in q.items():
-            np.savez_compressed(d / f"{k}.npz", qpos=v.astype(np.float32), fps=np.float32(30))
-        meta = dict(clip=c, body=folder, fps=30, frames={k: len(v) for k, v in q.items()}, search_run=run,
-                    selection=dict(rank=rank, rule=top["rule"], z0_passes_success=bool(r["z0_phc_ok"]),
-                                   mpjpe_cm=dict(z0=round(r["frozen_mpjpe"], 2), best=round(r["es_mpjpe"], 2)),
-                                   success=dict(z0=bool(r["frozen_success"]), best=bool(r["es_success"])),
-                                   fall_time_s=dict(z0=round(r["frozen_fall_s"], 2), best=round(r["es_fall_s"], 2))),
-                    side_by_side=template["side_by_side"], overlay=template["overlay"])
-        (d / "video.json").write_text(json.dumps(meta, indent=1))
-        out.append((c, n, bool(r["z0_phc_ok"])))
+        b = ClipBundle.from_run(c, folder, run=run, reference_adult=f"data/origin_motion/{t}/{c}.npz", same_length=True, at_least=True,
+                                reference_body=str(target_path("g1", c).relative_to(REPO)) if ref_t is None else ref_t.format(t=t, c=c),
+                                selection=dict(rank=rank, rule=top["rule"], z0_passes_success=bool(r["z0_phc_ok"]),
+                                               mpjpe_cm=dict(z0=round(r["frozen_mpjpe"], 2), best=round(r["es_mpjpe"], 2)),
+                                               success=dict(z0=bool(r["frozen_success"]), best=bool(r["es_success"])),
+                                               fall_time_s=dict(z0=round(r["frozen_fall_s"], 2), best=round(r["es_fall_s"], 2))),
+                                side_by_side=template["side_by_side"], overlay=template["overlay"])
+        b.save(TOP / folder / "trajectories" / c)
+        out.append((c, b.n, bool(r["z0_phc_ok"])))
     return out
 
 

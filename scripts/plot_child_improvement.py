@@ -18,6 +18,9 @@ ranked by that gain; values cached in outputs/child_52_rerun/phc_reward.json (z0
 docs/figures/child_improvement_bars_phc.*
 --short: abbreviated task names (short()); --rot 90: vertical labels (spacing = label height, more motions fit).
 Legend: our method is "Ours" (user, 11/10). Both bar parts have the same 0.6 pt blue outline, so the solid and hatched parts are equally wide.
+Colours: crossenbodiment/palette.py (Palette.hex("loes"), INK["bars"]); style and save: crossenbodiment/figstyle.py (OOP refactor
+step 10). Runs are read through crossenbodiment.paths.read_path ($CE_OUTPUTS_ROOT); a missing PHC cache is written next to LOES's runs
+under $CE_RESULTS_ROOT; the figure goes to $CE_FIGURES_ROOT (default docs/figures).
 usage: uv run python scripts/plot_child_improvement.py [--width 5.5] [--font 10] [--n N] [--metric mpjpe|phc] [--short] [--rot 45|90]   (N: fewer motions than the maximum)"""
 import argparse, math
 from pathlib import Path
@@ -27,12 +30,17 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 
-REPO = Path(__file__).resolve().parent.parent; OUT = REPO / "docs/figures"
+REPO = Path(__file__).resolve().parent.parent
+import sys as _sys
+_sys.path.insert(0, str(REPO))
+from crossenbodiment import paths                                   # noqa: E402
+from crossenbodiment.figstyle import FigureStyle                    # noqa: E402
+from crossenbodiment.palette import INK as _INK, Palette            # noqa: E402
 # --loes-dir: where LOES's runs are (default the anchored outputs/child_52_rerun; outputs/noanchor/child = LOES without the anchor term,
 # user 11/11); z0 and CEM stay the same runs. The PHC cache is written next to LOES's runs.
-import sys as _sys
-LOES = REPO / (_sys.argv[_sys.argv.index("--loes-dir") + 1] if "--loes-dir" in _sys.argv else "outputs/child_52_rerun")
-BLUE, TINT, INK, MUTED, GRID = "#2a78d6", "#d4e4f7", "#0b0b0b", "#52514e", "#e6e6e3"
+LOES_REL = _sys.argv[_sys.argv.index("--loes-dir") + 1] if "--loes-dir" in _sys.argv else "outputs/child_52_rerun"
+LOES = paths.read_path(LOES_REL)
+BLUE = Palette.hex("loes"); TINT, INK, MUTED, GRID = (_INK["bars"][k] for k in ("tint", "ink", "muted", "grid"))
 GAP = 1.5                                                    # pt between adjacent rotated labels
 SIN = math.sin(math.radians(45))
 ABBR = (("move-ego-low-", "mvl-"), ("move-ego-", "mv-"), ("raisearms", "ra"), ("rotate-", "rot-"), ("lieonground-", "lie-"), ("sitonground", "sit"))
@@ -52,22 +60,22 @@ def phc_one(c):
     import json, sys, mujoco
     sys.path.insert(0, str(REPO)); from model.phc_reward import PHCCost
     st = c.split("/")[1]; m = mujoco.MjModel.from_xml_path(str(REPO / "assets/robots_torque/child/robot_torque_full.xml"))
-    ref = np.load(REPO / f"data/child/retargeting_motion/{c}.npz")["qpos"].astype(np.float64); S0 = json.load(open(REPO / f"outputs/child_52_cem_phc/{st}_cem_s0/summary.json"))
+    ref = np.load(REPO / f"data/child/retargeting_motion/{c}.npz")["qpos"].astype(np.float64); S0 = json.load(open(paths.read_path(f"outputs/child_52_cem_phc/{st}_cem_s0/summary.json")))
     cost = PHCCost(m, ref[0], ref[1:], scale=S0["pos_div"])
     loes = [1 - float(cost(np.load(LOES / f"{st}_es_s{s}/best.npz")["qpos"].astype(np.float64)[None], ref[0])[0]) for s in range(5)]
-    cem = [1 - json.load(open(REPO / f"outputs/child_52_cem_phc/{st}_cem_s{s}/summary.json"))["best"]["cost"] for s in range(5)]
-    z0 = 1 - float(cost(np.load(REPO / f"outputs/child_52_rerun/{st}_es_s0/origin_z.npz")["qpos"].astype(np.float64)[None], ref[0])[0])
+    cem = [1 - json.load(open(paths.read_path(f"outputs/child_52_cem_phc/{st}_cem_s{s}/summary.json")))["best"]["cost"] for s in range(5)]
+    z0 = 1 - float(cost(np.load(paths.read_path(f"outputs/child_52_rerun/{st}_es_s0/origin_z.npz"))["qpos"].astype(np.float64)[None], ref[0])[0])
     assert abs(z0 - (1 - S0["origin_z"]["cost"])) < 1e-6, (c, z0, S0["origin_z"]["cost"])          # same z0 rollout and scoring as CEM's search
     return st, dict(z0=z0, loes=loes, cem=cem)
 
 
 def phc_data():
     import json
-    f = LOES / "phc_reward.json"
+    f = paths.own_path(f"{LOES_REL}/phc_reward.json")
     if not f.exists():
         from multiprocessing import Pool
-        import sys; sys.path.insert(0, str(REPO)); from crossenbodiment.paths import CHILD_52_TASK, read_clips   # configs/clips/child_52_task.txt = outputs/child_52/clips.txt (refactor step 4)
-        clips = read_clips(CHILD_52_TASK)
+        from crossenbodiment.paths import CHILD_52_TASK, read_clips   # configs/clips/child_52_task.txt = outputs/child_52/clips.txt (refactor step 4)
+        clips = read_clips(CHILD_52_TASK); f = paths.write_path(f"{LOES_REL}/phc_reward.json")
         with Pool(16) as p:
             f.write_text(json.dumps(dict(p.map(phc_one, clips)), indent=1))
     return json.load(open(f))
@@ -77,7 +85,7 @@ def data(metric="mpjpe"):
     if metric == "phc":                                       # higher is better: ranked by LOES's gain over z0 (5-seed mean)
         D = phc_data(); names = list(D); z0 = np.array([D[c]["z0"] for c in names]); es = np.array([np.mean(D[c]["loes"]) for c in names])
         o = np.argsort(-(es - z0)); return [names[j].rsplit("_", 1)[0] for j in o], z0[o], es[o]
-    z = np.load(REPO / "outputs/child_52_rerun/per_run.npz", allow_pickle=True); i = list(z["keys"]).index("mpjpe")
+    z = np.load(paths.read_path("outputs/child_52_rerun/per_run.npz"), allow_pickle=True); i = list(z["keys"]).index("mpjpe")
     names = [str(c).split("/")[0] for c in z["clips"]]; z0 = z["z0"][:, i].astype(float); es = z["best_es"][:, :, -1, i].mean(1).astype(float)
     assert z["best_es"].shape[2] == 64                       # 64 generations x 16 = 1,024 rollouts
     o = np.argsort(-(z0 - es))
@@ -109,8 +117,8 @@ def main():
     a = argparse.ArgumentParser(); a.add_argument("--width", type=float, default=5.5); a.add_argument("--font", type=float, default=10.0)
     a.add_argument("--n", type=int, default=None); a.add_argument("--metric", choices=["mpjpe", "phc"], default="mpjpe")
     a.add_argument("--short", action="store_true"); a.add_argument("--rot", type=float, default=45.0); a.add_argument("--loes-dir", default="outputs/child_52_rerun"); a = a.parse_args()
-    plt.rcParams.update({"font.family": "STIXGeneral", "mathtext.fontset": "stix", "font.size": a.font, "pdf.fonttype": 42, "ps.fonttype": 42,
-                         "axes.edgecolor": MUTED, "xtick.color": MUTED, "ytick.color": MUTED, "axes.labelcolor": INK, "hatch.linewidth": 0.8})
+    FigureStyle.paper({"font.size": a.font, "ps.fonttype": 42, "axes.edgecolor": MUTED, "xtick.color": MUTED, "ytick.color": MUTED, "axes.labelcolor": INK,
+                       "hatch.linewidth": 0.8}, svg=False).apply()
     labels, z0, es = data(a.metric); W = a.width; phc = a.metric == "phc"
     if a.short:
         labels = [short(x) for x in labels]; assert len(set(labels)) == len(labels)
@@ -142,9 +150,8 @@ def main():
         if bb.x0 < -0.5 or bb.y0 < -0.5 or bb.x1 > W * fig.dpi + 0.5 or bb.y1 > H * fig.dpi + 0.5:
             bad.append(t.get_text())
     print("text outside the figure:", bad or "none", f"| figure {W:.2f} x {H:.2f} in")
-    stem = OUT / (("child_improvement_bars_phc" if phc else "child_improvement_bars") + ("_short" if a.short else "") + ("" if a.rot == 45 else f"_rot{a.rot:g}"))
-    for ext in ("pdf", "png", "svg"):
-        fig.savefig(f"{stem}.{ext}", dpi=300 if ext == "png" else None)
+    stem = paths.figures_root() / (("child_improvement_bars_phc" if phc else "child_improvement_bars") + ("_short" if a.short else "") + ("" if a.rot == 45 else f"_rot{a.rot:g}"))
+    FigureStyle.save(fig, stem, formats=("pdf", "png", "svg"), dpi={"png": 300})
     for lab, a_, b_ in zip(labels[:n], z0[:n], es[:n]):
         print(f"  {lab:30s} z0 {a_:6.3f}  LOES {b_:6.3f}  gain {b_ - a_:6.3f}" if phc else f"  {lab:30s} z0 {a_:6.2f}  LOES {b_:6.2f}  gain {a_ - b_:6.2f} cm")
 

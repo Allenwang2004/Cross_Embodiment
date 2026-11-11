@@ -12,62 +12,56 @@ Look: scripts/render_blender.py (Cycles), one body colour fading from light (ear
 Out: outputs/walk_bodies/blender/{scene.json, meshes.npz, render_blender.py, renders/} and outputs/walk_bodies/walk_bodies_rows.png
 (rows bottom-up, a label column on the left).
 usage: uv run python scripts/walk_bodies_blender.py [export] [render] [combine] [--samples 128] [--threads 32] [--step 30]"""
-import json, math, os, shutil, subprocess, sys
+import json, math, sys
 from pathlib import Path
 import numpy as np
 
-REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO / "scripts"))
-import export_blender_package as E                                        # noqa: E402
-import mujoco                                                             # noqa: E402
+REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO))
+from crossenbodiment import paths                                         # noqa: E402
+from crossenbodiment.blender import BlenderScene, body_height as height, load_model   # noqa: E402
+from crossenbodiment.camera import BLENDER_AZIMUTH                        # noqa: E402
+from crossenbodiment.sheet import font                                    # noqa: E402
+from crossenbodiment.strobe import fade_tints                             # noqa: E402
 
 ARG = lambda k, d: type(d)(sys.argv[sys.argv.index(k) + 1]) if k in sys.argv else d
 SAMPLES = ARG("--samples", 128); THREADS = ARG("--threads", 32); STEP = ARG("--step", 30)
-CLIP = "move-ego-0-2/move-ego-0-2_1"; W_RUN = REPO / "outputs/walk_bodies"; OUT = W_RUN / "blender"
+CLIP = "move-ego-0-2/move-ego-0-2_1"; W_REL = "outputs/walk_bodies"; W_RUN = paths.write_path(W_REL); OUT = W_RUN / "blender"
 BODIES = ["len0.6_wid0.8", "len0.6_wid1.2", "child", "len0.8_wid0.8", "len0.8_wid1.2", "len1.2_wid0.8", "len1.2_wid1.2", "len1.4_wid0.8", "len1.4_wid1.2"]
-AZ, MARGIN, IMG_W = 125.0, 0.8, 3000                                      # the renderer's camera azimuth; metres around; image width (px)
-
-
-def height(m):
-    d = mujoco.MjData(m); mujoco.mj_forward(m, d)
-    z = [(d.geom_xpos[g][2] + m.geom_rbound[g], d.geom_xpos[g][2] - m.geom_rbound[g]) for g in range(m.ngeom) if m.geom_bodyid[g] > 0]
-    return max(a for a, _ in z) - min(b for _, b in z)
+AZ, MARGIN, IMG_W = BLENDER_AZIMUTH, 0.8, 3000                            # the renderer's camera azimuth; metres around; image width (px)
 
 
 def export():
-    rows = []
+    rows = []; sc = BlenderScene()
     for b in BODIES:
-        m = E.load(REPO / f"assets/robots_torque/{b}/robot_torque_full.xml")
-        q = np.load(W_RUN / f"{b}_es_s0/best.npz")["qpos"].astype(np.float64); ref = np.load(REPO / f"data/{b}/retargeting_motion/{CLIP}.npz")["qpos"]
+        m = load_model(REPO / f"assets/robots_torque/{b}/robot_torque_full.xml")
+        q = np.load(paths.read_path(f"{W_REL}/{b}_es_s0/best.npz"))["qpos"].astype(np.float64); ref = np.load(REPO / f"data/{b}/retargeting_motion/{CLIP}.npz")["qpos"]
         v = ref[-1, :2] - ref[0, :2]; a = math.atan2(v[1], v[0]); dhat = np.array([math.cos(a), math.sin(a)])
         frames = list(range(0, len(q), STEP)); dist = [(q[t, :2] - q[0, :2]) @ dhat for t in frames]
         rows.append(dict(body=b, m=m, q=q, frames=frames, dist=dist, h=height(m), heading=a + math.radians(90.0 - AZ)))
     rows.sort(key=lambda r: r["h"])
     lo = min(min(r["dist"]) for r in rows) - MARGIN; hi = max(max(r["dist"]) for r in rows) + MARGIN; W = hi - lo; pxpm = IMG_W / W
-    P = {}
     for r in rows:
-        n = len(r["frames"]); poses = []
-        for i, (t, x) in enumerate(zip(r["frames"], r["dist"])):
-            p = E.pose(r["m"], r["q"], t, 0.0, 0.62 * (1 - i / (n - 1)), r["heading"], False, "human"); p["shift"] = float(x - (lo + hi) / 2); poses.append(p)
+        poses = []
+        for (t, x), k in zip(zip(r["frames"], r["dist"]), fade_tints(len(r["frames"]))):
+            p = sc.pose(r["m"], r["q"], t, 0.0, k, r["heading"], False, "human"); p["shift"] = float(x - (lo + hi) / 2); poses.append(p)
         H = 1.25 * r["h"] + 0.3
-        P[r["body"]] = dict(figure="walk", width_m=W, height_m=H, feet_m=0.18, px=[IMG_W, round(H * pxpm)], white=True, cam_distance=60.0, poses=poses)
-    OUT.mkdir(parents=True, exist_ok=True); (OUT / "scene.json").write_text(json.dumps(dict(panels=P, order=[r["body"] for r in rows],
-        info={r["body"]: dict(height_m=r["h"], mass_kg=float(r["m"].body_subtreemass[1]), walked_m=float(r["dist"][-1] - r["dist"][0]), frames=r["frames"]) for r in rows})))
-    np.savez_compressed(OUT / "meshes.npz", _=np.zeros(1), **E.meshes); shutil.copy(REPO / "scripts/render_blender.py", OUT / "render_blender.py")
+        sc.add_panel(r["body"], dict(figure="walk", width_m=W, height_m=H, feet_m=0.18, px=[IMG_W, round(H * pxpm)], white=True, cam_distance=60.0, poses=poses))
+    sc.extra.update(order=[r["body"] for r in rows],
+                    info={r["body"]: dict(height_m=r["h"], mass_kg=float(r["m"].body_subtreemass[1]), walked_m=float(r["dist"][-1] - r["dist"][0]), frames=r["frames"]) for r in rows})
+    sc.write(OUT, placeholder=True)
     for r in rows:
         print(f"{r['body']:14s} height {r['h']:.2f} m  walked {r['dist'][-1] - r['dist'][0]:5.1f} m along the reference direction  ({len(r['frames'])} poses)")
     print(f"scene {W:.1f} m wide, {pxpm:.0f} px/m", flush=True)
 
 
 def render():
-    subprocess.run(["uv", "run", "--no-project", "--python", "3.11", "--with", "bpy", "python", "render_blender.py", "--", "--samples", str(SAMPLES),
-                    "--device", "CPU", "--threads", str(THREADS), "--out", "renders"], cwd=OUT, env=dict(os.environ, OMP_NUM_THREADS="1"), check=True,
-                   stdout=open(OUT / "render.log", "w"), stderr=subprocess.STDOUT)
+    BlenderScene.render(OUT, samples=SAMPLES, threads=THREADS, out="renders")
 
 
 def combine():
-    from PIL import Image, ImageDraw, ImageFont
-    sc = json.loads((OUT / "scene.json").read_text()); order = sc["order"]; F = ImageFont.truetype("DejaVuSans.ttf", 30); FS = ImageFont.truetype("DejaVuSans.ttf", 24)
-    ims = [Image.open(OUT / "renders" / f"{b}.png").convert("RGB") for b in order]; LW = 330
+    from PIL import Image, ImageDraw
+    sc = json.loads(paths.own_path(f"{W_REL}/blender/scene.json").read_text()); order = sc["order"]; F = font(30); FS = font(24); R = paths.own_path(f"{W_REL}/blender/renders")
+    ims = [Image.open(R / f"{b}.png").convert("RGB") for b in order]; LW = 330
     out = Image.new("RGB", (LW + IMG_W, sum(im.height for im in ims)), "white"); dr = ImageDraw.Draw(out); y = out.height
     for b, im in zip(order, ims):                                         # smallest at the bottom
         y -= im.height; out.paste(im, (LW, y)); i = sc["info"][b]

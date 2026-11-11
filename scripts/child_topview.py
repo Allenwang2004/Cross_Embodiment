@@ -17,16 +17,22 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-REPO = Path(__file__).resolve().parent.parent; OUT = REPO / "outputs/child_all52"; T = OUT / "trajectories"
+# (topview.md quotes this docstring, so notes go here.) OOP refactor step 10: colours / labels from crossenbodiment/palette.py; the
+# trajectories and index.md are read where child_all_blender.py wrote them (crossenbodiment.paths.own_path), outputs go under
+# $CE_RESULTS_ROOT (default outputs/).
+REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
+from crossenbodiment import paths                              # noqa: E402
 from crossenbodiment.geometry import facing                    # noqa: E402  root yaw - 90 deg (refactor step 3)
-LINES = (("reference_body", "Reference", "#1a1a1a", "-", 2.0), ("z0", r"$z_0$", "#8c8b87", "--", 1.4),
-         ("cem", "BFM-Zero", "#1baf7a", "-", 1.6), ("best", "Ours", "#2a78d6", "-", 1.6))
+from crossenbodiment.palette import INK, Palette               # noqa: E402
+OUT = paths.write_path("outputs/child_all52"); T = paths.own_path("outputs/child_all52/trajectories")
+LINES = tuple((f, Palette.label(k), Palette.hex(k), ls, lw) for f, k, ls, lw in
+              (("reference_body", "ref", "-", 2.0), ("z0", "z0", "--", 1.4), ("cem", "cem", "-", 1.6), ("best", "loes", "-", 1.6)))
 EVERY = 60                                                     # facing arrows every 2 s (30 fps)
 
 
 def order():
-    return [m.group(2) for m in re.finditer(r"^\| (\d+) \| `([^`]+)` \|", (OUT / "index.md").read_text(), re.M)]
+    return [m.group(2) for m in re.finditer(r"^\| (\d+) \| `([^`]+)` \|", paths.own_path("outputs/child_all52/index.md").read_text(), re.M)]
 
 
 def load(c):
@@ -49,10 +55,10 @@ def panel(ax, c, num, Q, M, small=False):
         ax.quiver(q[idx, 0], q[idx, 1], L * np.cos(f), L * np.sin(f), color=col, angles="xy", scale_units="xy", scale=1, width=0.006,
                   headwidth=4, headlength=5, zorder=4)
         ax.plot(q[-1, 0], q[-1, 1], "o", color=col, ms=4 if small else 5, zorder=5)
-    ax.plot(Q["reference_body"][0, 0], Q["reference_body"][0, 1], "s", color="#1a1a1a", ms=4 if small else 5, mfc="white", zorder=6)
+    ax.plot(Q["reference_body"][0, 0], Q["reference_body"][0, 1], "s", color=Palette.hex("ref"), ms=4 if small else 5, mfc="white", zorder=6)
     mid = (lo + hi) / 2; h = 0.5 * span * 1.12
     ax.set_xlim(mid[0] - h, mid[0] + h); ax.set_ylim(mid[1] - h, mid[1] + h); ax.set_aspect("equal")
-    ax.grid(True, color="#ececea", lw=0.5); ax.tick_params(labelsize=7 if small else 8)
+    ax.grid(True, color=INK["curves"]["grid_all"], lw=0.5); ax.tick_params(labelsize=7 if small else 8)
     fs = 8 if small else 10
     ax.set_title(f"#{num} {c}\ndrift m: z0 {M['z0']['drift']:.2f} | BFM-Zero {M['cem']['drift']:.2f} | Ours {M['best']['drift']:.2f}\n"
                  f"heading err deg: z0 {M['z0']['head']:.0f} | BFM-Zero {M['cem']['head']:.0f} | Ours {M['best']['head']:.0f}", fontsize=fs)
@@ -60,7 +66,7 @@ def panel(ax, c, num, Q, M, small=False):
 
 def main():
     plt.rcParams.update({"font.family": "DejaVu Sans"})
-    clips = order(); assert len(clips) == 52, len(clips); D = {c: load(c) for c in clips}
+    clips = order(); assert len(clips) == 52, len(clips); D = {c: load(c) for c in clips}; OUT.mkdir(parents=True, exist_ok=True)
     note = "square = start, dot = end, arrows = facing every 2 s; seed 0"
     for p in range(0, 52, 9):
         cs = clips[p:p + 9]; fig, axs = plt.subplots(3, 3, figsize=(15, 16.2)); axs = axs.ravel()

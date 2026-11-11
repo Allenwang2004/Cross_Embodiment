@@ -5,29 +5,38 @@ seemed to do better).
 
 Runs, seed 0 (the figures' seed): LOES = outputs/child_52_rerun/<clip>_es_s0 (our cost, best after 1,024 rollouts), z0 = its origin_z rollout,
 CEM (BFM-Zero) = outputs/child_52_cem_phc/<clip>_cem_s0 (BFM-Zero's tracking reward, best after 1,024). Trajectories in the survey
-alignment (references from their second frame), made by scripts/strobe_final_blender.py's trajectories() / add_cem().
+alignment (references from their second frame), packaged by crossenbodiment.clips.ClipBundle (as scripts/strobe_final_blender.py's
+"child_52" source + its CEM panel).
 Frames: 6 poses; where z0 falls mid-motion (pelvis below half the child target's, starting after frame 45, at least 9 frames), 15 apart
-from 40 frames before that fall, as scripts/body_all_blender.py; otherwise evenly over the clip. One fixed view (azimuth 140), no heading
-alignment. Preview quality (96 samples, 0.6 x resolution).
+from 40 frames before that fall, as scripts/body_all_blender.py; otherwise evenly over the clip (crossenbodiment.strobe around_fall /
+whole_clip). One fixed view (azimuth 140), no heading alignment. Preview quality (96 samples, 0.6 x resolution).
 Order: by CEM's MPJPE minus LOES's (seed 0), largest first (where LOES beats CEM most). Metrics (seed 0 and the 5-seed means) from
 outputs/child_52_rerun/per_run.npz (z0, LOES) and outputs/child_52_cem_phc/per_run.npz (CEM), q[t] against ref[t + 1].
-Out: outputs/child_all52/{overview_<k>.jpg (9 motions a page), index.md, renders/, trajectories/, scene.json}.
+Out: outputs/child_all52/{overview_<k>.jpg (9 motions a page), index.md, renders/, trajectories/, scene.json} (crossenbodiment.sheet
+ContactSheet / write_index_md for the pages).
 usage: uv run python scripts/child_all_blender.py [export] [render] [pages]   (none: all three); --threads N, --labels zstar,... for render
 11/10: LOES first drawn from outputs/child_52 (the older runs, scored one frame late) by mistake; re-made from outputs/child_52_rerun."""
-import json, os, subprocess, sys
+import json, sys
 from pathlib import Path
 import numpy as np
 
-REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO / "scripts"))
+REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO / "scripts")); sys.path.insert(1, str(REPO))
 import strobe_final_blender as F                                         # noqa: E402
+from crossenbodiment import paths                                        # noqa: E402
+from crossenbodiment.blender import BlenderScene                         # noqa: E402
+from crossenbodiment.clips import CHILD_TARGET, ClipBundle, task_of      # noqa: E402
+from crossenbodiment.palette import Palette                              # noqa: E402
+from crossenbodiment.sheet import ContactSheet, write_index_md           # noqa: E402
+from crossenbodiment.strobe import around_fall, mid_falls, whole_clip   # noqa: E402
 
-OUT = REPO / "outputs/child_all52"; N, STEP, BEFORE, START, MINLEN, ROWS = 6, 15, 40, 45, 9, 9
+OUT_REL = "outputs/child_all52"; OUT = paths.write_path(OUT_REL); N, STEP, BEFORE, START, MINLEN, ROWS = 6, 15, 40, 45, 9, 9
 THREADS = int(sys.argv[sys.argv.index("--threads") + 1]) if "--threads" in sys.argv else 32
-LABELS = (("adult", "reference (adult)"), ("z0", "z0"), ("cem", "CEM (BFM-Zero)"), ("zstar", "LOES (ours)"))
+LABELS = (("adult", Palette.label("adult", "pages")), ("z0", Palette.label("z0", "plain")), ("cem", Palette.label("cem", "pages")),
+          ("zstar", Palette.label("loes", "pages")))
 
 
 def metrics():
-    a = np.load(REPO / "outputs/child_52_rerun/per_run.npz", allow_pickle=True); b = np.load(REPO / "outputs/child_52_cem_phc/per_run.npz", allow_pickle=True)
+    a = np.load(paths.read_path("outputs/child_52_rerun/per_run.npz"), allow_pickle=True); b = np.load(paths.read_path("outputs/child_52_cem_phc/per_run.npz"), allow_pickle=True)
     assert (a["clips"] == b["clips"]).all(); K = list(a["keys"]); M = {}
     for j, c in enumerate(a["clips"]):
         st = str(c).split("/")[1]; v = lambda x: dict(zip(K, [float(y) for y in x]))
@@ -36,80 +45,57 @@ def metrics():
     return M
 
 
-def stretches(below):
-    out, t = [], 0
-    while t < len(below):
-        if below[t]:
-            u = t
-            while u < len(below) and below[u]:
-                u += 1
-            out.append((t, u)); t = u
-        else:
-            t += 1
-    return out
-
-
 def window(d):
+    """the frames shown (from the saved float32 trajectories): around z0's first mid-motion fall, else the whole clip"""
     ref = np.load(d / "reference_body.npz")["qpos"][:, 2]; n = len(ref)
-    mid = {k: [(a, b) for a, b in stretches(np.load(d / f"{f}.npz")["qpos"][:, 2] < 0.5 * ref) if a >= START and b - a >= MINLEN] for k, f in (("z0", "z0"), ("cem", "cem"), ("loes", "best"))}
+    mid = {k: mid_falls(np.load(d / f"{f}.npz")["qpos"][:, 2], ref, START, MINLEN) for k, f in (("z0", "z0"), ("cem", "cem"), ("loes", "best"))}
     if mid["z0"]:
-        a, b = mid["z0"][0]; s = int(np.clip(a - BEFORE, 1, n - 1 - STEP * (N - 1))); return (s, s + STEP * (N - 1), STEP), mid, f"z0's fall at frames {a}-{b}"
-    iv = (n - 2) // (N - 1); return (1, 1 + iv * (N - 1), iv), mid, "whole clip"
+        a, b = mid["z0"][0]; return around_fall(mid["z0"][0], n, N, STEP, BEFORE), mid, f"z0's fall at frames {a}-{b}"
+    return whole_clip(n, N), mid, "whole clip"
 
 
 def export():
-    from crossenbodiment.paths import CHILD_52_TASK, read_clips   # configs/clips/child_52_task.txt = outputs/child_52/clips.txt (refactor step 4)
-    clips = [c.split("/")[1] for c in read_clips(CHILD_52_TASK)]
-    F.OUT = OUT; F.CEM = {f"child_{c}": f"outputs/child_52_cem_phc/{c}_cem_s0" for c in clips}; plan = {}
-    F.EX = []
+    clips = [c.split("/")[1] for c in paths.read_clips(paths.CHILD_52_TASK)]   # configs/clips/child_52_task.txt = outputs/child_52/clips.txt (refactor step 4)
+    plan = {}; sc = BlenderScene(meshes={"_": np.zeros(1)}); todo = []
     for c in clips:                                                       # trajectories first: the window depends on them
-        name = f"child_{c}"; d = F.trajectories(name, "child", c, "child_52"); F.add_cem(name); fr, mid, why = window(d)
-        F.EX.append((name, "child", c, "child_52", fr, "fixed", {})); plan[c] = dict(frames=fr, why=why, mid_falls=mid)
-    F.OUT.mkdir(exist_ok=True); (OUT / "scene.json").write_text(json.dumps(dict(panels={})))
-    np.savez_compressed(OUT / "meshes.npz", _=np.zeros(1)); F.export(only=[e[0] for e in F.EX])       # into the (empty) scene, from the trajectories made above
-    (OUT / "plan.json").write_text(json.dumps(plan, indent=1)); print("exported", len(F.EX), "motions", flush=True)
+        name = f"child_{c}"; d = OUT / "trajectories" / name
+        ClipBundle.from_run(c, "child", run=f"outputs/child_52_rerun/{c}_es_s0", reference_body=f"{CHILD_TARGET}/{task_of(c)}/{c}.npz"
+                            ).add_cem(f"outputs/child_52_cem_phc/{c}_cem_s0").save(d)
+        fr, mid, why = window(d); todo.append((name, c, fr, d)); plan[c] = dict(frames=fr, why=why, mid_falls=mid)
+    for name, c, fr, d in todo:                                           # into one (empty) scene, from the trajectories made above
+        F.example_panels(sc, name, "child", c, fr, "fixed", {}, d)
+    sc.write(OUT); (OUT / "plan.json").write_text(json.dumps(plan, indent=1)); print("exported", len(todo), "motions", flush=True)
 
 
 def render():
-    sel = []                                                              # --labels zstar,...: only these panels (e.g. after re-packaging LOES)
+    sel = None                                                            # --labels zstar,...: only these panels (e.g. after re-packaging LOES)
     if "--labels" in sys.argv:
-        keep = sys.argv[sys.argv.index("--labels") + 1].split(","); sel = sum([["--panel", k] for k in json.load(open(OUT / "scene.json"))["panels"] if k.rsplit("_", 1)[1] in keep], [])
-    subprocess.run(["uv", "run", "--no-project", "--python", "3.11", "--with", "bpy", "python", "render_blender.py", "--", "--samples", "96", "--scale", "0.6",
-                    "--device", "CPU", "--threads", str(THREADS), "--out", "renders"] + sel, cwd=OUT, env=dict(os.environ, OMP_NUM_THREADS="1"), check=True,
-                   stdout=open(OUT / "render.log", "w"), stderr=subprocess.STDOUT)
+        keep = sys.argv[sys.argv.index("--labels") + 1].split(","); sel = [k for k in json.load(open(OUT / "scene.json"))["panels"] if k.rsplit("_", 1)[1] in keep]
+    BlenderScene.render(OUT, samples=96, threads=THREADS, panels=sel, scale=0.6, out="renders")
 
 
 def pages():
-    from PIL import Image, ImageDraw, ImageFont
-    Fn = ImageFont.truetype("DejaVuSans.ttf", 20); Wc, L = 480, 36; plan = json.load(open(OUT / "plan.json")); M = metrics()
+    plan = json.load(open(paths.own_path(f"{OUT_REL}/plan.json"))); M = metrics(); R = paths.own_path(f"{OUT_REL}/renders")
+    OUT.mkdir(parents=True, exist_ok=True)
     order = sorted(plan, key=lambda c: -(M[c]["cem_s0"]["mpjpe"] - M[c]["loes_s0"]["mpjpe"])); lines = []
+    ok = lambda x: "pass" if x["success"] >= 0.5 else "fail"
     for k in range(0, len(order), ROWS):
-        rows = []
-        for c in order[k:k + ROWS]:
-            ims = [Image.open(OUT / "renders" / f"child_{c}_{s}.png").convert("RGB") for s, _ in LABELS]
-            rows.append([im.resize((Wc, round(Wc * im.height / im.width))) for im in ims])
-        sheet = Image.new("RGB", (len(LABELS) * Wc, sum(max(im.height for im in r) for r in rows) + L * (len(rows) + 1)), "white"); dr = ImageDraw.Draw(sheet); y = L
-        for j, (_, lab) in enumerate(LABELS):
-            dr.text((j * Wc + 10, 8), lab, fill=(0, 0, 0), font=Fn)
-        for i, (c, row) in enumerate(zip(order[k:k + ROWS], rows)):
+        sheet = ContactSheet([lab for _, lab in LABELS], col_width=480, label_h=36, font_size=20, row_height="max", quality=88)
+        for i, c in enumerate(order[k:k + ROWS]):
             m, p, num = M[c], plan[c], k + i + 1; a, b, st = p["frames"]
-            ok = lambda x: "pass" if x["success"] >= 0.5 else "fail"
-            dr.text((10, y + 6), f"#{num} {c} | MPJPE z0 {m['z0']['mpjpe']:.1f}, CEM {m['cem_s0']['mpjpe']:.1f}, LOES {m['loes_s0']['mpjpe']:.1f} cm | PHC z0 {ok(m['z0'])}, "
-                                 f"CEM {ok(m['cem_s0'])}, LOES {ok(m['loes_s0'])} | frames {a}-{b}", fill=(0, 0, 0), font=Fn)
-            for j, im in enumerate(row):
-                sheet.paste(im, (j * Wc, y + L))
-            y += L + max(im.height for im in row)
+            sheet.add_row(f"#{num} {c} | MPJPE z0 {m['z0']['mpjpe']:.1f}, CEM {m['cem_s0']['mpjpe']:.1f}, LOES {m['loes_s0']['mpjpe']:.1f} cm | PHC z0 {ok(m['z0'])}, "
+                          f"CEM {ok(m['cem_s0'])}, LOES {ok(m['loes_s0'])} | frames {a}-{b}", [R / f"child_{c}_{s}.png" for s, _ in LABELS])
             lines.append(f"| {num} | `{c}` | {m['z0']['mpjpe']:.2f} | {m['cem_s0']['mpjpe']:.2f} | {m['loes_s0']['mpjpe']:.2f} | {m['cem_mean']['mpjpe']:.2f} | "
                          f"{m['loes_mean']['mpjpe']:.2f} | {ok(m['z0'])} | {ok(m['cem_s0'])} | {ok(m['loes_s0'])} | {m['z0']['fall_s']:.2f} | {m['cem_s0']['fall_s']:.2f} | "
                          f"{m['loes_s0']['fall_s']:.2f} | {a}-{b} ({p['why']}) | overview_{k // ROWS + 1}.jpg |")
-        sheet.save(OUT / f"overview_{k // ROWS + 1}.jpg", quality=88); print("page", k // ROWS + 1, sheet.size, flush=True)
-    (OUT / "index.md").write_text(
-        "# Child, all 52 task motions: z0, CEM (BFM-Zero), LOES\n\nSeed 0 (the figures): LOES's and CEM's best latents after 1,024 rollouts "
-        "(outputs/child_52_rerun/<clip>_es_s0, outputs/child_52_cem_phc/<clip>_cem_s0); 5-seed means alongside. Ordered by CEM's MPJPE minus LOES's (seed 0), "
-        "largest first. PHC success: mean body error never above 0.5 m adult-equivalent. Fall: seconds with a non-foot body on the floor while the "
-        "reference's is not. Frames: survey alignment (references from their second frame).\n\n"
-        "| # | clip | MPJPE z0 | MPJPE CEM s0 | MPJPE LOES s0 | MPJPE CEM 5-seed | MPJPE LOES 5-seed | z0 PHC | CEM PHC | LOES PHC | fall z0 s | fall CEM s | "
-        "fall LOES s | frames shown | page |\n|" + "---|" * 15 + "\n" + "\n".join(lines) + "\n")
+        im = sheet.save(OUT / f"overview_{k // ROWS + 1}.jpg"); print("page", k // ROWS + 1, im.size, flush=True)
+    write_index_md(OUT / "index.md", "Child, all 52 task motions: z0, CEM (BFM-Zero), LOES",
+                   "Seed 0 (the figures): LOES's and CEM's best latents after 1,024 rollouts "
+                   "(outputs/child_52_rerun/<clip>_es_s0, outputs/child_52_cem_phc/<clip>_cem_s0); 5-seed means alongside. Ordered by CEM's MPJPE minus LOES's (seed 0), "
+                   "largest first. PHC success: mean body error never above 0.5 m adult-equivalent. Fall: seconds with a non-foot body on the floor while the "
+                   "reference's is not. Frames: survey alignment (references from their second frame).",
+                   ["#", "clip", "MPJPE z0", "MPJPE CEM s0", "MPJPE LOES s0", "MPJPE CEM 5-seed", "MPJPE LOES 5-seed", "z0 PHC", "CEM PHC", "LOES PHC",
+                    "fall z0 s", "fall CEM s", "fall LOES s", "frames shown", "page"], lines)
 
 
 if __name__ == "__main__":

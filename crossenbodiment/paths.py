@@ -20,6 +20,8 @@ the environment says otherwise:
                     writable(): inside REPO only, so pointing CE_OUTPUTS_ROOT at another tree without CE_RESULTS_ROOT fails instead
                     of writing there (printing commands still works)
 The command lines keep their repository-relative "outputs/..." spellings (they run with the repository as cwd).
+Visualisation scripts (step 10) use the same two roots: read_path("outputs/...") for what they read, write_path("outputs/...")
+for what they write, and figures_root() ($CE_FIGURES_ROOT, default docs/figures) for the paper figures.
 """
 import os
 from pathlib import Path
@@ -146,6 +148,45 @@ def output(rel=""):
 def result(rel=""):
     """an analysis path to WRITE: results_root() / rel (parents are created by the writers)"""
     return results_root() / rel
+
+
+def read_path(rel):
+    """a repository-relative INPUT path as the visualisation scripts spell it (step 10): "outputs/<x>" -> outputs_root() / <x>
+    ($CE_OUTPUTS_ROOT, e.g. the main tree's outputs, read only); anything else (data/, assets/, docs/) -> REPO / rel; an absolute
+    path is returned as it is"""
+    p = Path(rel)
+    if p.is_absolute():
+        return p
+    return outputs_root().joinpath(*p.parts[1:]) if p.parts[:1] == (OUTPUTS_REL,) else REPO / p
+
+
+def write_path(rel):
+    """a repository-relative OUTPUT path of a visualisation script: "outputs/<x>" -> results_root() / <x>; anything else -> REPO / rel;
+    checked by writable() (inside the repository)"""
+    p = Path(rel)
+    p = results_root().joinpath(*p.parts[1:]) if p.parts[:1] == (OUTPUTS_REL,) else (p if p.is_absolute() else REPO / p)
+    return writable(p)
+
+
+def own_path(rel):
+    """a script's own earlier output (rendered panels, plan.json, index.md) to READ: under the results root if it is there, else under
+    the read root (so a script can re-make its pages in the worktree from the main tree's renders)"""
+    p = Path(rel)
+    w = results_root().joinpath(*p.parts[1:]) if p.parts[:1] == (OUTPUTS_REL,) else REPO / p
+    return w if w.exists() else read_path(rel)
+
+
+FIGURES_REL = "docs/figures"                 # the paper figures; their inputs (blender_renders/, *_parts/) are read from here
+FIGURES = REPO / FIGURES_REL
+FIGURES_ROOT_ENV = "CE_FIGURES_ROOT"
+FIGURE_CONFIGS = REPO / "configs/figures"   # strobe_examples.yaml, teaser.yaml, method.yaml: the figures' examples and panels
+
+
+def figures_root():
+    """where the figure scripts WRITE their figures: $CE_FIGURES_ROOT (inside the repository), else REPO/docs/figures. Their inputs
+    (blender_renders/, teaser_parts/, method_parts/) are always read from REPO/docs/figures."""
+    v = os.environ.get(FIGURES_ROOT_ENV)
+    return writable(Path(v)) if v else FIGURES
 
 
 def clips_file(name):

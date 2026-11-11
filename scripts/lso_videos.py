@@ -16,6 +16,7 @@ REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 from crossenbodiment.survey import ADULT, ADULT_H   # noqa: E402  survey_body_videos' (refactor step 4)
 from crossenbodiment.palette import BLUE, GREY, RED   # noqa: E402  survey_body_videos' (refactor step 4)
+from crossenbodiment.camera import survey_track   # noqa: E402  the survey's side-by-side camera (refactor step 10)
 
 
 def main():
@@ -24,7 +25,7 @@ def main():
     ap.add_argument("--xml", default="assets/robots_torque/child/robot_torque_full.xml")
     ap.add_argument("--height", type=float, default=1.26, help="the body's stature (m); child 1.26")
     a = ap.parse_args()
-    k = max(a.height, ADULT_H) / 1.26                                 # the child's camera (2.8 m / 0.55 m) scaled
+    track = survey_track(a.height, ADULT_H).to_track()                # the child's camera (2.8 m / 0.55 m) scaled
     for run in a.runs:
         d = REPO / run; s = json.loads((d / "summary.json").read_text()); res = s["results"]
         r = np.load(d / "rollouts.npz")
@@ -39,7 +40,7 @@ def main():
         rel = lambda p: str(p.relative_to(REPO))
         lso = f"LSO{' with ranks' if s.get('rank') else ''}, best of {s['iters']} iterations"
         spec = dict(out=rel(d / "compare.mp4"), cols=3, size=1080,
-                    track=dict(distance=round(2.8 * k, 2), elevation=-12, azimuth=140, lookat_z=round(0.55 * k, 2)),
+                    track=dict(track),
                     panels=[dict(title="adult, original motion", sub=Path(s["ref"]).stem, xml=ADULT, qpos=adult, rgba=GREY),
                             dict(title="Motivo zero-shot tracking (window L=8)", sub=cap(res["ER L=8 (Motivo zero-shot)"]),
                                  xml=a.xml, qpos=rel(d / "q_ER8.npz"), rgba=RED),

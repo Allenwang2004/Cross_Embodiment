@@ -11,13 +11,14 @@ drawn with mjv_addGeoms from assets/robots/g1/g1.xml, whose meshes match scene.x
 Default runs for --search <dir>: target / z0 (<dir>/origin_z.npz) / the searched z (<dir>/best.npz), labelled with
 bfm, fallen frames and end-point error from <dir>/compare/compare.json when it exists.
 Writes <dir>/compare/overlay.mp4 (1920 x 1080) and overlay.mp4.png (three moments).
+OOP refactor step 10: the legend, painting, projection and writer are crossenbodiment.video / camera's (shared with body_overlay.py
+and render_panels.py), the colours crossenbodiment.palette.OVERLAY.
 usage: MUJOCO_EGL_DEVICE_ID=2 uv run python scripts/robot_overlay.py --robot h1 --clip jump-2/jump-2_8 --search outputs/g1/search/jump-2_8_s0
        [--traj "label=path.npz" ...]   (replaces the default runs; the first is the ghost)
 """
 import argparse, json, os
 from pathlib import Path
 os.environ.setdefault("MUJOCO_GL", "egl")
-import imageio
 import mujoco
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
@@ -26,36 +27,17 @@ REPO = Path(__file__).resolve().parent.parent
 import sys
 sys.path.insert(0, str(REPO))
 from model.robots import ROBOTS, target_path   # noqa: E402
-FONT = Path.home() / ".local/share/fonts/NotoSansCJKtc-Regular.otf"
-COLORS = [(0.55, 0.57, 0.62, 0.35), (0.85, 0.22, 0.20, 1.0), (0.18, 0.42, 0.85, 1.0), (0.20, 0.65, 0.30, 1.0),
-          (0.95, 0.60, 0.10, 1.0)]
-W, H = 1920, 1080
-
-
-def legend(img, title, items, px=34):
-    im = Image.fromarray(img); d = ImageDraw.Draw(im)
-    load = (lambda n: ImageFont.truetype(str(FONT), n)) if FONT.exists() else (lambda n: ImageFont.load_default())
-    band = int(px * 1.7) + int(px * 1.25) * len(items)
-    d.rectangle([0, 0, im.width, band], fill=(252, 252, 251))
-    d.text((px // 2, int(px * 0.85)), title, fill=(11, 11, 11), font=load(px), anchor="lm")
-    y = int(px * 1.7)
-    for (label, rgba) in items:
-        c = tuple(int(255 * x) for x in rgba[:3])
-        sq = int(px * 0.8)
-        if rgba[3] < 1:
-            d.rectangle([px // 2, y, px // 2 + sq, y + sq], outline=(90, 90, 95), width=3, fill=(200, 202, 208))
-        else:
-            d.rectangle([px // 2, y, px // 2 + sq, y + sq], fill=c)
-        d.text((px // 2 + sq + px // 2, y + sq // 2), label, fill=(60, 60, 58), font=load(int(px * 0.8)), anchor="lm")
-        y += int(px * 1.25)
-    return np.asarray(im)
+from crossenbodiment.camera import project_point                                  # noqa: E402
+from crossenbodiment.palette import OVERLAY as COLORS                             # noqa: E402
+from crossenbodiment.video import FONT, OVERLAY_SIZE, enlarge_offscreen, legend, paint, write   # noqa: E402,F401
+W, H = OVERLAY_SIZE
 
 
 def split_panels(a, runs, trajs, rob, cfg, cam0, size, head_geoms, floor, T, T_rec, out):
     """--split: one solid robot per 1080 px panel (target grey, then the runs' colours), each camera following its own
     robot with the shared side-on angle; the head ring as in the overlay; a title band per panel."""
     P = 1080
-    rob.vis.global_.offwidth, rob.vis.global_.offheight = max(rob.vis.global_.offwidth, P), max(rob.vis.global_.offheight, P)
+    enlarge_offscreen(rob, P, P)
     r = mujoco.Renderer(rob, height=P, width=P)
     ds = [mujoco.MjData(rob) for _ in trajs]
     root = rob.body(cfg["root"]).id; ft = np.zeros(6)
@@ -73,19 +55,14 @@ def split_panels(a, runs, trajs, rob, cfg, cam0, size, head_geoms, floor, T, T_r
             cam.lookat[:] = [dk.xpos[root][0], dk.xpos[root][1], 0.35 * size]
             r.update_scene(dk, camera=cam)
             col = (*COLORS[k][:3], 1.0)
-            for i in range(r.scene.ngeom):
-                g = r.scene.geoms[i]
-                if g.objtype == mujoco.mjtObj.mjOBJ_GEOM and rob.geom_bodyid[g.objid] != 0:
-                    g.rgba[:] = col
+            paint(rob, r.scene, 0, r.scene.ngeom, col, flat=False)
             img = Image.fromarray(r.render().copy()); dr = ImageDraw.Draw(img)
             if a.mark_head and head_geoms:
                 gap, pt = min(((mujoco.mj_geomDistance(rob, dk, g, floor, 1.0, ft), ft[:3].copy()) for g in head_geoms),
                               key=lambda x: x[0])
                 head_min[k] = min(head_min[k], (100 * gap, t))
                 if k > 0 and 100 * gap < a.mark_head:
-                    c = r.scene.camera[0]; fw, up = np.array(c.forward), np.array(c.up); rt = np.cross(fw, up)
-                    kk = c.frustum_near / c.frustum_top; v = pt - np.array(c.pos); z = v @ fw
-                    u, w = P / 2 + (v @ rt) / z * kk * P / 2, P / 2 - (v @ up) / z * kk * P / 2
+                    u, w = project_point(r, pt, P, P)
                     rc = tuple(int(255 * x) for x in COLORS[k][:3])
                     dr.ellipse([u - 46, w - 46, u + 46, w + 46], outline=rc, width=7)
                     txt = f"head {100 * gap:.1f} cm from the floor"; tw = dr.textlength(txt, font=fnt(34))
@@ -105,7 +82,7 @@ def split_panels(a, runs, trajs, rob, cfg, cam0, size, head_geoms, floor, T, T_r
                                    font=fnt(36), anchor="lm")
         frames.append(np.concatenate([np.asarray(head), row], 0))
     r.close()
-    imageio.mimsave(out, frames, fps=30, quality=8, macro_block_size=8)
+    write(out, frames, fps=30, quality=8, macro_block_size=8)
     ts = sorted({int(T * 0.12), head_min[1][1] if len(head_min) > 1 else T // 2, int(T * 0.85)})
     Image.fromarray(np.concatenate([frames[i] for i in ts], axis=0)).save(str(out) + ".png")
     print("closest head-floor approach per panel (cm, recorded frame):", [(round(g, 1), round(f / a.slow, 2)) for g, f in head_min])
@@ -167,7 +144,7 @@ def main():
     out = Path(a.out) if a.out else sdir / "compare/overlay.mp4"; out.parent.mkdir(parents=True, exist_ok=True)
 
     base = mujoco.MjModel.from_xml_path(str(REPO / cfg["scene"]))
-    base.vis.global_.offwidth, base.vis.global_.offheight = max(base.vis.global_.offwidth, W), max(base.vis.global_.offheight, H)
+    enlarge_offscreen(base, W, H)
     rob = mujoco.MjModel.from_xml_path(str(REPO / cfg["scene"]))
     assert [base.mesh(i).name for i in range(base.nmesh)] == [rob.mesh(i).name for i in range(rob.nmesh)]
     d0 = mujoco.MjData(base); ds = [mujoco.MjData(rob) for _ in trajs[1:]]
@@ -189,9 +166,7 @@ def main():
     head_min = [(np.inf, 0) for _ in trajs[1:]]
 
     def project(p):
-        c = r.scene.camera[0]; f, up = np.array(c.forward), np.array(c.up); right = np.cross(f, up)
-        k = c.frustum_near / c.frustum_top; v = np.asarray(p) - np.array(c.pos); z = v @ f
-        return W / 2 + (v @ right) / z * k * H / 2, H / 2 - (v @ up) / z * k * H / 2
+        return project_point(r, p, W, H)
     items = [(n, COLORS[i]) for i, (n, _) in enumerate(runs)]
     if a.split:
         split_panels(a, runs, trajs, rob, cfg, cam, size, head_geoms, floor, T, T_rec, out)
@@ -202,10 +177,7 @@ def main():
         cam.lookat[:] = [d0.xpos[root][0], d0.xpos[root][1], (0.35 if a.camera == "side" else 0.7) * size]
         r.update_scene(d0, camera=cam)
         scn = r.scene
-        for i in range(scn.ngeom):
-            g = scn.geoms[i]
-            if g.objtype == mujoco.mjtObj.mjOBJ_GEOM and base.geom_bodyid[g.objid] != 0:
-                g.rgba[:] = COLORS[0]
+        paint(base, scn, 0, scn.ngeom, COLORS[0], flat=False)
         rings = []
         for k, dk in enumerate(ds, start=1):
             dk.qpos[:] = trajs[k][t]; mujoco.mj_kinematics(rob, dk)
@@ -218,8 +190,7 @@ def main():
                     rings.append((pt, k, 100 * gap))
             n0 = scn.ngeom
             mujoco.mjv_addGeoms(rob, dk, opt, pert, mujoco.mjtCatBit.mjCAT_DYNAMIC, scn)
-            for i in range(n0, scn.ngeom):
-                scn.geoms[i].rgba[:] = COLORS[k]
+            paint(rob, scn, n0, scn.ngeom, COLORS[k], flat=False, check=False)
         img = r.render().copy()
         if rings:
             im = Image.fromarray(img); dr = ImageDraw.Draw(im)
@@ -234,7 +205,7 @@ def main():
         when = (f"frame {t / a.slow:.2f} of {T_rec}, {1 / a.slow:g}x speed" if a.slow > 1 else f"step {t + 1}/{T}")
         frames.append(img if a.clean else legend(img, f"{a.clip} on the {RN}, {view}  ({when})", items))
     r.close()
-    imageio.mimsave(out, frames, fps=30, quality=8, macro_block_size=8)
+    write(out, frames, fps=30, quality=8, macro_block_size=8)
     ts = [int(T * f) for f in (0.2, 0.5, 0.85)]
     if a.mark_head and np.isfinite(head_min[0][0]):
         ts = sorted({int(T * 0.12), head_min[0][1], int(T * 0.85)})

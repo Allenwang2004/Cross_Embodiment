@@ -6,7 +6,9 @@ only the latent z does. Replaces scripts/plot_method_diagram.py, whose figure st
   draw     docs/figures/method_figure.{pdf,svg,png}
   first    the first layout with Blender bodies: docs/figures/method_figure_first.{pdf,svg,png}, and method_figure_first_no_loes without the word LOES
 
-Change the rollouts in SOURCES when the final searches exist.
+Change the rollouts in configs/figures/method.yaml (cutouts: the MuJoCo cut-outs; blender: the Blender panels) when the final searches
+exist. Colours: crossenbodiment/palette.py INK["paper"]; style, canvas and the txt / arrow helpers: crossenbodiment/figstyle.py (OOP
+refactor step 10). Figures are written to $CE_FIGURES_ROOT (default docs/figures); renders and cut-outs are read from docs/figures.
 usage: MUJOCO_EGL_DEVICE_ID=2 MUJOCO_GL=egl uv run python scripts/plot_method_figure.py render | draw | simple | first"""
 import json, sys
 from pathlib import Path
@@ -14,45 +16,51 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.patches import Arc, Circle, FancyArrowPatch, FancyBboxPatch, Polygon, Rectangle
+import yaml
+from functools import partial
+from matplotlib.patches import Arc, Circle, FancyBboxPatch, Polygon, Rectangle
 from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from figure_bodies import BG, BODY_RGBA, place, poses                # noqa: E402
+sys.path.insert(1, str(Path(__file__).resolve().parent.parent))
+from crossenbodiment import paths                                     # noqa: E402
+from crossenbodiment.figstyle import FigureStyle, arrow as _arrow, txt as _txt   # noqa: E402
+from crossenbodiment.palette import INK as _INK                       # noqa: E402
 
-REPO = Path(__file__).resolve().parent.parent; OUT = REPO / "docs/figures"; RENDERS = OUT / "blender_renders"; PARTS = OUT / "method_parts"
-RUN = "move-ego-0-4_8"; STAND = 165; RESULT = (60, 102, 144, 186, 228, 270)
-INK, MUTED, RULE, FROZEN, ACCENT, ACCENT_BG = "#22252a", "#62666e", "#a4a7ad", "#e4e5e7", "#d2601a", "#fbe9dc"
-SOURCES = {
-    "adult": dict(xml="assets/robots/adult/robot.xml", qpos=f"outputs/user_survey/child/trajectories/{RUN}/reference_adult.npz"),
-    "child": dict(xml="assets/robots_torque/child/robot_torque_full.xml", qpos=f"outputs/user_survey/child/trajectories/{RUN}/best.npz"),
-    "g1": dict(xml="assets/robots/g1/scene.xml", qpos=f"outputs/user_survey/g1/trajectories/{RUN}/best.npz"),
-}
-U_PER_M = 42.0                                  # figure units (0.01 in) per metre of body
+REPO = Path(__file__).resolve().parent.parent; RENDERS = paths.FIGURES / "blender_renders"; PARTS = paths.FIGURES / "method_parts"
+CFG = yaml.safe_load((paths.FIGURE_CONFIGS / "method.yaml").read_text())
+RUN = CFG["run"]; STAND = CFG["stand"]; RESULT = tuple(CFG["result"])
+INK, MUTED, RULE, FROZEN, ACCENT, ACCENT_BG = (_INK["paper"][k] for k in ("ink", "muted", "rule", "frozen", "accent", "accent_bg"))
+SOURCES = {k: dict(xml=v["xml"], qpos=v["qpos"].format(run=RUN)) for k, v in CFG["cutouts"].items()}
+U_PER_M = CFG["units_per_m"]                    # figure units (0.01 in) per metre of body
+STYLE = FigureStyle.paper()
+
+
+def save(fig, name):
+    """every format at 600 dpi (dpi sets the resolution of the bodies in the PDF and SVG too) into $CE_FIGURES_ROOT"""
+    FigureStyle.save(fig, paths.figures_root() / name, facecolor="white", dpi=600)
+    return paths.figures_root() / name
 
 
 def render():
     import mujoco
     PARTS.mkdir(parents=True, exist_ok=True); meta = {}
     for name, s in SOURCES.items():
-        m = mujoco.MjModel.from_xml_path(str(REPO / s["xml"])); q = np.load(REPO / s["qpos"])["qpos"].astype(np.float64); assert q.shape[1] == m.nq, (name, q.shape, m.nq)
+        m = mujoco.MjModel.from_xml_path(str(REPO / s["xml"])); q = np.load(paths.read_path(s["qpos"]))["qpos"].astype(np.float64); assert q.shape[1] == m.nq, (name, q.shape, m.nq)
         m.geom_rgba[m.geom_bodyid != 0] = BODY_RGBA; meta.update(poses(m, q, sorted({*RESULT, STAND}), PARTS, name)); print(name, "ok", flush=True)
     (PARTS / "meta.json").write_text(json.dumps(meta, indent=1))
 
 
 def draw():
     meta = json.loads((PARTS / "meta.json").read_text())
-    plt.rcParams.update({"font.family": "STIXGeneral", "mathtext.fontset": "stix", "pdf.fonttype": 42, "svg.fonttype": "none"})
-    W, Y0, Y1 = 550, 0, 258; fig = plt.figure(figsize=(W / 100, (Y1 - Y0) / 100)); ax = fig.add_axes([0, 0, 1, 1]); ax.set_xlim(0, W); ax.set_ylim(Y0, Y1); ax.axis("off")
+    STYLE.apply()
+    W, Y0, Y1 = 550, 0, 258; fig, ax = FigureStyle.canvas(W, Y1, Y0)
     FS, SM = 9.0, 8.0
-
-    def txt(x, y, s, size=FS, color=INK, ha="center", va="center", **k):
-        ax.text(x, y, s, fontsize=size, color=color, ha=ha, va=va, zorder=6, **k)
+    txt = partial(_txt, ax, size=FS, color=INK, zorder=6)
 
     def arrow(pts, color=INK, lw=0.9, ls="-", head=True):
-        for a, b in zip(pts[:-2], pts[1:-1]):
-            ax.plot([a[0], b[0]], [a[1], b[1]], color=color, lw=lw, ls=ls, solid_capstyle="round", zorder=3)
-        ax.add_patch(FancyArrowPatch(pts[-2], pts[-1], arrowstyle="-|>" if head else "-", mutation_scale=7, lw=lw, ls=ls, color=color, shrinkA=0, shrinkB=0, zorder=3))
+        _arrow(ax, pts, color, lw, ls=ls, style="-|>" if head else "-")
 
     def frame(x0, y0, x1, y1, title, poses_, right=False, label=True):
         """a grey frame, its label as in ReActor; poses_: (name, frame, x, feet[, tint])."""
@@ -102,23 +110,17 @@ def draw():
     # ---- result
     arrow([(30, py - 24), (30, 100)], color=ACCENT, lw=1.5); txt(36, 118, r"$z^*$", color=ACCENT, ha="left")
     frame(10, 2, 138, 100, "Result: Reshaped body", trail("child", 29, 18, 10), label=False); frame(146, 2, 274, 100, "Result: G1", trail("g1", 165, 18, 10), label=False)
-    for f in ("pdf", "svg", "png"):                                # dpi sets the resolution of the bodies in the PDF and SVG too
-        fig.savefig(OUT / f"method_figure.{f}", facecolor="white", dpi=600)
-    print(OUT / "method_figure.pdf")
+    print(save(fig, "method_figure").with_suffix(".pdf"))
 
 
 def draw_simple():
     """the short version, docs/figures/method_figure_simple.*: z goes in, the rollout is compared with the origin reference, z is updated from the comparison, the result comes out. Black but for z, its sampling and its update. Uses the Blender renders."""
-    plt.rcParams.update({"font.family": "STIXGeneral", "mathtext.fontset": "stix", "pdf.fonttype": 42, "svg.fonttype": "none"})
-    W, H = 562, 176; fig = plt.figure(figsize=(W / 100, H / 100)); ax = fig.add_axes([0, 0, 1, 1]); ax.set_xlim(0, W); ax.set_ylim(0, H); ax.axis("off"); FS, SM = 9.0, 8.0; py = 96
-
-    def txt(x, y, s, size=FS, color=INK, ha="center", **k):
-        ax.text(x, y, s, fontsize=size, color=color, ha=ha, va="center", zorder=8, **k)
+    STYLE.apply()
+    W, H = 562, 176; fig, ax = FigureStyle.canvas(W, H); FS, SM = 9.0, 8.0; py = 96
+    txt = partial(_txt, ax, size=FS, color=INK, zorder=8)
 
     def arrow(pts, color=INK, lw=0.9, style="-|>"):
-        for a, b in zip(pts[:-2], pts[1:-1]):
-            ax.plot([a[0], b[0]], [a[1], b[1]], color=color, lw=lw, solid_capstyle="round", zorder=3)
-        ax.add_patch(FancyArrowPatch(pts[-2], pts[-1], arrowstyle=style, mutation_scale=7, lw=lw, color=color, shrinkA=0, shrinkB=0, zorder=6))
+        _arrow(ax, pts, color, lw, style=style, head_z=6)
 
     def frame(x0, y0, x1, y1, title, panel, right=False):
         bg = FancyBboxPatch((x0, y0), x1 - x0, y1 - y0, boxstyle="round,pad=0,rounding_size=5", fc=BG, ec=INK, lw=0.8, zorder=2); ax.add_patch(bg)
@@ -151,25 +153,19 @@ def draw_simple():
     # the result comes out
     arrow([(429, py), (438, py)])
     group(438, 29, 561, 163); frame(442, 97, 557, 160, "", "child"); frame(442, 32, 557, 95, "", "g1"); txt(499.5, 169.5, "Result")
-    for f in ("pdf", "svg", "png"):
-        fig.savefig(OUT / f"method_figure_simple.{f}", facecolor="white", dpi=600)
-    print(OUT / "method_figure_simple.pdf")
+    print(save(fig, "method_figure_simple").with_suffix(".pdf"))
 
 
 def draw_first(loes=True):
     """the figure's first layout (commit dea2957, whose bodies were MuJoCo cut-outs), its bodies now from Blender (panels method_first_*, transparent background). loes=False leaves "LOES" off the update box."""
-    scene = json.loads((REPO / "outputs/blender_package/scene.json").read_text())["panels"]; FRAMES, CUT = (60, 165, 270), 165
-    plt.rcParams.update({"font.family": "STIXGeneral", "mathtext.fontset": "stix", "pdf.fonttype": 42, "svg.fonttype": "none"})
-    W, Y0, Y1 = 550, 6, 243; fig = plt.figure(figsize=(W / 100, (Y1 - Y0) / 100)); ax = fig.add_axes([0, 0, 1, 1]); ax.set_xlim(0, W); ax.set_ylim(Y0, Y1); ax.axis("off")
+    scene = json.loads(paths.read_path("outputs/blender_package/scene.json").read_text())["panels"]; FRAMES = tuple(CFG["first"])
+    STYLE.apply()
+    W, Y0, Y1 = 550, 6, 243; fig, ax = FigureStyle.canvas(W, Y1, Y0)
     FS, SM = 9.0, 8.0
-
-    def txt(x, y, s, size=FS, color=INK, ha="center", va="center", **k):
-        ax.text(x, y, s, fontsize=size, color=color, ha=ha, va=va, zorder=6, **k)
+    txt = partial(_txt, ax, size=FS, color=INK, zorder=6)
 
     def arrow(pts, color=INK, lw=0.9, ls="-", head=True):
-        for a, b in zip(pts[:-2], pts[1:-1]):
-            ax.plot([a[0], b[0]], [a[1], b[1]], color=color, lw=lw, ls=ls, solid_capstyle="round", zorder=3)
-        ax.add_patch(FancyArrowPatch(pts[-2], pts[-1], arrowstyle="-|>" if head else "-", mutation_scale=7, lw=lw, ls=ls, color=color, shrinkA=0, shrinkB=0, zorder=3))
+        _arrow(ax, pts, color, lw, ls=ls, style="-|>" if head else "-")
 
     def body(name, t, x, y0, z=4, clip=None):
         """the body centred on x, its lowest point at y0, at the figure's one scale. Only the solid body counts for this, not its shadow."""
@@ -232,9 +228,7 @@ def draw_first(loes=True):
     strip("child", 442, 40, 144); txt(426, 212, "Reshaped body", size=SM, color=MUTED, ha="left")
     strip("g1", 442, 40, 28); txt(426, 104, "G1", size=SM, color=MUTED, ha="left")
     name = "method_figure_first" + ("" if loes else "_no_loes")
-    for f in ("pdf", "svg", "png"):
-        fig.savefig(OUT / f"{name}.{f}", facecolor="white", dpi=600)
-    print(OUT / f"{name}.pdf"); plt.close(fig)
+    print(save(fig, name).with_suffix(".pdf")); plt.close(fig)
 
 
 def first():

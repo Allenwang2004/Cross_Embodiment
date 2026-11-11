@@ -1,0 +1,62 @@
+# The teaser's motion panels (OOP refactor step 10; before it, constants in the scripts): which rollouts, frames and sizes.
+#   scripts/export_blender_package.py   the Blender panels teaser_* and teaser_band(_grey) -> outputs/blender_package
+#   scripts/plot_teaser.py              the MuJoCo cut-outs (render) and the figure (draw): panels, frames, units_per_m
+#   scripts/teaser_band_tall.py         the band with H1 replaced by the tall body (band_tall)
+# Paths are repository-relative ("outputs/..." read through crossenbodiment.paths.read_path); {walk2} / {walk4} are the clips below.
+# Rollouts are the survey's recorded ones (outputs/user_survey), nothing is re-simulated.
+walk2: move-ego-0-2_2
+walk4: move-ego-0-2_4            # the payload walks move-ego-0-2_4 (its 0-2_2 search never got the walk right): same task, other clip
+units_per_m: 55.0                # figure units (0.01 in) per metre of body
+frames: [100, 112, 124]          # three poses of the walk, getting darker ...
+tints: [0.58, 0.3, 0.0]          # ... the last at the true colour
+pose_dx_u: 33                    # figure units between those poses
+models:
+  adult: outputs/user_survey/models/adult.xml
+  child: outputs/user_survey/models/child.xml
+  limit_leg: outputs/user_survey/models/limit_leg.xml
+  heavy_arm: outputs/user_survey/models/heavy_arm.xml
+  g1: outputs/user_survey/models/g1/scene.xml
+  h1: assets/robots/h1/scene.xml
+# the source frame (the adult's walk) and the four condition frames; colour: crossenbodiment.palette.CONDITIONS[key]
+origin:
+  model: adult
+  qpos: outputs/user_survey/child/trajectories/{walk2}/reference_adult.npz
+  panel_u: [142, 130, 10]        # width, height, feet height (figure units)
+panels:
+  - {key: payload, title: "Payload (+38 kg)", body: heavy_arm, clip: walk4, payload: true}
+  - {key: joint, title: "Restricted joint", body: limit_leg, clip: walk2, red_leg: true}
+  - {key: child, title: "Reshaped body", body: child, clip: walk2}
+  - {key: g1, title: "Robot (G1)", body: g1, clip: walk2}
+panel_u: [128, 125, 9]
+# the teaser as one band, as in ReActor's Fig. 1: one walk carrying on across the conditions, each fading in from see-through ghosts
+# that start behind the pose before, on one white floor. shift: metres sideways in the image. The clip is 300 frames: H1 goes back
+# h1_back frames, three of its gait periods (11 frames), to stay in phase. Frames: start + (i * 4 + k) * dt.
+band:
+  units: [550, 107, 12, 50.5]    # width, height, feet height (figure units), figure units per metre
+  left: 0.12
+  dx: 1.65                       # metres between groups
+  pose_dx: 0.57                  # metres between the poses of a group
+  alpha: [0.2, 0.42, 0.7, 1.0]
+  start: 40
+  dt: 12
+  h1_back: 33
+  cam_distance: 60.0
+  groups:
+    - {label: Origin, model: adult, qpos: "outputs/user_survey/child/trajectories/{walk2}/reference_adult.npz", tag: adult}
+    - {label: Payload, model: heavy_arm, qpos: "outputs/user_survey/heavy_arm/trajectories/{walk4}/best.npz", tag: heavy_arm, payload: true}
+    - {label: Restricted joint, model: limit_leg, qpos: "outputs/user_survey/limit_leg/trajectories/{walk2}/best.npz", tag: limit_leg, red_leg: true}
+    - {label: Reshaped body, model: child, qpos: "outputs/user_survey/child/trajectories/{walk2}/best.npz", tag: child}
+    - {label: G1, model: g1, qpos: "outputs/user_survey/g1/trajectories/{walk2}/best.npz", tag: g1}
+    # the survey's videos have H1, its folder no rollouts: the search behind them is outputs/user_survey_search/h1_ridge, as g1_ridge is for G1
+    - {label: H1, model: h1, qpos: "outputs/user_survey_search/h1_ridge/{walk2}_s0/best.npz", tag: h1}
+# teaser_band_tall.py: H1 replaced by the tallest thin scaled body, len1.4_wid0.8 (L x 1.4, W x 0.8, 2.6 m; user, 11/11), right of
+# the child and left of the G1; its poses spaced by its height (0.57 m x 2.6 / 1.81, as walk_band_blender.py); the G1, now the sixth
+# group, goes back one stride (g1_back = 18 frames, the autocorrelation peak of its foot signal, 0.99), as H1 went back three of its
+# strides in the original. Everything else as the band above.
+band_tall:
+  body: len1.4_wid0.8
+  xml: assets/robots_torque/len1.4_wid0.8/robot_torque_full.xml
+  qpos: outputs/walk_bodies/len1.4_wid0.8_es_s0/best.npz   # move-ego-0-2_1, 2,048 rollouts, seed 0: the walking-task search
+  g1_back: 18
+  adult_h: 1.81
+  groups: [Origin, Payload, Restricted joint, Reshaped body, Tall body, G1]   # Tall body = the body above, the others the band's

@@ -62,6 +62,24 @@ Step 9 adds the body-building pipeline (scripts/build_body.py; docs/new_body.md)
                   torque_aggregate_motion_k.py, torque_scale_actuators.py's library, archived)
   GainScaler      kp / kd multipliers, MJCF or gains json (scale_body_gains.py, kpkd_test.py prepare)
   BodyPipeline    the idempotent, memory-gated steps; BuildRoots (where a build writes); beta.BETA_AXES, the one list of the 8 axes
+Step 10 adds the visualisation layer (scripts/strobe_final_blender.py, export_blender_package.py, topdown / walk / teaser / child_all /
+body_all Blender scripts, render_panels.py, body_overlay.py, robot_overlay.py, the survey packagers, the paper figures are built on it):
+  palette   Palette: the method table (ref, adult, z0, cem, loes, random, cmaes, lso, lsor, ta, native) -> label + hex / video RGBA /
+            render_blender.py's sRGB, VARIANTS where scripts disagree (DISAGREEMENTS), ACCENTS, CONDITIONS, INK token sets
+  figstyle  FigureStyle (paper: STIX, the 0.01-inch canvas, save to pdf / svg / png; notebook), context manager or apply();
+            txt / arrow / box, the figures' plain drawing functions
+  camera    ViewSpec (to_mjv / to_track / to_blender / project) and the presets (survey_track, body_overlay, robot_overlay,
+            BLENDER_STROBE); project is the one world-to-pixel formula (draw.project, robot_overlay.py's copies)
+  clips     ClipBundle: a survey-format clip folder (from_run / from_files / from_survey, add_cem, save); strobe_source routes
+            strobe_final_blender.py's sources ("child_52", "child_52_s<k>", "c540", "tall_body_52", "body_52/", "kpkd:", folders)
+  blender   BlenderScene (panels + its own mesh store, write() with a schema version, load, render() through uv + bpy) and the
+            pose export (load_model, pose_spec, contact_frames, heading, body_height, panel)
+  strobe    StrobeLayout (frames, tints, shifts, fixed / path / orbit headings, align) and the overview pages' frame windows;
+            recipe_panels (export_strobe_blender.py's clip_panels, archived)
+  video     VideoRenderer: side by side (render_panels' spec) and overlay sharing paint / label_px / legend / write
+  sheet     ContactSheet (the overview pages), hcat / vcat / legend_strip, write_index_md
+  paths     + read_path / write_path / own_path ($CE_OUTPUTS_ROOT / $CE_RESULTS_ROOT for the visualisation scripts), figures_root()
+            ($CE_FIGURES_ROOT), FIGURE_CONFIGS (configs/figures: strobe_examples.yaml, teaser.yaml, method.yaml)
 Importing the package imports nothing heavy (no torch, mujoco or humenv); align_cost (model.losses -> mujoco), robot_rollout,
-eval_metrics (mujoco, ot), policy (torch) and bodybuild's modules (mujoco) import them when they are imported.
+eval_metrics (mujoco, ot), policy (torch), bodybuild's modules, blender and video (mujoco) import them when they are imported.
 """

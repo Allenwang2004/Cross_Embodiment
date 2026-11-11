@@ -5,17 +5,24 @@ user to choose new payload examples from (user, 11/10). Not added to the user su
 Candidates: the 52-motion payload run (outputs/body_52/payload, seed 0, LOES's best after 2,048 rollouts); "falls" = the pelvis
 below half the reference's pelvis height at the same frame for >= 0.5 s; kept: z0 falls, LOES < 0.5 s. Ordered by the drop in that time.
 Steps: (1) trajectories in the survey format (outputs/user_survey's frame alignment: references from their second frame, all files
-the reference's length minus one) -> outputs/payload_fall_candidates/trajectories/<clip>; (2) strobe figures with
-strobe_figures/replay_strobe.py, 6 poses 15 frames apart from 40 frames before z0's fall, camera fixed at the survey view (azimuth 140)
--> strobe/, configs/; (3) the same frames in Blender (scripts/export_strobe_blender.py's panels, render_blender.py) -> blender/;
-(4) overview_mujoco.jpg, overview_blender.jpg.
+the reference's length minus one; crossenbodiment.clips.ClipBundle) -> outputs/payload_fall_candidates/trajectories/<clip>; (2) strobe
+figures with strobe_figures/replay_strobe.py, 6 poses 15 frames apart from 40 frames before z0's fall, camera fixed at the survey view
+(azimuth 140) -> strobe/, configs/; (3) the same frames in Blender (crossenbodiment.strobe.recipe_panels, render_blender.py) -> blender/;
+(4) overview_mujoco.jpg, overview_blender.jpg (crossenbodiment.sheet.ContactSheet).
 usage: uv run python scripts/payload_fall_candidates.py"""
 import glob, json, os, subprocess, sys
 from pathlib import Path
 import numpy as np
 
-REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO / "scripts"))
-OUT = REPO / "outputs/payload_fall_candidates"; RUN = REPO / "outputs/body_52/payload"; PKG = REPO / "strobe_figures"
+REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO))
+from crossenbodiment import paths                                         # noqa: E402
+from crossenbodiment.blender import BlenderScene                          # noqa: E402
+from crossenbodiment.clips import ClipBundle, origin_clip                 # noqa: E402
+from crossenbodiment.palette import Palette                               # noqa: E402
+from crossenbodiment.sheet import ContactSheet                            # noqa: E402
+from crossenbodiment.strobe import RECIPE_DX, recipe_panels               # noqa: E402
+
+OUT = paths.write_path("outputs/payload_fall_candidates"); RUN_REL = "outputs/body_52/payload"; RUN = paths.read_path(RUN_REL); PKG = REPO / "strobe_figures"
 CLIPS = ["move-ego-0-2-raisearms-h-m_1", "move-ego-0-2-raisearms-m-h_1", "raisearms-h-l_1", "split-1_7", "rotate-z-5-0.8_9"]
 ENV = dict(os.environ, MUJOCO_GL="egl", CUDA_VISIBLE_DEVICES="2", MUJOCO_EGL_DEVICE_ID="2", OMP_NUM_THREADS="1", PYTHONDONTWRITEBYTECODE="1")
 N, STEP, BEFORE = 6, 15, 40
@@ -26,19 +33,14 @@ def low_s(q, ref):
 
 
 def package(c):
-    t = c.rsplit("_", 1)[0]; adult = np.load(glob.glob(str(REPO / f"data/origin_motion/{t}/{c}.npz"))[0])["qpos"][1:]; n = len(adult)
-    q = dict(reference_adult=adult, reference_body=adult, z0=np.load(RUN / f"{c}_es_s0/origin_z.npz")["qpos"][:n], best=np.load(RUN / f"{c}_es_s0/best.npz")["qpos"][:n])
-    d = OUT / "trajectories" / c; d.mkdir(parents=True, exist_ok=True)
-    for k, v in q.items():
-        np.savez_compressed(d / f"{k}.npz", qpos=v.astype(np.float32), fps=np.float32(30))
+    b = ClipBundle.from_run(c, "heavy_arm", run=f"{RUN_REL}/{c}_es_s0", reference_body=origin_clip(c)); q = b.qpos; adult = q["reference_adult"]; n = len(adult)
     R = json.load(open(RUN / "results.json"))["per_motion"]["best"][c]
     below = q["z0"][:, 2] < 0.5 * adult[:, 2]; tf = int(np.argmax(below))
     info = dict(pelvis_below_half_s=dict(z0=low_s(q["z0"], adult), best=low_s(q["best"], adult)), z0_falls_at_frame=tf,
                 contact_fall_s=dict(z0=round(R["frozen"]["fall_s"], 2), best=round(R["es"]["fall_s"], 2)),
                 mpjpe_cm=dict(z0=round(R["frozen"]["mpjpe"], 2), best=round(R["es"]["mpjpe"], 2)), success=dict(z0=bool(R["frozen"]["success"]), best=bool(R["es"]["success"])))
-    tmpl = json.loads(next((REPO / "outputs/user_survey/heavy_arm/trajectories").glob("*/video.json")).read_text())
-    (d / "video.json").write_text(json.dumps(dict(clip=c, body="heavy_arm", fps=30, frames={k: len(v) for k, v in q.items()}, search_run=str((RUN / f"{c}_es_s0").relative_to(REPO)),
-                                                  candidate=info, side_by_side=tmpl["side_by_side"], overlay=tmpl["overlay"]), indent=1))
+    tmpl = json.loads(next((paths.read_path("outputs/user_survey") / "heavy_arm/trajectories").glob("*/video.json")).read_text())
+    b.meta.update(candidate=info, side_by_side=tmpl["side_by_side"], overlay=tmpl["overlay"]); b.save(OUT / "trajectories" / c)
     s = int(np.clip(tf - BEFORE, 1, n - 1 - STEP * (N - 1))); travel = float(np.linalg.norm(adult[s + STEP * (N - 1), :2] - adult[s, :2]))
     return dict(n=n, start=s, end=s + STEP * (N - 1), travel=travel, **info)
 
@@ -54,34 +56,21 @@ def strobe(c, p):
 
 
 def blender():
-    import export_strobe_blender as B
-    B.DX["heavy_arm_task52/split-1_7"] = 0.75; P = {}
+    dx = dict(RECIPE_DX, **{"heavy_arm_task52/split-1_7": 0.75}); sc = BlenderScene()
     for c in CLIPS:
-        P.update(B.clip_panels("heavy_arm_task52", c, cfg_path=OUT / "configs" / f"heavy_arm_{c}.yaml", traj_dir=OUT / "trajectories" / c))
-    d = OUT / "blender"; d.mkdir(exist_ok=True)
-    (d / "scene.json").write_text(json.dumps(dict(panels=P))); np.savez_compressed(d / "meshes.npz", **B.E.meshes)
-    (d / "render_blender.py").write_bytes((REPO / "scripts/render_blender.py").read_bytes())
-    subprocess.run(["uv", "run", "--no-project", "--python", "3.11", "--with", "bpy", "python", "render_blender.py", "--", "--samples", "128", "--device", "CPU",
-                    "--threads", "32", "--out", "renders"], cwd=d, env=ENV, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        sc.panels.update(recipe_panels(sc, "heavy_arm_task52", c, cfg_path=OUT / "configs" / f"heavy_arm_{c}.yaml", traj_dir=OUT / "trajectories" / c, dx_table=dx))
+    d = sc.write(OUT / "blender")
+    BlenderScene.render(d, samples=128, threads=32, out="renders", env=ENV, log=None)
 
 
 def overview(plan, kind):
-    from PIL import Image, ImageDraw, ImageFont
-    F = ImageFont.truetype("DejaVuSans.ttf", 22); Wc, L = 640, 40; rows = []
-    for c in CLIPS:
-        paths = [glob.glob(str(OUT / "strobe" / f"heavy_arm_{c}_fixed_{k}_strobe.png"))[0] for k in ("adult", "z0", "zstar")] if kind == "mujoco" else \
-                [OUT / "blender/renders" / f"heavy_arm_{c}_{k}.png" for k in ("adult", "z0", "zstar")]
-        ims = [Image.open(p).convert("RGB") for p in paths]; rows.append([im.resize((Wc, round(Wc * im.height / im.width))) for im in ims])
-    sheet = Image.new("RGB", (3 * Wc, sum(r[0].height for r in rows) + L * (len(rows) + 1)), "white"); dr = ImageDraw.Draw(sheet); y = L
-    for j, lab in enumerate(("reference (adult)", "z0", "LOES (best latent)")):
-        dr.text((j * Wc + 10, 8), lab, fill=(0, 0, 0), font=F)
-    for i, (c, row) in enumerate(zip(CLIPS, rows)):
-        p = plan[c]; dr.text((10, y + 6), f"#{i + 1} {c}: down {p['pelvis_below_half_s']['z0']:.1f} s -> {p['pelvis_below_half_s']['best']:.1f} s, MPJPE {p['mpjpe_cm']['z0']:.1f} -> {p['mpjpe_cm']['best']:.1f} cm, frames {p['start']}-{p['end']}",
-                             fill=(0, 0, 0), font=F)
-        for j, im in enumerate(row):
-            sheet.paste(im, (j * Wc, y + L))
-        y += L + row[0].height
-    sheet.save(OUT / f"overview_{kind}.jpg", quality=90); print("overview", kind, sheet.size)
+    sheet = ContactSheet((Palette.label("adult", "pages"), Palette.label("z0", "plain"), Palette.label("loes", "pages_best")), col_width=640, label_h=40, font_size=22, quality=90)
+    for i, c in enumerate(CLIPS):
+        ims = [glob.glob(str(OUT / "strobe" / f"heavy_arm_{c}_fixed_{k}_strobe.png"))[0] for k in ("adult", "z0", "zstar")] if kind == "mujoco" else \
+              [OUT / "blender/renders" / f"heavy_arm_{c}_{k}.png" for k in ("adult", "z0", "zstar")]
+        p = plan[c]
+        sheet.add_row(f"#{i + 1} {c}: down {p['pelvis_below_half_s']['z0']:.1f} s -> {p['pelvis_below_half_s']['best']:.1f} s, MPJPE {p['mpjpe_cm']['z0']:.1f} -> {p['mpjpe_cm']['best']:.1f} cm, frames {p['start']}-{p['end']}", ims)
+    im = sheet.save(OUT / f"overview_{kind}.jpg"); print("overview", kind, im.size)
 
 
 if __name__ == "__main__":

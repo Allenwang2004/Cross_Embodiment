@@ -4,7 +4,9 @@
   blender -b -P render_blender.py --                                                every panel, final quality
 
 Options: --panel NAME (repeatable; default all), --samples N (default 256), --scale X (resolution factor, default 1), --device CPU|GPU (default GPU if Blender finds one), --threads N, --out DIR (default renders).
-To change the look, edit the block below."""
+To change the look, edit the block below.
+scene.json: {"version": N (written since the repository's OOP refactor step 10; not read here), "panels": {name: panel}, ...}; this file
+stays standalone (the repository's crossenbodiment/palette.py BLENDER mirrors COLORS, checked by its tests)."""
 import argparse, json, math, os, sys
 
 import bpy

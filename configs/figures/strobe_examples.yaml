@@ -1,0 +1,173 @@
+# The strobe figures the user kept (11/10 - 11/12): scripts/strobe_final_blender.py reads this file (OOP refactor step 10; before it,
+# the lists EX and CEM in that script). Per example four panels (adult reference, z0, CEM (BFM-Zero)'s best, LOES's best) and the four
+# side by side, in outputs/strobe_task52_blender.
+#
+# examples: name (the panel / file prefix), body (payload | limit_leg | g1 | child | tall: the model drawn, the target clip),
+#   clip (the task clip's stem), source (where the trajectories come from: a survey-format clip folder whose <clip>/ is copied, or
+#   one of "child_52", "child_52_s<k>", "c540", "tall_body_52", "body_52/<body>", "kpkd:<folder>": a single-latent run + the body's
+#   target, packaged by crossenbodiment.clips.ClipBundle), range [start, end, step] or frames [an explicit list], view (fixed | path),
+#   and optional az (fixed view: the camera's world azimuth, default 140), align (each pose turned to the reference's heading at
+#   its frame), H (panel height, m), dx (m between poses), px, feet, wider, nudge, elev.
+# The payload and limited-leg sources outputs/payload_all52, outputs/limit_leg_all52 were deleted on 11/10 after the export; their
+# copies are in outputs/strobe_task52_blender/trajectories.
+examples:
+  - name: payload_move-ego-0-2-raisearms-h-m_1
+    body: payload
+    clip: move-ego-0-2-raisearms-h-m_1
+    source: outputs/payload_all52/trajectories
+    range: [120, 170, 10]
+    view: fixed
+    # z0 fully down (pelvis and head below half the reference's) at frames 118-177
+  - name: payload_rotate-y-5-0.8_7
+    body: payload
+    clip: rotate-y-5-0.8_7
+    source: outputs/user_survey/heavy_arm/trajectories
+    range: [150, 192, 7]
+    view: fixed
+    align: true
+    # the original strobe folder's window (strobe_figures); z0 falls mid-motion (pelvis below half 185-195), LOES stays up. Not one
+    # of the 52 task motions: the older user-survey search
+  - name: g1_rotate-z--5-0.8_6
+    body: g1
+    clip: rotate-z--5-0.8_6
+    source: outputs/user_survey/g1_task52/trajectories
+    range: [30, 130, 20]
+    view: fixed
+  - name: g1_jump-2_3
+    body: g1
+    clip: jump-2_3
+    source: outputs/user_survey/g1_task52/trajectories
+    range: [2, 102, 20]
+    view: path
+  - name: limit_leg_move-ego-low-90-2_9
+    body: limit_leg
+    clip: move-ego-low-90-2_9
+    source: outputs/limit_leg_all52/trajectories
+    range: [1, 296, 59]
+    view: fixed
+    align: true
+    # the reference turns about a full circle to the left, z0 and LOES to the right
+  - name: limit_leg_move-ego-0-2_2
+    body: limit_leg
+    clip: move-ego-0-2_2
+    source: outputs/user_survey/limit_leg/trajectories
+    range: [37, 72, 7]
+    view: path
+    # replaces split-1_7 (user, 11/10): the user survey's clip (older search, not one of the 52), the original strobe folder's
+    # window; z0 stoops forward, LOES upright
+  - name: child_headstand_4
+    body: child
+    clip: headstand_4
+    source: child_52
+    range: [45, 90, 9]
+    view: fixed
+    # LOES holds both legs up from frame 45 (its left foot comes down at 25-40); z0s left foot is down at 30-90
+  - name: child_move-ego-0-4_9
+    body: child
+    clip: move-ego-0-4_9
+    source: child_52
+    range: [200, 290, 18]
+    view: path
+    # z0's hands down from frame 235
+  # user, 11/11: a child example where ours looks clearly closer to the reference than BFM-Zero (headstand_4 has none). Frames: the 6
+  # (at least 8 apart) where BFM-Zero's error minus ours is largest, the error being the mean body distance to the child reference
+  # with the centre of mass's x, y removed and the world heading kept (as this figure draws a pose); BFM-Zero 38.0 cm, ours 6.8 cm
+  # on them. One world view side-on to the reference's path over those frames (heading -92 deg), so a wrong heading shows.
+  - name: child_move-ego-90-4_5
+    body: child
+    clip: move-ego-90-4_5
+    source: child_52
+    frames: [137, 150, 163, 175, 183, 191]
+    view: fixed
+    az: -2.4
+  # user, 11/11: headstand with seed 2 of both ours and BFM-Zero (the one seed where ours is closer on most frames: 77 of 119), frames
+  # chosen as above (BFM-Zero 5.5 cm, ours 3.6 cm on them; seed 0, the figure's, has no frames where ours is closer)
+  - name: child_headstand_4_s2
+    body: child
+    clip: headstand_4
+    source: child_52_s2
+    frames: [22, 41, 56, 72, 83, 111]
+    view: fixed
+  # user, 11/12: the tall, thin body (len1.4_wid0.8, outputs/tall_body_52, seed 0, 1,024 rollouts), the one motion where z0 touches down,
+  # BFM-Zero touches down too and fails PHC's test, and ours passes. Frames (>= 120, >= 14 apart): BFM-Zero's drawn-pose error minus
+  # ours largest (z0 31.4, BFM-Zero 15.7, ours 8.2 cm on them). One world view side-on to the reference's path (heading 46.7 deg).
+  - name: tall_move-ego-low-0-2_9
+    body: tall
+    clip: move-ego-low-0-2_9
+    source: tall_body_52
+    frames: [120, 163, 187, 263, 277, 294]
+    view: fixed
+    az: 136.7
+    H: 3.0
+    dx: 0.8
+  # user, 11/12: the tall body's rotate-z-5-0.8_9 (z0 down 2.9 s, BFM-Zero 1.2 s, ours 1.3 s; all three fail PHC's test). Frames as above
+  # (BFM-Zero minus ours largest, >= 14 apart): z0 65.7, BFM-Zero 58.6, ours 46.5 cm. View side-on to the reference's path (-116.2 deg).
+  - name: tall_rotate-z-5-0.8_9
+    body: tall
+    clip: rotate-z-5-0.8_9
+    source: tall_body_52
+    frames: [82, 122, 163, 193, 207, 226]
+    view: fixed
+    az: -26.2
+    H: 3.0
+    dx: 1.0
+  # the same motion at frames where z0 is down (a non-foot body within 1 cm of the floor while the reference's is clear) and both
+  # BFM-Zero and ours are up (user, 11/12: "挑出 z0 跌倒的那幾個 frame"; z0 is down in bursts about every 36 frames, 88 frames in all)
+  - name: tall_rotate-z-5-0.8_9_z0down
+    body: tall
+    clip: rotate-z-5-0.8_9
+    source: tall_body_52
+    frames: [99, 135, 162, 202, 245, 281]
+    view: fixed
+    az: -26.2
+    H: 3.6
+    dx: 1.2
+  # user, 11/12: the best sample of each gain test (seed 0, 1,024 rollouts; the bodies' kp lowered, kd unchanged; drawn with the body's
+  # normal model: gains do not change the kinematics). Child headstand_4 at kp x0.85 (outputs/child_kpkd_headstand): z0 and BFM-Zero
+  # collapse, LOES holds the headstand (drawn-pose error over the clip z0 21.3, BFM-Zero 20.5, LOES 6.6 cm); frames every 15 from 40.
+  - name: child_headstand_4_kp0.85
+    body: child
+    clip: headstand_4
+    source: kpkd:child_kpkd_headstand/kp0.85_kd1.0
+    frames: [40, 55, 70, 85, 100, 115]
+    view: fixed
+  # tall body move-ego-180-4_9 at kp x0.6 (outputs/tall_kpkd_180): z0 down 3.5 s, BFM-Zero 7.6 s, LOES 1.9 s; frames where BFM-Zero minus
+  # LOES is largest (>= 14 apart; z0 87.0, BFM-Zero 128.4, LOES 39.9 cm); view side-on to the reference's path (-162.6 deg).
+  - name: tall_move-ego-180-4_9_kp0.6
+    body: tall
+    clip: move-ego-180-4_9
+    source: kpkd:tall_kpkd_180/kp0.6_kd1.0
+    frames: [119, 133, 147, 220, 234, 248]
+    view: fixed
+    az: -72.6
+    H: 3.0
+    dx: 1.2
+
+# CEM (BFM-Zero): BFM-Zero's tracking reward (PHC), seed 0, 2,048 rollouts (the child's: 1,024, as its LOES) (user, 11/10: add CEM to the
+# figures). The child's are the 52-motion CEM runs (1,024 rollouts); the others were run for these figures
+# (outputs/train_logs/queue/run_strobe_cem.sh).
+cem:
+  payload_move-ego-0-2-raisearms-h-m_1: outputs/body_52/payload/move-ego-0-2-raisearms-h-m_1_cem_s0
+  payload_rotate-y-5-0.8_7: outputs/user_survey_search/heavy_arm/rotate-y-5-0.8_7_cem_g128_s0     # 2,048 rollouts (user), start at rest as its LOES run (8,192)
+  g1_rotate-z--5-0.8_6: outputs/g1_52/rotate-z--5-0.8_6_cem_s0
+  g1_jump-2_3: outputs/g1_52/jump-2_3_cem_s0
+  limit_leg_move-ego-low-90-2_9: outputs/body_52/limit_leg/move-ego-low-90-2_9_cem_s0
+  limit_leg_move-ego-0-2_2: outputs/user_survey_search/limit_leg/move-ego-0-2_2_cem_g128_s0
+  child_headstand_4: outputs/child_52_cem_phc/headstand_4_cem_s0
+  child_move-ego-0-4_9: outputs/child_52_cem_phc/move-ego-0-4_9_cem_s0
+  child_move-ego-90-4_5: outputs/child_52_cem_phc/move-ego-90-4_5_cem_s0
+  child_headstand_4_s2: outputs/child_52_cem_phc/headstand_4_cem_s2
+  tall_move-ego-low-0-2_9: outputs/tall_body_52/move-ego-low-0-2_9_cem_s0
+  tall_rotate-z-5-0.8_9: outputs/tall_body_52/rotate-z-5-0.8_9_cem_s0
+  tall_rotate-z-5-0.8_9_z0down: outputs/tall_body_52/rotate-z-5-0.8_9_cem_s0
+  child_headstand_4_kp0.85: outputs/child_kpkd_headstand/kp0.85_kd1.0/cem_s0
+  tall_move-ego-180-4_9_kp0.6: outputs/tall_kpkd_180/kp0.6_kd1.0/cem_s0
+
+# the strobe figures' models (xml relative to the repository; outputs/user_survey/models are the survey's copies)
+models:
+  adult: outputs/user_survey/models/adult.xml
+  payload: outputs/user_survey/models/heavy_arm.xml
+  limit_leg: outputs/user_survey/models/limit_leg.xml
+  g1: outputs/user_survey/models/g1/scene.xml
+  child: outputs/user_survey/models/child.xml
+  tall: assets/robots_torque/len1.4_wid0.8/robot_torque_full.xml      # the tall, thin body of the new teaser (11/12)

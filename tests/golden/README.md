@@ -170,3 +170,19 @@ tests/test_moves.py runs every helper step 4 moved against its 68c95f4 source.
   - tests/test_bodybuild.py: the variant scripts (heavy_arm_body, lock_joint_body, limit_joint_body, elderly_body,
     strength_rollout's build) run from 2bdb2fe in a scratch root against the builders; the limited leg and adult_s08_* against
     the stored files; the wrappers' CLIs against 2bdb2fe's parsers; one BETA_AXES; the pipeline's skips, prune and registry.
+* Step 10 (visualisation layer: crossenbodiment/palette.py, figstyle.py, camera.py, clips.py, blender.py, strobe.py, video.py, sheet.py;
+  configs/figures/{strobe_examples,teaser,method}.yaml; scripts/export_strobe_blender.py archived) changed no search code; the golden
+  cases and metrics.json must stay identical. The visualisation outputs are checked two ways:
+  - verify_vis.py LABEL: the new scripts re-make, into outputs/refactor_step10/LABEL/new (CE_OUTPUTS_ROOT = the main tree's outputs,
+    read only; CE_RESULTS_ROOT / CE_FIGURES_ROOT inside the worktree), the stored Blender scenes (scene.json JSON-equal but for the new
+    "version" field, meshes.npz arrays equal) of strobe_task52_blender (all 15 examples), blender_package, the top view, the walk
+    band / rows, teaser_band_tall, child_all52, limit_leg_all52; the ClipBundle trajectories of child_all52, limit_leg_all52 and the
+    14 strobe examples whose sources still exist (arrays, video.json bytes); the overview pages, index.md, top views, combined
+    strobes and walk figures (bytes); the paper figures against the 8e9dc99 scripts run in a scratch root (PNG bytes, PDF but
+    /CreationDate, SVG but <dc:date> and matplotlib's random ids); render_panels.py videos (MuJoCo's EGL frames are not
+    bit-reproducible: old vs new within old vs old on the GPU, and exactly equal frames / mp4 bytes with tests/golden/fake_render.py,
+    which replaces the rasterisation by a picture of the scene digest); two small Blender panels rendered by the old and the new
+    scene + render_blender.py (Cycles on the CPU is deterministic run to run: pixel-equal).
+  - tests/test_vis.py: the palette against render_blender.py's COLORS and every script's 8e9dc99 colour table, the figure helpers
+    (SVG bytes), project / presets, StrobeLayout, pose_spec, BlenderScene, ClipBundle, ContactSheet, the frame bands, VideoRenderer vs
+    the survey's replay.py.
