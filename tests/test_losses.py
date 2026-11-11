@@ -13,6 +13,7 @@ or under pytest if it is installed:
 
 import os
 import sys
+import unittest
 from pathlib import Path
 
 os.environ.setdefault("MUJOCO_GL", "egl")
@@ -167,10 +168,12 @@ def test_speed_error_is_in_body_lengths():
     would be scored identically to the child despite covering the gap in far
     fewer body lengths."""
     T = 200
+    giant_xml = REPO_ROOT / "assets" / "robots" / "giant" / "robot.xml"
+    if not giant_xml.exists():   # the old body set (giant included) was deleted from assets/robots
+        raise unittest.SkipTest(f"{giant_xml.relative_to(REPO_ROOT)} not found")
     child = mujoco.MjModel.from_xml_path(
         str(REPO_ROOT / "assets" / "robots" / "child" / "robot.xml"))
-    giant = mujoco.MjModel.from_xml_path(
-        str(REPO_ROOT / "assets" / "robots" / "giant" / "robot.xml"))
+    giant = mujoco.MjModel.from_xml_path(str(giant_xml))
 
     def gap(m):
         q = np.tile(m.qpos0, (T, 1)).astype(np.float64)
@@ -349,15 +352,18 @@ def test_discount_keeps_the_scale():
 def main():
     tests = [(n, f) for n, f in sorted(globals().items())
              if n.startswith("test_") and callable(f)]
-    failed = 0
+    failed = skipped = 0
     for name, fn in tests:
         try:
             fn()
             print(f"  PASS  {name}")
+        except unittest.SkipTest as e:
+            skipped += 1
+            print(f"  SKIP  {name}: {e}")
         except AssertionError as e:
             failed += 1
             print(f"  FAIL  {name}: {e}")
-    print(f"\n{len(tests) - failed}/{len(tests)} passed")
+    print(f"\n{len(tests) - failed - skipped}/{len(tests)} passed, {skipped} skipped")
     return 1 if failed else 0
 
 

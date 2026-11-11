@@ -78,9 +78,10 @@ CUDA_VISIBLE_DEVICES=1 uv run python scripts/single_z_search.py --clip move-ego-
 # an 8-d ES adapter on the 500 clips (10% held out), 500 updates
 GPU=1 bash scripts/run_b500_subspace.sh 8            # OBS=exact for exact observations
 
-# a supervised adapter on 8-d search labels, scored by rollout on the held-out clips
-uv run python scripts/train_sup_lowdim.py --label-roots outputs/lowdim_b100 outputs/lowdim_train \
-    --out outputs/lowdim_train/sup
+# a supervised adapter on 8-d search labels, scored by rollout on the held-out clips -- archived 2026-11-11
+# (archive/scripts/train_sup_lowdim.py; its label folders outputs/lowdim_b100, outputs/lowdim_train are gone):
+# uv run python scripts/train_sup_lowdim.py --label-roots outputs/lowdim_b100 outputs/lowdim_train \
+#     --out outputs/lowdim_train/sup
 ```
 
 Experiments run on GPUs 1–3; the bottleneck is CPU (MuJoCo), so keep the number of parallel searches
