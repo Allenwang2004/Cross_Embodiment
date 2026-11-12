@@ -87,7 +87,7 @@ original scripts did (part of bit-identity: robot workers spawn before CUDA is t
 | strobe | `StrobeLayout` | strobe frames, tints, shifts, headings |
 | video | `VideoRenderer` | recorded qpos replayed into side-by-side or overlay videos |
 | sheet | `ContactSheet` | overview pages of rendered panels |
-| model/exact_obs | `ExactObs`, `ExactObsWrapper` | the adult-equivalent observation of a body state (positions / scale), in the env workers |
+| model/exact_obs | `ExactObs`, `ExactObsWrapper` | the adult-equivalent observation of a body state (positions / scale), in the env workers; option `clearance_vel` (default off): + d/dt of the ground-clearance height correction in the root's vertical velocity (single_z_search `--exact-clearance-vel`) |
 | model/robot_map | `RobotMap`, `Lowest` | SMPL <-> robot through per-segment orientations (IK), the robot's root scale |
 | model/robot_env | `RobotEnv`, `RobotVecEnv` | a robot driven by Motivo's SMPL actions; n of them in worker processes |
 | model/phc_reward | `PHCCost` | PHC's tracking reward (BFM-Zero's) as a cost |

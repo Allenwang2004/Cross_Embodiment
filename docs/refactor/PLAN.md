@@ -50,8 +50,11 @@ step, reporting after each step and stopping only when a check fails or a decisi
 | 10 | Visualisation: `Palette`, `FigureStyle`, `ViewSpec`, `ClipBundle`, `StrobeLayout`, `BlenderScene`, `VideoRenderer`, `ContactSheet`; strobe picks (EX/CEM) to YAML; `render_blender.py` stays a standalone file | re-exported scene.json identical; one panel re-rendered pixel-equal; figures re-plotted equal | done, eee1938 |
 | 11 | Naming (es->loes, cem->cem_ours/cem_phc, lsor->lsor_bfm/lsor_w005, z0/origin_z, s/scale/pos_div, body/robot/label) with read aliases for old output files; update docs (workflow.md, new_body.md) | old outputs still readable; golden identical | done, the commit "refactor(step 11): consistent naming with on-disk compatibility, documentation" |
 
-Also on the branch: a997a23 (the rule on waiting for background jobs), ded6f5d and 2bdb2fe (ports of main-tree changes made during
-the refactor: the --loes-dir switches of 11/11, the strobe examples of 11/12).
+Also on the branch: a997a23 (the rule on waiting for background jobs) and the "port:" commits (main-tree changes made during and
+after the refactor): ded6f5d (the --loes-dir switches of 11/11), 2bdb2fe, 10c8ebd, a2a03a8 (strobe examples of 11/12), and the 11/12
+port of ExactObs's clearance_vel option (single_z_search --exact-clearance-vel), kpkd_test --set mild / table, the new analysis and
+figure scripts (obs_canon_metrics, phc_reward_tables, tall_kp06_analysis, plot_cost_phc, plot_obs_canon, amass_pickup_figures) and the
+paper's LaTeX sections and figures (tests/test_clearance_vel.py; tests/test_cli.py and test_vis.py expect the main tree's additions).
 
 Stay plain functions (do not wrap in classes): `project_z`, `rank_normalize`, `colored_noise`, return-to-go, latent distance,
 quaternion/heading/yaw, lowest point (a cached function), `losses.*`, `dtw`, PHC kinematics, MPJPE/MMPJPE/MPJAE math (MPJAE is the
