@@ -120,9 +120,15 @@ class HumanLatentProblem:
         self.policy = policy = MotivoPolicy.load(a.metamotivo, a.device)   # FBcprModel.from_pretrained(...).to(device); .eval()
         model = policy.model
         # --obs-scale: exact = the adult-equivalent observation; a body other than the child reads its root scale s off this
-        # clip against the adult's (bodies.clip_ratio), the child keeps ExactObs's default; auto / <r> / none: multiplier / raw
+        # clip against the adult's (bodies.clip_ratio), the child keeps ExactObs's default; auto / <r> / none: multiplier / raw.
+        # --exact-clearance-vel (main tree 11/12): + d/dt of ExactObs's ground-clearance correction (model/exact_obs.py clearance_vel)
+        clearance_vel = bool(getattr(a, "exact_clearance_vel", False))
+        if clearance_vel and a.obs_scale != "exact":
+            raise SystemExit("--exact-clearance-vel needs --obs-scale exact")
         mapper = single_z_obs(a.obs_scale, a.body, xml, ref_path, data_root / "origin_motion" / task / f"{stem}.npz",
-                              REPO / a.obs_scale_ref, parts=cfg.obs_scale_parts)
+                              REPO / a.obs_scale_ref, parts=cfg.obs_scale_parts, clearance_vel=clearance_vel)
+        if clearance_vel:
+            print("exact obs: + d/dt of the ground-clearance height correction in the root's vertical velocity")
         if isinstance(mapper, ExactObs) and "scale" in mapper.kw:
             print(f"exact obs: root scale {mapper.kw['scale']:.6f} (from the reference vs the adult motion)")
         if a.floor_friction is not None:
@@ -160,6 +166,7 @@ class HumanLatentProblem:
             else:
                 # the reference through the SAME reverse retargeting as the rollout states
                 vr, ro = np.zeros(fk.nv), []
+                exact.reset()                     # clearance_vel: differenced along the reference, frame 0 adds 0
                 for t in range(len(ref)):
                     if t:
                         mujoco.mj_differentiatePos(fk, vr, bfm_align.DEFAULT_DT, ref[t - 1], ref[t])
@@ -413,6 +420,7 @@ class HumanLatentProblem:
             "pos_unit": a.pos_unit if exact is not None else "body", "pos_div": self.pos_scale,
             "anchor": a.anchor, "anchor_weight": a.anchor_weight,
             "subspace": a.subspace, "subspace_dim": None if U is None else len(U),
+            **({"exact_clearance_vel": True} if getattr(a, "exact_clearance_vel", False) else {}),
             Z0_KEY: base, "reference_floor": floor,
             "best": {k: best[k] for k in ("cost", "align", "phys", "bfm", "gen", "source", "head", "pos", "mse",
                                           "dtw", "done", "pace", "head_al", "fallen") if k in best},

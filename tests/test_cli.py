@@ -9,6 +9,11 @@ description / prog settings that argparse prints. Also checked: the names other 
 robot_z_search.dtw_align) still resolve, and colored_noise / dtw_align are the package's (crossenbodiment.optim /
 crossenbodiment.costs) with the old source's results on fixed inputs.
 
+Flags added in the main tree after the refactor and ported (ADDED): the expected parser is BASE's source with the main tree's
+add_argument lines inserted verbatim where the main tree has them. So far one: single_z_search.py --exact-clearance-vel (main tree
+11/12, after --obs-scale-ref; model/exact_obs.py clearance_vel). test_single_z_search_flags_main_tree also compares the new parser
+with the main tree's own scripts/single_z_search.py (read only; skipped when that file is not there).
+
 No GPU, no simulation: ~10 s.  Run standalone:  uv run python tests/test_cli.py
 """
 import argparse
@@ -29,10 +34,27 @@ import numpy as np  # noqa: E402
 
 BASE = "fa6c5f9"                                              # the commit before step 6
 SCRIPTS = ("single_z_search", "robot_z_search", "lso_search", "robot_lso_search")
+MAIN_TREE = Path("/home/allen19/crossenbodiment")             # the main tree (feat/multibody): read only
+# script -> [(the BASE line after which the main tree added flags, the added lines verbatim)]
+ADDED = {"single_z_search": [(
+    '    p.add_argument("--obs-scale-ref", default="assets/robots/adult/robot.xml")\n',
+    '    p.add_argument("--exact-clearance-vel", action="store_true",\n'
+    '                   help="with --obs-scale exact: also add d/dt of ExactObs\'s ground-clearance height correction to the root\'s "\n'
+    '                        "vertical velocity (backward difference over the 1/30 s control step, 0 at the start state; "\n'
+    '                        "model/exact_obs.py clearance_vel). Off by default (the derivative-free interface)")\n')]}
 
 
 def old_source(rel):
     return subprocess.run(["git", "show", f"{BASE}:{rel}"], cwd=REPO, capture_output=True, text=True, check=True).stdout
+
+
+def expected_source(name):
+    """BASE's scripts/<name>.py with the flags the main tree added since (ADDED) inserted"""
+    src = old_source(f"scripts/{name}.py")
+    for after, lines in ADDED.get(name, ()):
+        assert src.count(after) == 1, f"{name}: the anchor line of an added flag is not in {BASE}'s source once"
+        src = src.replace(after, after + lines)
+    return src
 
 
 class _Parser(Exception):
@@ -40,11 +62,12 @@ class _Parser(Exception):
         self.parser = parser
 
 
-def old_parser(name):
-    """the parser main() of scripts/<name>.py at BASE builds"""
+def old_parser(name, src=None, label=None):
+    """the parser main() of scripts/<name>.py at BASE builds (+ the flags added since, ADDED); src / label: another old source"""
     mod = types.ModuleType(f"old_{name}")
     mod.__file__ = str(REPO / "scripts" / f"{name}.py")
-    exec(compile(old_source(f"scripts/{name}.py"), f"{BASE}:scripts/{name}.py", "exec"), mod.__dict__)
+    src = expected_source(name) if src is None else src
+    exec(compile(src, label or f"{BASE}:scripts/{name}.py", "exec"), mod.__dict__)
     orig = argparse.ArgumentParser.parse_args
 
     def grab(self, *a, **k):
@@ -72,10 +95,10 @@ def same_type(a, b):
 FIELDS = ("option_strings", "dest", "default", "choices", "nargs", "required", "help", "const", "metavar")
 
 
-def compare(name):
+def compare(name, src=None, label=None):
     import importlib
     new = importlib.import_module(name).build_parser()
-    old = old_parser(name)
+    old = old_parser(name, src, label)
     for k in ("description", "epilog", "prefix_chars", "add_help", "allow_abbrev"):
         assert getattr(old, k) == getattr(new, k), f"{name}: parser.{k} differs"
     A, B = old._actions, new._actions
@@ -91,6 +114,14 @@ def compare(name):
 
 def test_single_z_search_flags():
     assert compare("single_z_search") > 40
+
+
+def test_single_z_search_flags_main_tree():
+    """the new parser against the main tree's current scripts/single_z_search.py (its main() builds the parser inline)"""
+    f = MAIN_TREE / "scripts/single_z_search.py"
+    if not f.exists():
+        raise unittest.SkipTest(f"{f} not found")
+    assert compare("single_z_search", f.read_text(), str(f)) > 40
 
 
 def test_robot_z_search_flags():

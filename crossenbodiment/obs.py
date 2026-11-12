@@ -12,6 +12,11 @@ crossenbodiment/rollout.py BatchRollout records that mapped observation as the r
                  (`.exact`, made by build()) is used for the start pose only. in_env=False (rollout_z_trace via
                  single_z_search.rollout, test_exact_obs): the main process computes every slot in turn -- same numbers,
                  slower. Not to be confused with model.exact_obs.ExactObs, the function object this strategy wraps.
+                 clearance_vel=True (single_z_search --exact-clearance-vel, main tree 11/12; default off): model/exact_obs.py's
+                 option, + d/dt of the ground-clearance height correction in the root's vertical velocity (backward difference
+                 over the control step, 0 at the start state); passed on to the workers' ExactObsWrapper and to the main-process
+                 ExactObs only when on, so the default calls are the ones before. start() resets the main-process ExactObs
+                 before the start observation, as single_z_search.rollout does in the main tree (no effect with the option off).
 
 Factories (the scripts' own selection rules, kept as they are):
   single_z_obs(...)   single_z_search.py --obs-scale auto | none | <r> | exact, including its root-scale rule for --body
@@ -84,13 +89,18 @@ class ExactObs(ObsMapper):
     """the adult-equivalent observation (model/exact_obs.py). xml: the simulated body; adult_xml: the adult the observation is
     computed on; scale: the root scale s (None = model/exact_obs's default 0.611036, passed to it as no argument at all, as the
     callers did). The paths are passed on as given: str() of them to the workers' ExactObsWrapper, as they are to the
-    main-process ExactObs (single_z_search / lso_search's spellings)."""
+    main-process ExactObs (single_z_search / lso_search's spellings). clearance_vel: model/exact_obs.py's option (module docstring)."""
     name = "exact"
 
-    def __init__(self, xml=None, adult_xml=paths.ADULT_XML_REL, scale=None, in_env=True, exact=None):
+    def __init__(self, xml=None, adult_xml=paths.ADULT_XML_REL, scale=None, in_env=True, exact=None, clearance_vel=False):
         self.xml, self.adult_xml, self.in_env = xml, adult_xml, in_env
         self.kw = {} if scale is None else {"scale": scale}
+        self.clearance_vel = bool(clearance_vel)
         self.exact = exact                   # the main-process model.exact_obs.ExactObs (build(), or given)
+
+    def _option_kw(self):
+        """the clearance_vel keyword, only when on (the default calls stay the ones before the option existed)"""
+        return {"clearance_vel": True} if self.clearance_vel else {}
 
     @classmethod
     def wrap(cls, exact, in_env=True):
@@ -109,21 +119,27 @@ class ExactObs(ObsMapper):
         if not self.in_env:
             return []
         from model.exact_obs import ExactObsWrapper
-        return [functools.partial(ExactObsWrapper, child_xml=str(self.xml), adult_xml=str(self.adult_xml), **self.kw)]
+        return [functools.partial(ExactObsWrapper, child_xml=str(self.xml), adult_xml=str(self.adult_xml), **self.kw,
+                                  **self._option_kw())]
 
     def build(self):
-        """make the main-process model.exact_obs.ExactObs(xml, adult_xml[, scale]) (once) and return it."""
+        """make the main-process model.exact_obs.ExactObs(xml, adult_xml[, scale][, clearance_vel=True]) (once) and return it."""
         if self.exact is None:
             from model.exact_obs import ExactObs as _ExactObs
-            self.exact = _ExactObs(self.xml, self.adult_xml, **self.kw)
+            self.exact = _ExactObs(self.xml, self.adult_xml, **self.kw, **self._option_kw())
         return self.exact
+
+    def _start_obs(self, q, v):
+        if hasattr(self.exact, "reset"):
+            self.exact.reset()               # clearance_vel: the start state adds 0 (no effect otherwise)
+        return self.exact(q, v)
 
     def start(self, first, init_qpos, init_qvel, n, per_slot=False):
         if init_qpos is None:
             raise SystemExit("--obs-scale exact needs --init reference")
         if per_slot:                         # test_exact_obs: every slot its own start pose
-            return np.stack([self.exact(q, v) for q, v in zip(init_qpos, init_qvel)])
-        return np.repeat(self.exact(init_qpos, init_qvel)[None], n, 0)
+            return np.stack([self._start_obs(q, v) for q, v in zip(init_qpos, init_qvel)])
+        return np.repeat(self._start_obs(init_qpos, init_qvel)[None], n, 0)
 
     def step(self, out):
         if self.in_env:
@@ -136,19 +152,20 @@ def multiplier_or_raw(obs_mul):
     return RawObs() if obs_mul is None else MultiplierObs(obs_mul)
 
 
-def single_z_obs(obs_scale, body, xml, ref_path=None, adult_clip=None, ref_xml=paths.ADULT_XML, parts="length"):
+def single_z_obs(obs_scale, body, xml, ref_path=None, adult_clip=None, ref_xml=paths.ADULT_XML, parts="length", clearance_vel=False):
     """single_z_search.py's --obs-scale selection, rule for rule:
       exact        ExactObs(xml, ref_xml): --body child keeps ExactObs's default s (0.611036, no scale argument); any other
                    body reads s off the clip, bodies.clip_ratio(ref_path, adult_clip) (median ratio of the reference's root
                    x, y to the adult clip's: the expression the script had, now the registry's)
       none         RawObs
       auto / <r>   MultiplierObs(build_obs_multiplier(xml, ref_xml, mode=obs_scale, parts=parts))
+    clearance_vel: exact only (--exact-clearance-vel; the caller rejects it for the other modes).
     Returns the mapper; for exact, `mapper.kw` holds the scale (empty for the child) and build() makes the ExactObs."""
     if obs_scale == "exact":
         if body != "child":
             from .bodies import clip_ratio
-            return ExactObs(xml, ref_xml, scale=clip_ratio(ref_path, adult_clip))
-        return ExactObs(xml, ref_xml)
+            return ExactObs(xml, ref_xml, scale=clip_ratio(ref_path, adult_clip), clearance_vel=clearance_vel)
+        return ExactObs(xml, ref_xml, clearance_vel=clearance_vel)
     from model.obs_scale import build_obs_multiplier
     return multiplier_or_raw(build_obs_multiplier(xml, ref_xml, mode=obs_scale, parts=parts, verbose=False))
 

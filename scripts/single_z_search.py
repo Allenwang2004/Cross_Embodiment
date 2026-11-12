@@ -229,6 +229,10 @@ def build_parser():
                         "adult-equivalent observation by reverse retargeting (model/exact_obs.py), for the actor and for B; "
                         "a positive number r: every length feature / r (ONE uniform ratio, model/obs_scale.py's ablation)")
     p.add_argument("--obs-scale-ref", default="assets/robots/adult/robot.xml")
+    p.add_argument("--exact-clearance-vel", action="store_true",
+                   help="with --obs-scale exact: also add d/dt of ExactObs's ground-clearance height correction to the root's "
+                        "vertical velocity (backward difference over the 1/30 s control step, 0 at the start state; "
+                        "model/exact_obs.py clearance_vel). Off by default (the derivative-free interface)")
     p.add_argument("--phys-weights", default="balanced",
                    choices=["balanced", "equal", "default"],
                    help="balanced, because this script SUMS L_align and L_phys: "
