@@ -142,6 +142,19 @@ examples:
     az: -72.6
     H: 3.0
     dx: 1.2
+  # user, 11/12: replaces the backward walk above (there BFM-Zero fell longer than z0). The weakened tall body (kp x0.6) on all 52 motions
+  # (outputs/tall_kpkd_all/kp0.6_kd1.0): move-ego-low-90-2_9 is the motion where z0 > BFM-Zero > LOES on every measure: down 3.70 / 3.27 /
+  # 1.07 s, MPJPE 20.9 / 15.0 / 10.5 cm, drift 3.86 / 0.45 / 0.20 m, PHC success only LOES. Frames: BFM-Zero minus LOES largest (>= 14 apart;
+  # z0 55.7, BFM-Zero 44.6, LOES 17.1 cm on them). View side-on to the reference's path (-83.8 deg).
+  - name: tall_move-ego-low-90-2_9_kp0.6
+    body: tall
+    clip: move-ego-low-90-2_9
+    source: kpkd:tall_kpkd_all/kp0.6_kd1.0/move-ego-low-90-2_9
+    frames: [105, 133, 240, 267, 281, 297]
+    view: fixed
+    az: 6.2
+    H: 3.0
+    dx: 1.0
 
 # CEM (BFM-Zero): BFM-Zero's tracking reward (PHC), seed 0, 2,048 rollouts (the child's: 1,024, as its LOES) (user, 11/10: add CEM to the
 # figures). The child's are the 52-motion CEM runs (1,024 rollouts); the others were run for these figures
@@ -162,6 +175,7 @@ cem:
   tall_rotate-z-5-0.8_9_z0down: outputs/tall_body_52/rotate-z-5-0.8_9_cem_s0
   child_headstand_4_kp0.85: outputs/child_kpkd_headstand/kp0.85_kd1.0/cem_s0
   tall_move-ego-180-4_9_kp0.6: outputs/tall_kpkd_180/kp0.6_kd1.0/cem_s0
+  tall_move-ego-low-90-2_9_kp0.6: outputs/tall_kpkd_all/kp0.6_kd1.0/move-ego-low-90-2_9/cem_s0
 
 # the strobe figures' models (xml relative to the repository; outputs/user_survey/models are the survey's copies)
 models:
