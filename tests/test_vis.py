@@ -173,18 +173,39 @@ def test_palette_script_tables():
     assert import_script("child_all_blender").LABELS == old["LABELS"]
 
 
-def test_strobe_examples_yaml():
-    """configs/figures/strobe_examples.yaml = strobe_final_blender.py's EX / CEM / MODEL at BASE (values and types)"""
-    src = old_source("scripts/strobe_final_blender.py"); tree = ast.parse(src); old = {}
-    for node in tree.body:
+# strobe examples the main tree added after BASE, ported into configs/figures/strobe_examples.yaml by 10c8ebd and a2a03a8 (main tree 11/12)
+STROBE_ADDED = ("tall_move-ego-low-90-2_9_kp0.6", "tall_move-ego-180-4_9_kp0.6_2048")
+
+
+def _ex_cem(src, label):
+    """strobe_final_blender.py's EX and CEM literals in `src`"""
+    out = {}
+    for node in ast.parse(src).body:
         if isinstance(node, ast.Assign) and isinstance(node.targets[0], ast.Name) and node.targets[0].id in ("EX", "CEM"):
-            old[node.targets[0].id] = eval(compile(ast.Expression(node.value), "EX", "eval"), {"dict": dict})
-    F = import_script("strobe_final_blender")
-    assert len(F.EX) == len(old["EX"])
-    for a, b in zip(F.EX, old["EX"]):
+            out[node.targets[0].id] = eval(compile(ast.Expression(node.value), label, "eval"), {"dict": dict})
+    return out
+
+
+def _same_examples(new, old):
+    assert len(new) == len(old), (len(new), len(old))
+    for a, b in zip(new, old):
         assert a[:4] == b[:4] and a[5] == b[5] and a[6] == b[6] and all(type(a[6][k]) is type(b[6][k]) for k in b[6]), (a, b)
         assert (a[4] is None and b[4] is None) or tuple(a[4]) == tuple(b[4]), (a, b)
-    assert F.CEM == old["CEM"]
+
+
+def test_strobe_examples_yaml():
+    """configs/figures/strobe_examples.yaml = strobe_final_blender.py's EX / CEM / MODEL at BASE (values and types), plus the examples
+    the main tree added after BASE (STROBE_ADDED), which must equal the main tree's own current EX / CEM (read only; that part needs the
+    main tree's scripts/strobe_final_blender.py)"""
+    old = _ex_cem(old_source("scripts/strobe_final_blender.py"), "EX")
+    F = import_script("strobe_final_blender")
+    _same_examples([a for a in F.EX if a[0] not in STROBE_ADDED], old["EX"])
+    assert {a[0] for a in F.EX} - {b[0] for b in old["EX"]} == set(STROBE_ADDED)
+    assert {k: v for k, v in F.CEM.items() if k not in STROBE_ADDED} == old["CEM"] and set(F.CEM) - set(old["CEM"]) == set(STROBE_ADDED)
+    f = MAIN / "scripts/strobe_final_blender.py"
+    if f.exists():                                               # the whole list, in order, against the main tree's
+        cur = _ex_cem(f.read_text(), str(f))
+        _same_examples(F.EX, cur["EX"]); assert F.CEM == cur["CEM"]
     S = MAIN / "outputs/user_survey"
     assert {k: v.resolve() for k, v in F.MODEL.items()} == {k: v.resolve() for k, v in dict(
         payload=S / "models/heavy_arm.xml", limit_leg=S / "models/limit_leg.xml", g1=S / "models/g1/scene.xml", child=S / "models/child.xml",
