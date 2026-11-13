@@ -5,6 +5,12 @@
   analyse   cost, metrics (scripts/eval_metrics.py, on the body itself) and PHC reward (as scripts/phc_reward_tables.py) of each run's z0 and best-so-far rollout, for the bodies whose runs are all finished; writes <OUT>/{per_run.npz, means.json} . Checks: settings, z0 rollout identical across seeds, conditions differ, child kp x 1 matches outputs/child_52_rerun (--set mild: outputs/noanchor/child) where the clip is there.
 --set mild (11/12, user: 0.8 -> 0.9 and 1.2 -> 1.1, the same 6 motions, 3 seeds, child and G1): kp1_kd1, kp0.9_kd1.1, kp1.1_kd0.9, kp0.9_kd0.9, kp1.1_kd1.1, seeds 0-2, child and g1 only, LOES as used now, without the anchor term
           (--anchor-weight 0 on both; robot_z_search's default is 0.3, so the G1 gets it explicitly), everything else as above -> outputs/kpkd_mild. Without --set: the 11/06 run (outputs/kpkd, anchor 0.3).
+          11/13 (user): + the tall body (tall = len1.4_wid0.8) with the paper's gains as its base, kp x 0.6 (assets/robots_torque/len1.4_wid0.8_kp0.6_kd1.0),
+          the five conditions multiplying that base again (kp0.9 = 0.6 x 0.9 = 0.54 of the calibrated gains; XMLs in <base folder>_<condition>);
+          its searches use the tall runs' own flags (outputs/tall_kp06_52/commands.txt, the _es_ lines) with --xml, --seed and --out changed, so
+          tall kp1_kd1 must reproduce outputs/tall_kp06_52/<stem>_es_s<seed> where that run exists; root scale s = 1.364408905613045 (single_z_search's
+          median ref / adult root x, y; every run's summary pos_div is checked against it) for the PHC reward and the 0.5 x s success threshold.
+          The child and G1 commands are unchanged; the tall's are the last 90 lines of commands.
   table     after analyse, contactfall and phcsuccess: the Notion page's table rows (Fall Time by contact, PHC success, analyse's metrics, PHC reward) -> <OUT>/table.md
 usage: uv run python scripts/kpkd_test.py [--set mild] prepare | commands | analyse | contactfall | phcsuccess | table"""
 import json, shutil, subprocess, sys
@@ -28,6 +34,7 @@ assert SET in ("default", "mild"), SET
 MILD = SET == "mild"
 OUT_REL = "outputs/kpkd_mild" if MILD else "outputs/kpkd"                 # --set mild (main tree 11/12): the second, milder gain test
 OUT = paths.read_path(OUT_REL); RES = paths.result(OUT_REL[len("outputs/"):]); SEEDS = range(3) if MILD else range(5)
+RUNS_REPO = paths.outputs_root().parent                                 # the tree the runs were made in (summary "ref" is absolute there; this repository by default)
 ANCHOR = 0.0 if MILD else 0.3                                            # the anchor weight of every search
 SAME_RUN = "outputs/noanchor/child" if MILD else "outputs/child_52_rerun"   # child kp x 1 must reproduce these runs' best_z
 BODY = dict(child=dict(xml=CHILD_XML_REL, ref="data/child/retargeting_motion/{c}.npz", label="child"), g1=dict(ref="outputs/g1/roundtrip/{stem}/g1.npz"),
@@ -37,6 +44,9 @@ COND = (("kp1_kd1", 1.0, 1.0), ("kp0.8_kd1.2", 0.8, 1.2), ("kp1.2_kd0.8", 1.2, 0
 if MILD:
     COND = (("kp1_kd1", 1.0, 1.0), ("kp0.9_kd1.1", 0.9, 1.1), ("kp1.1_kd0.9", 1.1, 0.9), ("kp0.9_kd0.9", 0.9, 0.9), ("kp1.1_kd1.1", 1.1, 1.1))
     BODY = {b: BODY[b] for b in ("child", "g1")}
+    BODY["tall"] = dict(xml="assets/robots_torque/len1.4_wid0.8_kp0.6_kd1.0/robot_torque_full.xml", ref="data/len1.4_wid0.8/retargeting_motion/{c}.npz", label="len1.4_wid0.8",
+                        note=" (len1.4_wid0.8; gains relative to its paper base kp × 0.6, kd × 1)")
+TALL_RUN = "outputs/tall_kp06_52"                                         # tall kp x 1 must reproduce these runs (<stem>_es_s<seed>) exactly
 # 11/08: the user's motion list is these 6; crawl-0.4-2-d_8 and crouch-0_8 were also run for the first three conditions (outputs/kpkd,
 # means_8clips.json) and are left out, so the same-ratio conditions (kp and kd x 0.8 or x 1.2 together) were run on the 6 only
 CLIPS_8 = ["crawl-0.4-2-d/crawl-0.4-2-d_8", "crouch-0/crouch-0_8", "headstand/headstand_4", "jump-2/jump-2_6", "jump-2/jump-2_7", "move-ego-0-2/move-ego-0-2_2", "move-ego-0-4/move-ego-0-4_8", "rotate-x--5-0.8/rotate-x--5-0.8_4"]
@@ -73,6 +83,8 @@ def prepare():
 
 def command(r):
     b, name, c, s, d = r.body, r.method, r.clip, r.seed, r.dir
+    if b == "tall":                                                       # outputs/tall_kp06_52/commands.txt's _es_ flags, in their order; no --ref (single_z_search finds it)
+        return f"uv run python scripts/single_z_search.py --clip {c} --body {BODY[b]['label']} --xml {XML(b, name)} --evals 1024 --pairs 8 --sigma 0.05 --lr 0.03 --obs-scale exact --eval-every 0 --init-vel-scale 1 --seed {s} --objective bfm --heading-weight 1.0 --pos-weight 0.1 --anchor data/origin_z/{c}.npy --anchor-weight {ANCHOR:g} --out {d}"
     if b != "g1":
         rf = "" if b == "child" else f" --ref {ref_path(b, c)}"
         return f"uv run python scripts/single_z_search.py --clip {c} --body {BODY[b]['label']} --xml {XML(b, name)}{rf} --objective bfm --evals 1024 --pairs 8 --sigma 0.05 --lr 0.03 --obs-scale exact --heading-weight 1.0 --pos-weight 0.1 --anchor data/origin_z/{c}.npy --anchor-weight {ANCHOR:g} --seed {s} --eval-every 0 --init-vel-scale 1 --out {d}"
@@ -124,6 +136,8 @@ def one(job):
     vz, vb = full(body[b], zq, ref, 1.0), full(body[b], bq, ref, S["best"]["cost"] / base)
     bad = Checks.settings(dict(evals=1024, seed=s, frame_offset=1, sampling="independent", sigma=0.05, lr=0.03, heading_weight=1.0, pos_weight=0.1, anchor_weight=ANCHOR), S)
     bad += [k for k, want in (("init_vel_scale", 1.0), ("obs_scale", "exact"), ("xml", XML(b, name) if b != "g1" else None)) if b != "g1" and S.get(k) != want] + [k for k, want in (("init_vel", "reference"), ("fill", "ridge"), ("ik_weight", 1.0), ("gains", GAINS(name))) if b == "g1" and S.get(k) != want]
+    if b == "tall":
+        bad += [k for k, want in (("body", BODY[b]["label"]), ("ref", str(RUNS_REPO / ref_path(b, c))), ("pos_div", SCALE[b]), ("pos_unit", "adult"), ("pairs", 8), ("objective", "bfm"), ("init", "reference"), ("algo", "es")) if S.get(k) != want]
     return job, [vz[k] for k in KEYS], [vb[k] for k in KEYS], zq[:len(ref)], base, S["best"]["cost"], bad, phc_reward(b, c, zq), phc_reward(b, c, bq)
 
 
@@ -153,6 +167,22 @@ def analyse():
             if "child" in BODIES and o.exists():
                 m52 = max(m52, float(np.abs(np.load(o) - np.load(OUT / f"child_kp1_kd1/{st}_s{s}/best_z.npy")).max())); n52 += 1
     print("runs:", len(res), "| settings not as intended:", len(bad), bad[:4], "| z0 rollout, largest difference across seeds:", spread, "| clips whose z0 rollout did not change with the gains:", same_across, f"| child kp x 1 vs {SAME_RUN} on {n52} runs, largest z difference:", m52, flush=True)
+    if "tall" in BODIES:
+        b = "tall"; sp = max(float(np.abs(R[(b, n, c, s)][3] - R[(b, n, c, 0)][3]).max()) for n, _, _ in COND for c in CLIPS for s in SEEDS)
+        moved = [float(np.abs(R[(b, n, c, 0)][3] - R[(b, "kp1_kd1", c, 0)][3]).max()) for n, _, _ in COND[1:] for c in CLIPS]
+        same, nt = [], 0                                                  # same command apart from --out -> every array and curve.csv identical
+        for c in CLIPS:
+            for s in SEEDS:
+                o, d = paths.read_path(f"{TALL_RUN}/{c.split('/')[1]}_es_s{s}"), OUT / f"tall_kp1_kd1/{c.split('/')[1]}_s{s}"
+                if not (o / "summary.json").exists():
+                    continue
+                nt += 1; ok = (o / "curve.csv").read_bytes() == (d / "curve.csv").read_bytes() and np.array_equal(np.load(o / "best_z.npy"), np.load(d / "best_z.npy"))
+                for f in ("best.npz", "origin_z.npz", "z_trace.npz"):
+                    x, y = np.load(o / f), np.load(d / f); ok &= sorted(x.files) == sorted(y.files) and all(np.array_equal(x[k], y[k]) for k in x.files)
+                S0, S1 = (json.load(open(p / "summary.json")) for p in (o, d)); ok &= S0["best"] == S1["best"] and S0["origin_z"] == S1["origin_z"]
+                same.append(ok)
+        print(f"tall: z0 rollout, largest difference across seeds: {sp} | z0 rollout vs kp1_kd1, smallest largest-difference over the other {len(moved)} (condition, clip) pairs: {min(moved):.4g}"
+              f" (unchanged: {sum(v == 0 for v in moved)}) | tall kp x 1 vs {TALL_RUN} on {nt} runs: identical (curve.csv bytes, best_z, best/origin_z/z_trace arrays, summary best and origin_z) in {sum(same)}", flush=True)
     i = {k: j for j, k in enumerate(KEYS)}; rep = {}
     for b in BODIES:
         rep[b] = {}
@@ -174,7 +204,7 @@ def table():
     m, f, p = (json.load(open(paths.own_path(f"{OUT_REL}/{x}"))) for x in ("means.json", "means_contactfall_without_none.json", "means_phcsuccess.json"))
     lab = {n: f"kp × {a:g}, kd × {d:g}" for n, a, d in COND}; L = []
     for b in [x for x in BODY if x in m]:
-        L += [f"\n{b}: frozen = mean over {len(CLIPS)} motions, LOES = mean over {len(CLIPS) * len(SEEDS)} searches ({OUT_REL})", "",
+        L += [f"\n{b}{BODY[b].get('note', '')}: frozen = mean over {len(CLIPS)} motions, LOES = mean over {len(CLIPS) * len(SEEDS)} searches ({OUT_REL})", "",
               "| Gains | Method | Fall Time (s) ↓ | Success Rate ↑ | MPJPE (cm) ↓ | MMPJPE (cm) ↓ | MPJAE (m/s²) ↓ | Cost ↓ | PHC reward ↑ |", "|---|---|---|---|---|---|---|---|---|"]
         for n, _, _ in COND:
             for w, name in (("z0", "Frozen (z\\_0)"), ("best", "LOES")):
@@ -272,6 +302,7 @@ def contactfall():
 
 
 SCALE = {b: BODIES.scale(b) for b in ("child", "g1", "limit_leg", "heavy_arm")}   # body / adult: ExactObs's s, RobotMap("g1").s, 1, 1
+if MILD: SCALE["tall"] = 1.364408905613045                                   # single_z_search's root scale of len1.4_wid0.8 (the same on all 6 clips; = each run's pos_div, checked)
 
 
 def phc_one(job):

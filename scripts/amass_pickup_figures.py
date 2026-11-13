@@ -54,11 +54,26 @@ Other clips and bodies (11/12; with no options everything above is unchanged):
        (combined/amass_tall_martial_arts_kick_moment_unaligned.png: the same without --align lsor --ground)
        --top-style final --top-lsor outputs/amass_baselines/tall_extra/Male2MartialArtsExtended__Extended_1_lsor_s0_2048/rollouts.npz:q_best_it128
        added for combined/amass_tall_martial_arts_topdown.png (..._topdown_strobe.png: without them)
+
+A kick filmstrip (11/12; needs --moment kick; replaces the moment and top-down figures in that run):
+  --sequence N         N panels in one row, one body only, our method (SEQ_METHOD = lsor, q_best_it64), at N frames around the kick that
+                       --moment kick picks, chosen from the adult reference's kicking-foot height (see seq_frames; N = 5: wind-up, leg
+                       rising, kick peak, retraction, foot back down); one world camera for every panel (--cam-azimuth as for the moment
+                       figure, fit over the adult reference and SEQ_METHOD at the kick peak), each panel centred on its own bodies, one
+                       scale for all (the widest and the tallest panel, PAD around, grown to SEQ_PX = the tall martial-arts moment panels' size)
+  --overlay-adult      in every panel also the adult reference (the AMASS origin motion, full adult size) at the same frame, moved
+                       horizontally only so its root (pelvis, the free joint's x, y) is on the method's root; no turn, no scaling; --ground
+                       lowers it as for the moment figure; drawn light and see-through (ADULT_LOOK: the body colour tinted towards white,
+                       alpha) so the solid method body shows inside it
+  Out: outputs/strobe_task52_blender/amass_<body>_<tag>_kick_sequence/{trajectories/, frames.json, source.json (frames, run file,
+       alignment offsets, heading differences), scene.json, meshes.npz, render_blender.py, renders/}, combined/amass_<body>_<tag>_kick_sequence.png
+       (24 px apart, no labels) and every panel as panels/amass_<body>_<tag>_kick_sequence_f<frame>.png
+  e.g. uv run python scripts/amass_pickup_figures.py --clip Male2MartialArtsExtended__Extended_1 --body child --moment kick --tag martial_arts --cam-azimuth fit --ground --sequence 5 --overlay-adult
 OOP refactor (ported from the main tree, 11/12): the pose export is crossenbodiment/blender.py's (BlenderScene, load_model: the functions
 export_blender_package.py had), so scene.json carries the "version" field every refactored Blender export writes (render_blender.py
 ignores it); runs and the survey models are read through crossenbodiment.paths.read_path ($CE_OUTPUTS_ROOT), the figure folders are
 written under $CE_RESULTS_ROOT (default outputs/)."""
-import itertools, json, math, os, subprocess, sys
+import itertools, json, math, os, shutil, subprocess, sys
 from pathlib import Path
 import numpy as np
 
@@ -90,6 +105,13 @@ GHOST = ("z0", 0.6); PATH_TINT = 0.45; R_DOT = 0.045; BODY_DATA = dict(child="ch
 ALIGN, GROUND = set(ARG("--align", "").split(",")) - {""}, "--ground" in sys.argv             # moment figure: see the docstring
 PAD = 0.15                                                                # off the pick-up clip: room around the drawn poses and their shadows (m)
 SUN = np.array([2.2, -2.2, 0.8 - 6.5]); SUN = SUN / -SUN[2]               # render_blender.py's key light (KEY_POS towards (x, 0, 0.8)): a point at height z shadows at xy + z * SUN[:2]
+SEQ, OVERLAY, SEQ_METHOD = ARG("--sequence", 0), "--overlay-adult" in sys.argv, "lsor"     # the kick filmstrip: see the docstring
+BODY_RGB = (0.47, 0.61, 0.70)                                             # render_blender.py COLORS["body"] (sRGB), for the record in source.json
+ADULT_LOOK = (0.45, 0.35)                                                 # --overlay-adult: tint towards white (paler, less saturated), alpha
+SEQ_PX = (M_PX, 1576)                                                     # --sequence panel size (px): the tall martial-arts moment panels' (combined/amass_tall_martial_arts_kick_moment.png)
+NEAR, HALF = 0.05, 0.5                                                    # seq_frames: "on the floor" = within NEAR m of the standing foot height; HALF of the kick's rise
+if SEQ:
+    assert MOMENT == "kick", "--sequence needs --moment kick"; OUT = ST / f"amass_{BODY}_{TAG}_{MOMENT}_sequence"
 
 
 def trajectories():
@@ -174,10 +196,10 @@ def yaw(q):
     return np.arctan2(2 * (x * y + w * z), 1 - 2 * (y * y + z * z))
 
 
-def fit_view(info, key):
+def fit_view(info, key, keys=None):
     """--cam-azimuth fit: the world camera azimuth that keeps every panel's lean (kick) direction closest to the image plane (the smallest
-    largest angle out of it), turned so that the adult reference's points right"""
-    dirs = {k: info["methods"][k][key] for k, _ in BODIES}; off = lambda d, c: abs((d - c + 90.0) % 180.0 - 90.0)       # angle between direction d and the line c (deg)
+    largest angle out of it), turned so that the adult reference's points right; keys: the bodies counted (default all five; must hold adult)"""
+    dirs = {k: info["methods"][k][key] for k in (keys or [k for k, _ in BODIES])}; off = lambda d, c: abs((d - c + 90.0) % 180.0 - 90.0)       # angle between direction d and the line c (deg)
     c = min(np.arange(0.0, 180.0, 0.1), key=lambda c: max(off(d, c) for d in dirs.values()))                                 # the image plane's line
     cam = min((c + 90.0, c + 270.0), key=lambda z: abs((dirs["adult"] - (z - 90.0) + 180.0) % 360.0 - 180.0))                  # camera at z: direction z - 90 runs right
     info["moment_camera_fit"] = dict(rule="smallest largest angle between a panel's kick (lean) and the image plane", out_of_image_plane_deg={k: round(off(d, cam - 90.0), 1) for k, d in dirs.items()})
@@ -207,6 +229,75 @@ def export_moment(Q, info, P):
     for k, _ in BODIES:
         P[f"{PFX}_moment_{k}"] = dict(figure="moment", width_m=size[0], height_m=size[1], feet_m=size[2], px=[M_PX, round(M_PX * size[1] / size[0])], white=True, poses=[po_[k][0]], frames=[F], view="fixed", cam_azimuth_world=cam_world)
     info["moment_camera_world_azimuth_deg"] = round(cam_world, 1)
+
+
+def seq_frames(h, F):
+    """--sequence 5: the kick's frames from the adult reference's kicking-foot height h (the higher of ankle and toe, m) and its peak F.
+    Standing height b = the median of h over the clip; wind-up = the last frame before F with the foot within NEAR of b (still on the
+    floor); leg rising = the first frame before F at or above b + HALF (h[F] - b); kick peak = F; retraction = the first frame after F at or
+    below that; foot back down = the first frame after F within NEAR of b again"""
+    assert SEQ == 5, "seq_frames picks 5 frames"
+    b = float(np.median(h)); mid = b + HALF * (h[F] - b); pre, post = np.arange(F), np.arange(F + 1, len(h))
+    w = int(pre[h[pre] <= b + NEAR].max()); fr = [w, int(pre[(h[pre] >= mid) & (pre > w)].min()), F, int(post[h[post] <= mid].min()), int(post[h[post] <= b + NEAR].min())]
+    names = ("wind-up", "leg rising", "kick peak", "retraction", "foot back down"); assert fr == sorted(fr) and len(set(fr)) == 5, fr
+    rule = (f"from the adult reference's kicking-foot height h (the higher of ankle and toe): standing height b = median of h over the clip "
+            f"({b:.3f} m); wind-up = last frame before the peak with h <= b + {NEAR} m; leg rising = first frame after that with h >= b + {HALF} (h_peak - b) "
+            f"({mid:.3f} m); kick peak = the --moment kick frame (the reference's highest foot); retraction = first frame after the peak with h <= {mid:.3f} m; "
+            f"foot back down = first frame after the peak with h <= b + {NEAR} m")
+    return fr, names, rule, b
+
+
+def export_sequence(Q, info, M, P):
+    """--sequence: SEQ_METHOD's pose at each of the kick's frames, one panel each, with the adult reference overlaid (--overlay-adult)"""
+    F = info["frame"]; side = ("left", "right").index(info["kick_leg"]); h_ad = M["adult"]["foot"][:, side]; frames, names, rule, b = seq_frames(h_ad, F)
+    key = "kick_dir_deg_at_frame"; c_arg = ARG("--cam-azimuth", ""); keys = ["adult", SEQ_METHOD]
+    cam_world = info["methods"]["adult"][key] + 90.0 if c_arg == "" else fit_view(info, key, keys) if c_arg == "fit" else float(c_arg); h = math.radians(cam_world - AZ)
+    right = np.array([math.sin(math.radians(AZ)), -math.cos(math.radians(AZ))]); c, s = math.cos(-h), math.sin(-h); Rz = np.array([[c, -s], [s, c]])   # the pose export's turn
+    ya, ym = yaw(Q["adult"]), yaw(Q[SEQ_METHOD]); rows, built = [], []
+    for i, t in enumerate(frames):
+        poses, row = [], dict(panel=f"{PFX}_sequence_f{t:03d}", position=i + 1, moment=names[i], frame=t, frame_in_reference_file=t + 1, seconds=round(t / 30, 2),
+                              adult_kick_foot_m=round(float(h_ad[t]), 3), method_kick_foot_m=round(float(M[SEQ_METHOD]["foot"][t, side] * K), 3))
+        for k in (["adult"] if OVERLAY else []) + [SEQ_METHOD]:
+            m = model(k); d = mujoco.MjData(m); d.qpos[:] = Q[k][t]; mujoco.mj_forward(m, d); com, root = d.subtree_com[1][:2].copy(), Q[k][t, :2].copy()
+            po = SCENE.pose(m, Q[k], t, 0.0, 0.0, h, False, "human"); dxy = Rz @ (com - root)         # the pose export centres on the centre of mass: put the root (pelvis) at the origin instead
+            for g in po["geoms"]:
+                g["p"][0] = round(g["p"][0] + float(dxy[0]), 5); g["p"][1] = round(g["p"][1] + float(dxy[1]), 5)
+            row[f"{k}_root_xy_m"] = [round(float(x), 4) for x in root]
+            if k == "adult":                                              # moved by (method root - adult root): both roots at the origin; light and see-through
+                po.update(tint=ADULT_LOOK[0], alpha=ADULT_LOOK[1])
+                if GROUND:                                                # as --ground on the moment figure
+                    from model.robot_map import Lowest
+                    d2 = mujoco.MjData(m); d2.qpos[:] = Q[k][t]; mujoco.mj_kinematics(m, d2); low = float(Lowest(m)(d2)); row["adult_lowered_m"] = round(low, 4)
+                    for g in po["geoms"]:
+                        g["p"][2] = round(g["p"][2] - low, 5)
+            poses.append(po)
+        if OVERLAY:
+            off = Q[SEQ_METHOD][t, :2] - Q["adult"][t, :2]; dy = float(ym[t] - ya[t])
+            row.update(adult_offset_xy_m=[round(float(x), 4) for x in off], heading_method_minus_adult_deg=round(math.degrees(math.atan2(math.sin(dy), math.cos(dy))), 1))
+        gs = [g for po in poses for g in po["geoms"]]; lo, hi = h_offset(dict(geoms=gs), right); top = max(g["p"][2] + max(g["size"]) for g in gs)
+        for po in poses:
+            po["shift"] = -(lo + hi) / 2
+        row.update(width_m=round(hi - lo, 3), top_m=round(top, 3)); rows.append(row); built.append((poses, hi - lo, top))
+        print(f"  {row['panel']} ({names[i]}): adult foot {h_ad[t]:.2f} m, {SEQ_METHOD} foot {row['method_kick_foot_m']:.2f} m, width {hi - lo:.2f} m, top {top:.2f} m"
+              + (f", adult moved {row['adult_offset_xy_m']}, heading off {row['heading_method_minus_adult_deg']:+.1f} deg" if OVERLAY else ""), flush=True)
+    w_, h_ = max(w for _, w, _ in built) + 2 * PAD, max(t for _, _, t in built) + M_FEET + PAD; r_ = SEQ_PX[1] / SEQ_PX[0]
+    size = (max(w_, h_ / r_), max(h_, w_ * r_), M_FEET)                  # grown to SEQ_PX's shape (room added at the sides or the top)
+    for (poses, _, _), row in zip(built, rows):
+        P[row["panel"]] = dict(figure="sequence", width_m=size[0], height_m=size[1], feet_m=size[2], px=list(SEQ_PX), white=True, poses=poses,
+                               frames=[row["frame"]], view="fixed", cam_azimuth_world=cam_world)
+    info["sequence"] = dict(method=SEQ_METHOD, frames=frames, rule=rule, standing_foot_m=round(b, 3), panel_m=[round(size[0], 2), round(size[1], 2)],
+                            camera_world_azimuth_deg=round(cam_world, 1), panels=rows)
+    src = dict(clip=CLIP, body=BODY, method=f"{SEQ_METHOD} (ours)", run=f"{RUNS_REL}/{CLIP}_{SEQ_METHOD}_s0/rollouts.npz", key="q_best_it64",
+               adult=f"amass_data/amass_origin_motion/ACCAD/{CLIP}.npz qpos[1:] (full adult size)" if OVERLAY else None,
+               frame_alignment="simulated q[t] against the adult reference's qpos[1:][t] (its file frame t + 1); seconds = t / 30",
+               kick=dict(frame=F, leg=info["kick_leg"], adult_peak_foot_m=round(float(h_ad[F]), 3)), frames=frames, rule=rule,
+               alignment=("the adult moved horizontally only, its root (pelvis, free joint x, y) onto the method's root at that frame; no turn, no scaling"
+                          + ("; lowered by its own lowest point at that frame (model.robot_map.Lowest on outputs/user_survey/models/adult.xml)" if GROUND else "")) if OVERLAY else None,
+               camera=dict(world_azimuth_deg=round(cam_world, 1), rule=("fit over adult and " + SEQ_METHOD + " kick directions at the kick peak") if c_arg == "fit" else c_arg or "side-on to the adult's kick"),
+               look=dict(method=dict(colour="body", srgb=list(BODY_RGB), alpha=1.0), adult=dict(colour="body", tint_to_white=ADULT_LOOK[0],
+                         srgb=[round((1 - ADULT_LOOK[0]) * x + ADULT_LOOK[0], 3) for x in BODY_RGB], alpha=ADULT_LOOK[1]) if OVERLAY else None),
+               panels=rows)
+    (OUT / "source.json").write_text(json.dumps(src, indent=1))
 
 
 def trail(xy, color, r):
@@ -313,9 +404,12 @@ def export_topdown(Q, info, P):
 
 
 def export():
-    Q = trajectories(); info, _ = pick_frame(Q); P = SCENE.panels
+    Q = trajectories(); info, M = pick_frame(Q); P = SCENE.panels
     print(f"{MOMENT} frame", info["frame"], json.dumps(info["methods"], indent=None), flush=True)
-    export_moment(Q, info, P); export_topdown(Q, info, P)
+    if SEQ:                                                               # --sequence: the kick filmstrip only
+        export_sequence(Q, info, M, P)
+    else:
+        export_moment(Q, info, P); export_topdown(Q, info, P)
     OUT.mkdir(parents=True, exist_ok=True); (OUT / "frames.json").write_text(json.dumps(info, indent=1))
     SCENE.write(OUT, placeholder=True)                                    # scene.json (+ "version"), meshes.npz (+ "_"), render_blender.py
     print("exported", len(P), "panels", flush=True)
@@ -331,6 +425,12 @@ def render():
 def combine(gap=24):
     from PIL import Image
     (ST / "combined").mkdir(exist_ok=True)
+    if SEQ:                                                               # --sequence: its panels left to right (the frames' order), each also in panels/
+        names = sorted((n for n in json.loads((OUT / "scene.json").read_text())["panels"] if n.startswith(f"{PFX}_sequence_")), key=lambda n: int(n.rsplit("_f", 1)[1])); ims = [Image.open(OUT / "renders" / f"{n}.png").convert("RGB") for n in names]
+        out = Image.new("RGB", (sum(im.width for im in ims) + gap * (len(ims) - 1), max(im.height for im in ims)), "white"); x = 0
+        for n, im in zip(names, ims):
+            out.paste(im, (x, 0)); x += im.width + gap; shutil.copy(OUT / "renders" / f"{n}.png", ST / "panels" / f"amass_{BODY}_{TAG}_{n}.png")
+        out.save(ST / "combined" / f"amass_{BODY}_{TAG}_{MOMENT}_sequence.png"); print("sequence", out.size, names, flush=True); return
     for fig in [f for f in ("moment", "topdown") if f"{PFX}_{f}_".startswith(tuple(ARG("--only", f"{PFX}_").split(",")))]:
         ims = [Image.open(OUT / "renders" / f"{PFX}_{fig}_{k}.png").convert("RGB") for k, _ in BODIES]
         out = Image.new("RGB", (sum(im.width for im in ims) + gap * (len(ims) - 1), max(im.height for im in ims)), "white"); x = 0

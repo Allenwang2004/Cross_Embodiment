@@ -42,8 +42,9 @@ def main():
         fig, axs = plt.subplots(1, 4, figsize=(5.5, 2.3), gridspec_kw=dict(width_ratios=[1, 1, 1.12, 1.12]))
         fig.subplots_adjust(left=0.06, right=0.99, bottom=0.05, top=0.76, wspace=0.42)
     else:
-        fig, axs = plt.subplots(1, 2, figsize=(5.5, 2.3))
-        fig.subplots_adjust(left=0.08, right=0.98, bottom=0.05, top=0.76, wspace=0.32)
+        # 11/13 (user): lower than before (was 5.5 x 2.3 in) so that it is no taller than the paper's convergence figure
+        fig, axs = plt.subplots(1, 2, figsize=(5.5, 1.8))
+        fig.subplots_adjust(left=0.08, right=0.98, bottom=0.06, top=0.70, wspace=0.32)
         axs = [None, axs[0], None, axs[1]]
     x = np.arange(3); cols = [c for _, _, c in MAPS]
     title = lambda ax, t: ax.set_title(t, fontsize=10, color=INK, loc="left", pad=4)

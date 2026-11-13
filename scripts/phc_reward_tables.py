@@ -73,12 +73,19 @@ def model(xml):
     return _M[xml]
 
 
+def reward_fn(xml, ref, s):
+    """the PHC reward of a rollout q (T, nq) against ref (frames 0..; q[t] against ref[t + 1]) with root scale s:
+    1 - PHCCost(model, ref[0], ref[1:], scale=s)(q[None], ref[0]) (also used by amass_baselines.py --set bfm)"""
+    from model.phc_reward import PHCCost
+    phc = PHCCost(model(xml), ref[0], ref[1:], scale=s)
+    return lambda q: 1.0 - float(phc(np.asarray(q, dtype=np.float64)[None], ref[0])[0])
+
+
 def curve(run):
     return np.array([float(r["best_so_far"]) for r in csv.DictReader(open(run / "curve.csv"))])
 
 
 def job(arg):
-    from model.phc_reward import PHCCost
     b, c = arg; B = BODY[b]; st = c.split("/")[1] if b in ("child", "payload", "limit_leg", "g1") else c; G = B["G"]; S = list(B["seeds"])
     chk = dict(cem_curve=[], cem_eval=[], cem_z0=[], frozen_vs_cem_z0=None, ta_budget=[], g1_reset=None)
     if b == "g1":
@@ -95,8 +102,7 @@ def job(arg):
             s = scale("tall", c)
         else:
             s = B["s"]
-    phc = PHCCost(model(B["xml"]), ref[0], ref[1:], scale=s)
-    rew = lambda q: 1.0 - float(phc(np.asarray(q, dtype=np.float64)[None], ref[0])[0])
+    rew = reward_fn(B["xml"], ref, s)
     R = {}
     if B["frozen"] is not None:
         R["frozen"] = rew(np.load(str(B["frozen"]).format(st=st))["qpos"])
