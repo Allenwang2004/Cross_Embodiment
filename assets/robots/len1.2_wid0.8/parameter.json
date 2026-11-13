@@ -1,0 +1,12 @@
+{
+  "label": "len1.2_wid0.8",
+  "scale_actuators": false,
+  "leg_scale": 1.2,
+  "arm_scale": 1.2,
+  "torso_scale": 1.2,
+  "head_scale": 1.2,
+  "leg_girth": 0.96,
+  "arm_girth": 0.96,
+  "torso_girth": 0.96,
+  "head_girth": 0.96
+}
