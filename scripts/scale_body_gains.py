@@ -12,7 +12,9 @@ so every joint keeps its damping ratio zeta = C / (2 sqrt(K I)); ctrl keeps its 
 are touched. verify() compiles both models and checks every ratio, and that nothing else (masses, inertias,
 geometry, ranges, contacts) moved.
 usage: uv run python scripts/scale_body_gains.py --src assets/robots_torque/child/robot_torque_full.xml --m 1.2 \
-           --out assets/robots_torque/child_k1.2/robot_torque_full.xml"""
+           --out assets/robots_torque/child_k1.2/robot_torque_full.xml
+--kp A --kd B instead of --m moves the two apart: kp's group (gainprm[0], biasprm[0], biasprm[1], joint stiffness) x A, the damping terms (biasprm[2], joint damping) x B,
+torque limit and armature unchanged, so zeta changes by B / sqrt(A). A joint whose stiffness or damping comes from a <default> class (the adult's XML) gets its compiled value written out, scaled."""
 import argparse, re
 from pathlib import Path
 import mujoco
@@ -21,16 +23,16 @@ import numpy as np
 REPO = Path(__file__).resolve().parent.parent
 
 
-def verify(src, out, m):
+def verify(src, out, m, md=None, mf=None):
     a, b = mujoco.MjModel.from_xml_path(str(src)), mujoco.MjModel.from_xml_path(str(out))
     assert (a.nu, a.njnt, a.nbody, a.ngeom) == (b.nu, b.njnt, b.nbody, b.ngeom)
-    sm = np.sqrt(m)
+    sm = np.sqrt(m) if md is None else md; mf = m if mf is None else mf
     ratio = lambda x, y: np.divide(y, x, out=np.full(x.shape, np.nan), where=x != 0)
     checks = {"gainprm[0]": (a.actuator_gainprm[:, 0], b.actuator_gainprm[:, 0], m),
               "biasprm[0]": (a.actuator_biasprm[:, 0], b.actuator_biasprm[:, 0], m),
               "biasprm[1]": (a.actuator_biasprm[:, 1], b.actuator_biasprm[:, 1], m),
               "biasprm[2]": (a.actuator_biasprm[:, 2], b.actuator_biasprm[:, 2], sm),
-              "forcerange": (a.actuator_forcerange, b.actuator_forcerange, m)}
+              "forcerange": (a.actuator_forcerange, b.actuator_forcerange, mf)}
     hinge = a.jnt_type == mujoco.mjtJoint.mjJNT_HINGE
     dof = a.jnt_dofadr[hinge]
     checks.update({"joint stiffness": (a.jnt_stiffness[hinge], b.jnt_stiffness[hinge], m),
@@ -56,9 +58,9 @@ def verify(src, out, m):
         j = mm.actuator_trnid[:, 0]; dd = mm.jnt_dofadr[j]
         K = -mm.actuator_biasprm[:, 1] + mm.jnt_stiffness[j]; C = -mm.actuator_biasprm[:, 2] + mm.dof_damping[dd]
         return C / (2 * np.sqrt(K * M[dd, dd]))
-    za, zb = zeta(a), zeta(b)
-    print(f"  damping ratio zeta: src median {np.median(za):.3f}, new median {np.median(zb):.3f}, "
-          f"max |change| {np.max(np.abs(zb / za - 1)) * 100:.2g}% (K x m, C x sqrt(m), the inertia unchanged)")
+    za, zb = zeta(a), zeta(b); want = sm / np.sqrt(m)
+    print(f"  damping ratio zeta: src median {np.median(za):.3f}, new median {np.median(zb):.3f}, want x {want:.4f}, "
+          f"largest miss {np.max(np.abs(zb / za / want - 1)) * 100:.2g}% (K x {m:g}, C x {sm:.4f}, the inertia unchanged)")
 
 
 def fmt(x):
@@ -75,30 +77,42 @@ def scale_attr(tag, name, f):
     return tag[:m.start(1)] + " ".join(fmt(x * g) for x, g in zip(v, f + [1.0] * len(v))) + tag[m.end(1):], True
 
 
+def scale_joint_attr(tag, name, f, value):
+    """the joint's own attribute scaled; if it has none (a <default> class sets it), its compiled value scaled and written out"""
+    tag, ok = scale_attr(tag, name, f)
+    return tag if ok else re.sub(r"\s*/?>$", lambda e: f' {name}="{fmt(value * f)}"' + e.group(0), tag)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--src", default="assets/robots_torque/child/robot_torque_full.xml")
-    ap.add_argument("--m", type=float, required=True, help="multiply every joint's k by this")
+    ap.add_argument("--m", type=float, default=None, help="multiply every joint's k by this")
+    ap.add_argument("--kp", type=float, default=None, help="instead of --m: multiply kp alone by this (needs --kd)")
+    ap.add_argument("--kd", type=float, default=None, help="with --kp: multiply the damping alone by this")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
     src, out = REPO / a.src, REPO / a.out
-    sm = float(np.sqrt(a.m)); txt = src.read_text(); n_j = n_u = 0
+    if (a.m is None) == (a.kp is None or a.kd is None):
+        raise SystemExit("give --m, or --kp and --kd")
+    mp, sm, mf = (a.m, float(np.sqrt(a.m)), a.m) if a.m is not None else (a.kp, a.kd, 1.0)
+    txt = src.read_text(); n_j = n_u = 0; m0 = mujoco.MjModel.from_xml_path(str(src))
 
     def joint(mt):                       # text-level, so every other number keeps its full precision
         nonlocal n_j
         tag = mt.group(0)
-        if 'type="hinge"' not in tag:
+        name = re.search(r'\bname="([^"]*)"', tag)                         # no name: a <default> class's joint
+        if name is None or m0.joint(name.group(1)).type[0] != mujoco.mjtJoint.mjJNT_HINGE:
             return tag
-        tag, ok1 = scale_attr(tag, "stiffness", a.m); tag, ok2 = scale_attr(tag, "damping", sm)
-        assert ok1 and ok2, f"hinge joint without explicit stiffness / damping: {tag}"
+        j = m0.joint(name.group(1)).id
+        tag = scale_joint_attr(tag, "stiffness", mp, m0.jnt_stiffness[j]); tag = scale_joint_attr(tag, "damping", sm, m0.dof_damping[m0.jnt_dofadr[j]])
         n_j += 1
         return tag
 
     def general(mt):
         nonlocal n_u
         tag = mt.group(0)
-        tag, ok1 = scale_attr(tag, "gainprm", a.m); tag, ok2 = scale_attr(tag, "biasprm", [a.m, a.m, sm])
-        tag, ok3 = scale_attr(tag, "forcerange", a.m)
+        tag, ok1 = scale_attr(tag, "gainprm", mp); tag, ok2 = scale_attr(tag, "biasprm", [mp, mp, sm])
+        tag, ok3 = scale_attr(tag, "forcerange", mf)
         assert ok1 and ok2 and ok3, f"actuator without explicit gainprm / biasprm / forcerange: {tag}"
         n_u += 1
         return tag
@@ -106,8 +120,8 @@ def main():
     txt = re.sub(r"<joint\b[^>]*>", joint, txt)
     txt = re.sub(r"<general\b[^>]*>", general, txt)
     out.parent.mkdir(parents=True, exist_ok=True); out.write_text(txt)
-    print(f"{src.relative_to(REPO)} -> {out.relative_to(REPO)}: k x {a.m:g} on {n_u} actuators, {n_j} hinge joints")
-    verify(src, out, a.m)
+    print(f"{src.relative_to(REPO)} -> {out.relative_to(REPO)}: kp x {mp:g}, damping x {sm:.4f}, torque limit x {mf:g} on {n_u} actuators, {n_j} hinge joints")
+    verify(src, out, mp, sm, mf)
 
 
 if __name__ == "__main__":

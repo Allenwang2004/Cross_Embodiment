@@ -44,6 +44,17 @@ g1.npz, the G1 target) in place of bfm + heading + pos, on the G1's own body, we
          root     mean |pelvis - pelvis_target|^2, world x, y, z (--mse-no-xy: the height z only)       m^2
          heading  mean 1 - cos(pelvis yaw - target yaw)
          (logged under either objective as "mse"; anchor and ik terms as above)
+--objective phc (11/09, the Task page's CEM (BFM-Zero) on the G1): cost = 1 - mean_t PHC tracking reward
+(model/phc_reward.py, as single_z_search.py --objective phc) on the G1's own bodies against the G1 target (the clip mapped
+onto the G1, as g1mse), lengths / the map's root scale s (adult-equivalent metres); the state before the first step is
+the rollout's start pose on one side and target frame frame_offset - 1 on the other. Pass --heading-weight 0
+--pos-weight 0 --anchor-weight 0 --ik-weight 0 for BFM-Zero's reward alone.
+--algo (11/09, single_z_search.py's other searches, same code): es (the default, above), random (candidates = the best z
+so far + sigma * noise, on the sphere), cem (N(mean, std^2) per dimension, then mean and std of the --cem-elites best,
+std floor --cem-sigma-min, start std --sigma), cmaes (pycma, popsize 2 * pairs, sigma0 --sigma, seed + 1, candidates
+projected onto the sphere and told back, mean re-projected).
+--eval-z (11/09): no search; roll out every latent of an (N, 256) .npy with the run's exact cost (batches of 2 * pairs,
+padded with z0) and write <out>/{eval.csv, eval_base.json} and, with --eval-save-qpos, eval_qpos.npz (G1 qpos).
 Writes <out>/{best_z.npy, best.npz, origin_z.npz, z_trace.npz, curve.csv, summary.json}; best.npz / origin_z.npz hold
 the G1 qpos ("qpos"), its SMPL-equivalent ("qpos_smpl") and per step the 13 IK residuals (deg) + limit count ("fz").
 usage: CUDA_VISIBLE_DEVICES=2 uv run python scripts/robot_z_search.py --robot h1 [--clip ...] [--evals 1024] [--objective mse]
@@ -120,12 +131,22 @@ def main():
     p.add_argument("--ik-weight", type=float, default=0.0,
                    help="weight on the mean IK residual (rad) of the commanded poses: penalises latents whose actions "
                         "ask the G1 for joint configurations it cannot reach")
-    p.add_argument("--objective", default="bfm", choices=["bfm", "mse", "g1mse", "dtw"],
-                   help="mse (= g1mse): squared errors against the robot's target in place of bfm + heading + pos")
+    p.add_argument("--objective", default="bfm", choices=["bfm", "mse", "g1mse", "dtw", "phc"],
+                   help="mse (= g1mse): squared errors against the robot's target in place of bfm + heading + pos; "
+                        "phc: 1 - mean_t PHC tracking reward against the robot's target, in place of bfm + heading + pos")
+    p.add_argument("--algo", default="es", choices=["es", "random", "cem", "cmaes"], help="as single_z_search.py --algo")
+    p.add_argument("--cem-elites", type=int, default=4)
+    p.add_argument("--cem-sigma-min", type=float, default=None, help="--algo cem: std floor (default --sigma / 5)")
+    p.add_argument("--eval-z", default=None, help="no search: score every latent in this (N, 256) .npy, write eval.csv, then exit")
+    p.add_argument("--eval-save-qpos", action="store_true", help="with --eval-z: also write eval_qpos.npz (robot qpos (N, T, nq))")
     p.add_argument("--mse-no-xy", action="store_true",
                    help="g1mse's root term compares the pelvis height only, not where it is on the floor")
     p.add_argument("--start-frame", type=int, default=0,
                    help="use the clip from this frame on (reference, robot target, rollout start)")
+    p.add_argument("--frame-offset", type=int, default=1,
+                   help="the state after step t is scored against reference frame t + this. 1: the rollout starts at frame 0, so "
+                        "after step t it should be at frame t + 1, as in scripts/robot_lso_search.py. 0 reproduces every run before "
+                        "this flag existed, which scored each state one frame late")
     p.add_argument("--init-vel", default="rest", choices=["rest", "reference"],
                    help="every rollout starts from the clip's frame 0 at rest, or moving at the reference's velocity "
                         "(frames 0 -> 1 mapped onto the robot)")
@@ -150,7 +171,8 @@ def main():
     cfg = ROBOTS[a.robot]
     if a.objective == "g1mse":
         a.objective = "mse"
-    tag = {"bfm": "", "dtw": "_dtw"}.get(a.objective, "_g1mse" if a.robot == "g1" else "_mse")
+    tag = {"bfm": "", "dtw": "_dtw", "phc": "_phc"}.get(a.objective, "_g1mse" if a.robot == "g1" else "_mse")
+    assert a.algo == "es" or not a.resume, "--resume is for --algo es only"
     out = Path(a.out) if a.out else out_dir(a.robot) / "search" / f"{stem}{tag}_s{a.seed}"
     out.mkdir(parents=True, exist_ok=True)
     n_envs = 2 * a.pairs; n_gens = max(a.evals // n_envs, 1); n_eps = a.pairs if a.sampling == "antithetic" else n_envs
@@ -163,7 +185,7 @@ def main():
     import humenv.utils as hu
     from metamotivo.fb_cpr.huggingface import FBcprModel
     ref = np.load(REPO / f"data/origin_motion/{a.clip}.npz")["qpos"][a.start_frame:]
-    T = len(ref)
+    T = len(ref) - a.frame_offset                 # steps
     z0 = project_z(np.load(REPO / f"data/origin_z/{a.clip}.npy").reshape(-1).astype(np.float64))
     anchor = project_z(np.load(a.anchor).reshape(-1).astype(np.float64)) if a.anchor else z0
     model = FBcprModel.from_pretrained("facebook/metamotivo-M-1").to(a.device)
@@ -171,10 +193,10 @@ def main():
     fk = adult.unwrapped.model; dk = mujoco.MjData(fk)
     VEL = slice(214, 358)                         # humenv proprio: local_body_vel + local_body_ang_vel
     Og = bfm_align.obs_from_qpos(adult, ref)
-    Bg_plain = bfm_align.embed(model, Og, a.device)
+    Bg_plain = bfm_align.embed(model, Og, a.device)[a.frame_offset:]
     if a.bfm_zero_vel:
         Og = Og.copy(); Og[:, VEL] = 0
-    Bg = bfm_align.embed(model, Og, a.device)
+    Bg = bfm_align.embed(model, Og, a.device)[a.frame_offset:]
     gref = np.load(target_path(a.robot, stem))["qpos"][a.start_frame:]
     floor = json.loads((target_path(a.robot, stem).parent / "summary.json").read_text())["bfm_floor"]
     fc = REPO / "outputs/map_error/fill_compare_motivo.json"            # the ridge fill's floor (scripts/fit_smpl_fill.py)
@@ -215,8 +237,13 @@ def main():
             E[i] = np.stack([c * d[:, 0] + sn * d[:, 1], -sn * d[:, 0] + c * d[:, 1], d[:, 2]], -1); P[i], H[i] = pel, h
         sh = qg.shape[:-1]
         return P.reshape(sh + (3,)), H.reshape(sh), E.reshape(sh + (n_ee, 3))
-    gT = gref[:T]
+    gT = gref[a.frame_offset:a.frame_offset + T]
     ref_P, ref_H, ref_E = g1_points(gT)
+    phc = None
+    if a.objective == "phc":
+        from model.phc_reward import PHCCost
+        phc = PHCCost(mg, gref[max(a.frame_offset - 1, 0)], gT, scale=rm.s)
+        print(f"phc: {mg.nbody - 1} robot bodies against the robot target, lengths / s = {rm.s:.6f}", flush=True)
 
     def g1mse(QG):
         P, H, E = g1_points(QG)
@@ -232,12 +259,12 @@ def main():
         for i, qq in enumerate(flat):
             dk.qpos[:] = qq; mujoco.mj_kinematics(fk, dk); r[i] = dk.xquat[1]
         return hu.calc_heading(hu.quat_mul(r, np.repeat(base_rot, len(r), axis=0))).reshape(qs.shape[:-1]), qs[..., :2]     # hu.remove_base_rot works on one quat only
-    ref_h, ref_xy = heading_xy(ref)
+    ref_h, ref_xy = heading_xy(ref[a.frame_offset:])
 
     @torch.no_grad()
     def score(zs):
         zt = torch.as_tensor(zs, dtype=torch.float32, device=a.device)
-        obs, _, _, _ = vec.reset((ref[0], ref[1]) if a.init_vel == "reference" else ref[0])
+        obs, _, qg_start, _ = vec.reset((ref[0], ref[1]) if a.init_vel == "reference" else ref[0])
         O, QS, QG, FZ = [], [], [], []
         for _ in range(T):
             o = torch.as_tensor(obs, dtype=torch.float32, device=a.device)
@@ -268,6 +295,9 @@ def main():
             dtw = done = head_al = np.full(n_, np.nan); path = np.zeros((n_, T_), dtype=np.int64)
         if a.objective == "mse":
             main = mse
+        elif a.objective == "phc":                 # every slot starts from the same pose (checked)
+            assert np.abs(qg_start - qg_start[:1]).max() == 0
+            main = phc(QG, qg_start[0]) + a.heading_weight * head + a.pos_weight * pos
         elif a.objective == "dtw":
             main = dtw + a.dtw_lambda * (1 - done) + a.heading_weight * head_al + a.pos_weight * pos
         else:
@@ -294,6 +324,20 @@ def main():
     print(f"  origin_z:{al(base)} cost {base['cost']:.4f}  bfm {base['bfm']:.4f} (plain {base['bfm_plain']:.4f})  mse {base['mse']:.4f}  heading {base['head']:.4f}  pos {base['pos']:.2f}"
           f"  ik {base['ik']:.2f} deg (arms {base['ik_arm']:.2f}, at limit {100 * base['atlim']:.1f}%)"
           f"   (16 copies identical to {spread:.1e}; {time.time() - t0:.0f} s per step)", flush=True)
+
+    if a.eval_z:                                           # no search: roll out the given latents with this run's cost
+        Z = np.load(a.eval_z).reshape(-1, z0.size).astype(np.float64); rows, Q = [], []
+        for i0 in range(0, len(Z), n_envs):
+            chunk = Z[i0:i0 + n_envs]; r = score(np.concatenate([chunk, np.repeat(z0[None], n_envs - len(chunk), axis=0)]))
+            Q.append(r["qg"][:len(chunk)])
+            rows += [(i0 + k, *(float(r[x][k]) for x in ("cost", "bfm", "head", "pos", "anchor_dist", "ik", "mse"))) for k in range(len(chunk))]
+        with open(out / "eval.csv", "w") as fh:
+            fh.write("index,cost,bfm,head,pos,anchor_dist,ik,mse\n")
+            fh.writelines(",".join(str(x) if isinstance(x, int) else f"{x:.9g}" for x in row) + "\n" for row in rows)
+        (out / "eval_base.json").write_text(json.dumps({k: base[k] for k in ("cost", "bfm", "head", "pos", "ik", "mse")}))
+        if a.eval_save_qpos:
+            np.savez_compressed(out / "eval_qpos.npz", qpos=np.concatenate(Q).astype(np.float32))
+        vec.close(); print(f"eval: {len(rows)} latents scored -> {out / 'eval.csv'}"); return
 
     rng = np.random.default_rng(a.seed)
     z = z0.copy(); m = np.zeros_like(z); v = np.zeros_like(z); b1, b2, eps_adam = 0.9, 0.999, 1e-8
@@ -329,27 +373,50 @@ def main():
                 rng.standard_normal((n_eps, z.size))
         print(f"  resumed {rd.name} at step {gen0} ({'exact: Adam state restored' if exact else 'from its last search point, Adam restarted'}), "
               f"best so far {best['cost']:.4f}", flush=True)
+    cem_sigma = np.full(z.size, float(a.sigma)); cem_sigma_min = a.cem_sigma_min if a.cem_sigma_min is not None else a.sigma / 5
+    cma_es = None
+    if a.algo == "cmaes":                                  # as single_z_search.py
+        import cma
+        cma_es = cma.CMAEvolutionStrategy(z0.copy(), a.sigma, {"popsize": n_envs, "seed": a.seed + 1, "verbose": -9})
     for gen in range(gen0, n_gens):
-        eps = rng.standard_normal((n_eps, z.size))
-        cand = project_z(np.concatenate([z + a.sigma * eps, z - a.sigma * eps], axis=0) if a.sampling == "antithetic" else z + a.sigma * eps)
+        if a.algo == "cem":
+            cand = project_z(z + cem_sigma * rng.standard_normal((n_envs, z.size)))
+        elif a.algo == "random":
+            cand = project_z(best["z"] + a.sigma * rng.standard_normal((n_envs, z.size)))
+        elif a.algo == "cmaes":
+            cand = project_z(np.asarray(cma_es.ask(), dtype=np.float64))
+        else:
+            eps = rng.standard_normal((n_eps, z.size))
+            cand = project_z(np.concatenate([z + a.sigma * eps, z - a.sigma * eps], axis=0) if a.sampling == "antithetic" else z + a.sigma * eps)
         r = score(cand)
         i = int(np.argmin(r["cost"]))
         if r["cost"][i] < best["cost"]:
             best = pick(r, i, cand[i], gen, "sample")
-        s = rank_normalize(r["cost"])
-        if a.sampling == "antithetic":
-            g = ((s[:a.pairs] - s[a.pairs:])[:, None] * eps).sum(0) / (2 * a.pairs * a.sigma)
-        else:                                              # leave-one-out baseline, as lso_search.py
-            g = ((s - (s.sum() - s) / (len(s) - 1))[:, None] * eps).sum(0) / (2 * a.pairs * a.sigma)
-        m = b1 * m + (1 - b1) * g; v = b2 * v + (1 - b2) * g * g
-        t = gen - gen0 + t_adam0 + 1                       # Adam's step count (gen + 1 unless resumed without state)
-        step = a.lr * (m / (1 - b1 ** t)) / (np.sqrt(v / (1 - b2 ** t)) + eps_adam)
-        z_prev, z = z, project_z(z - step)
+        z_prev = z
+        if a.algo == "cem":
+            elite = cand[np.argsort(r["cost"])[:a.cem_elites]]
+            z = project_z(elite.mean(0)); cem_sigma = np.maximum(elite.std(0), cem_sigma_min)
+        elif a.algo == "random":
+            z = best["z"].copy()
+        elif a.algo == "cmaes":
+            cma_es.tell(list(cand), list(map(float, r["cost"])))
+            cma_es.mean = project_z(np.asarray(cma_es.mean, dtype=np.float64)); z = cma_es.mean.copy()
+        else:
+            s = rank_normalize(r["cost"])
+            if a.sampling == "antithetic":
+                g = ((s[:a.pairs] - s[a.pairs:])[:, None] * eps).sum(0) / (2 * a.pairs * a.sigma)
+            else:                                          # leave-one-out baseline, as lso_search.py
+                g = ((s - (s.sum() - s) / (len(s) - 1))[:, None] * eps).sum(0) / (2 * a.pairs * a.sigma)
+            m = b1 * m + (1 - b1) * g; v = b2 * v + (1 - b2) * g * g
+            t = gen - gen0 + t_adam0 + 1                   # Adam's step count (gen + 1 unless resumed without state)
+            step = a.lr * (m / (1 - b1 ** t)) / (np.sqrt(v / (1 - b2 ** t)) + eps_adam)
+            z = project_z(z - step)
         path_len += ang_pair(z_prev, z)
         row = dict(gen=gen, evals=(gen + 1) * n_envs, gen_best=float(r["cost"].min()), gen_mean=float(r["cost"].mean()),
                    best_so_far=best["cost"], best_bfm=best["bfm"], best_done=best.get("done", ""), best_ik=best["ik"], mean_z_cost="",
                    cos_z0=float(z @ z0 / (np.linalg.norm(z) * np.linalg.norm(z0))),
-                   path_len_deg=round(path_len, 2), net_deg=round(ang_pair(z0, z), 2))
+                   path_len_deg=round(path_len, 2), net_deg=round(ang_pair(z0, z), 2),
+                   sigma=float(cma_es.sigma) if cma_es is not None else float(cem_sigma.mean()) if a.algo == "cem" else a.sigma)
         if a.eval_every and (gen % a.eval_every == 0 or gen == n_gens - 1):
             rm = score(np.repeat(z[None], n_envs, axis=0))
             row["mean_z_cost"] = float(rm["cost"][0])
@@ -374,11 +441,12 @@ def main():
         w = csv.DictWriter(f, fieldnames=list(curve[-1]), restval=""); w.writeheader(); w.writerows(curve)   # [-1]: a resumed older run's rows lack newer columns
     keys = ("cost", "bfm", "bfm_plain", "mse", "head", "pos", "ik", "ik_arm", "atlim", "gen", "source") + (("dtw", "done", "head_al") if a.objective == "dtw" else ())
     summ = dict(clip=a.clip, body=a.robot, evals=n_gens * n_envs, generations=n_gens, pairs=a.pairs, sampling=a.sampling, sigma=a.sigma, lr=a.lr,
-                seed=a.seed, **({"dtw_lambda": a.dtw_lambda} if a.objective == "dtw" else {}), bfm_zero_vel=a.bfm_zero_vel, mse_no_xy=a.mse_no_xy, init_vel=a.init_vel, start_frame=a.start_frame, heading_weight=a.heading_weight, pos_weight=a.pos_weight, anchor=a.anchor or "z0",
+                algo=a.algo, **({"cem_elites": a.cem_elites, "cem_sigma_min": cem_sigma_min} if a.algo == "cem" else {}),
+                seed=a.seed, **({"dtw_lambda": a.dtw_lambda} if a.objective == "dtw" else {}), bfm_zero_vel=a.bfm_zero_vel, mse_no_xy=a.mse_no_xy, init_vel=a.init_vel, frame_offset=a.frame_offset, start_frame=a.start_frame, heading_weight=a.heading_weight, pos_weight=a.pos_weight, anchor=a.anchor or "z0",
                 anchor_weight=a.anchor_weight, ik_weight=a.ik_weight, gains=a.gains or cfg["gains_json"], objective=a.objective, fill=a.fill,
                 bfm_floor_of_map=floor,
-                origin_z={**{k: base.get(k) for k in keys}, "motion": motion(base["qg"], gref)},
-                best={**{k: best.get(k) for k in keys}, "motion": motion(best["qg"], gref)},
+                origin_z={**{k: base.get(k) for k in keys}, "motion": motion(base["qg"], gref[a.frame_offset:])},
+                best={**{k: best.get(k) for k in keys}, "motion": motion(best["qg"], gref[a.frame_offset:])},
                 improvement_vs_origin_z=(base["cost"] - best["cost"]) / abs(base["cost"]),
                 dist_best_z0=float(np.linalg.norm(best["z"] - z0)), path_len_deg=round(path_len, 1),
                 resumed_from=a.resume, resumed_at=gen0 if a.resume else None, resume_exact=exact,

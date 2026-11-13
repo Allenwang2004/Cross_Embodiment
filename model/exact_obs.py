@@ -13,6 +13,13 @@ except for the root height that the ground lift overwrote:
 and the observation is humenv's own, computed on the ADULT skeleton in that state. Against the adult's own
 motion this reproduces body positions, rotations and angular velocities exactly; root height to ~1 mm
 (median); linear velocities to 1-6% (vs 2-4% / 8-15% / 1-11% for the fixed multiplier).
+
+The root z velocity above omits the time derivative of the height correction c = qa[2] - qc[2] / s. Option
+clearance_vel=True (default False: the default numbers are unchanged) adds it, by a backward difference over
+the control step: va[2] += (c_t - c_{t-1}) / dt, dt = 1/30 s, c_{t-1} the previous call's correction; the
+first call after reset() adds 0. ExactObsWrapper keeps one ExactObs per env worker, clears it on reset() and,
+on the first step after it, takes c_{t-1} from the state the step starts from (after set_physics: the start
+pose), so a rollout's first step is differenced against its start state.
 """
 import itertools
 
@@ -60,7 +67,7 @@ class _LowestPoint:
 class ExactObs:
     """obs(qpos_c, qvel_c) -> (358,) humenv proprio of the adult-equivalent state."""
 
-    def __init__(self, child_xml, adult_xml=ADULT_XML, scale=0.611036):
+    def __init__(self, child_xml, adult_xml=ADULT_XML, scale=0.611036, clearance_vel=False, dt=1.0 / 30):
         from humenv import make_humenv
         self.mc = mujoco.MjModel.from_xml_path(str(child_xml)); self.dc = mujoco.MjData(self.mc)
         self.ma = mujoco.MjModel.from_xml_path(str(adult_xml)); self.da = mujoco.MjData(self.ma)
@@ -69,14 +76,24 @@ class ExactObs:
         # child / adult root scale of the dataset's retargeting, measured on it (x, y ratio, identical to 1e-16
         # across clips); a different body needs its own
         self.s = float(scale)
+        self.clearance_vel, self.dt = bool(clearance_vel), float(dt)          # option: + d/dt of the height correction
+        self.reset()
+
+    def reset(self):
+        """forget the previous height correction (clearance_vel only): the next call adds 0"""
+        self._prev, self.added = None, 0.0
 
     def adult_state(self, qpos_c, qvel_c):
         qa = np.array(qpos_c, dtype=np.float64); qa[:3] /= self.s
         self.dc.qpos[:] = qpos_c; mujoco.mj_kinematics(self.mc, self.dc)
         clearance = self.low_c(self.dc) / self.s
         self.da.qpos[:] = qa; mujoco.mj_kinematics(self.ma, self.da)
-        qa[2] += clearance - self.low_a(self.da)
+        corr = clearance - self.low_a(self.da)                    # the height correction c = qa[2] - qc[2] / s
+        qa[2] += corr
         va = np.array(qvel_c, dtype=np.float64); va[:3] /= self.s
+        if self.clearance_vel:                                    # backward difference, 0 on the first call after reset()
+            self.added = 0.0 if self._prev is None else (corr - self._prev) / self.dt
+            va[2] += self.added; self._prev = corr
         return qa, va
 
     def __call__(self, qpos_c, qvel_c):
@@ -89,11 +106,19 @@ class ExactObsWrapper(gymnasium.Wrapper):
     """Adds info["exact_proprio"] = ExactObs(info["qpos"], info["qvel"]) to every step, so in a vector env each
     worker computes its own slot's observation in parallel; same numbers as calling ExactObs on the returned info."""
 
-    def __init__(self, env, child_xml, adult_xml=ADULT_XML, scale=0.611036):
+    def __init__(self, env, child_xml, adult_xml=ADULT_XML, scale=0.611036, clearance_vel=False):
         super().__init__(env)
-        self.exact = ExactObs(child_xml, adult_xml, scale)
+        self.exact = ExactObs(child_xml, adult_xml, scale, clearance_vel=clearance_vel)
+
+    def reset(self, **kwargs):
+        self.exact.reset()
+        return self.env.reset(**kwargs)
 
     def step(self, action):
+        if self.exact.clearance_vel and self.exact._prev is None:  # first step after reset: c of the state it starts from
+            d = self.env.unwrapped.data; self.exact.adult_state(d.qpos.copy(), d.qvel.copy())
         obs, reward, terminated, truncated, info = self.env.step(action)
         info["exact_proprio"] = self.exact(info["qpos"], info["qvel"])
+        if self.exact.clearance_vel:
+            info["clearance_vel_added"] = self.exact.added
         return obs, reward, terminated, truncated, info
