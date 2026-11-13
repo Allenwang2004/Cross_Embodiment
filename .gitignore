@@ -117,3 +117,5 @@ mujoco_Humanoid_motionretargeting/
 /tests
 
 /utils
+/MUJOCO_LOG.TXT
+/docs/figures/Screenshot*

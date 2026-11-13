@@ -55,6 +55,11 @@ after the refactor): ded6f5d (the --loes-dir switches of 11/11), 2bdb2fe, 10c8eb
 port of ExactObs's clearance_vel option (single_z_search --exact-clearance-vel), kpkd_test --set mild / table, the new analysis and
 figure scripts (obs_canon_metrics, phc_reward_tables, tall_kp06_analysis, plot_cost_phc, plot_obs_canon, amass_pickup_figures) and the
 paper's LaTeX sections and figures (tests/test_clearance_vel.py; tests/test_cli.py and test_vis.py expect the main tree's additions).
+The 11/13 port (feat/multibody 26f3dca, the main tree committed in full) makes the branch a superset of the main tree: amass_baselines
+--set bfm (BFMTrack's 128 x 24 budget), kpkd_test --set mild's tall body, amass_pickup_figures --sequence / --overlay-adult,
+phc_reward_tables.reward_fn, plot_obs_canon's lower figure, the new scripts (success_thresholds, amass_thresholds, objective_optimizer_test,
+objective_optimizer_52, walk_band_labels, latex_accept_changes, latex_split_allen), the gain-variant assets, the paper's LaTeX (tracked
+and clean) and .gitignore; outside the code every file equals feat/multibody's except the refactor's own docs.
 
 Stay plain functions (do not wrap in classes): `project_z`, `rank_normalize`, `colored_noise`, return-to-go, latent distance,
 quaternion/heading/yaw, lowest point (a cached function), `losses.*`, `dtw`, PHC kinematics, MPJPE/MMPJPE/MPJAE math (MPJAE is the
