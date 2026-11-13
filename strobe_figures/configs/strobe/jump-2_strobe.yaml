@@ -1,0 +1,54 @@
+# resolved by render_strobe.py: base config + overlays + command line
+task_name: jump-2
+xml_path: assets/robots_torque/child/robot_torque_full.xml
+seed: 0
+reference_clip: data/child/retargeting_motion/jump-2/jump-2_2.npz
+init_from_reference: true
+nominal_latent: data/origin_z/jump-2/jump-2_2.npy
+adapted_latent: outputs/my_search/jump-2_2/best_z.npy
+nominal_qpos: null
+adapted_qpos: null
+baseline:
+  label: adult
+  qpos: data/origin_motion/jump-2/jump-2_2.npz
+  xml: assets/robots/adult/robot.xml
+  latent: null
+project_latent: false
+rollout:
+  steps: 120
+  obs_scale: exact
+camera:
+  type: orbit_auto
+  distance: 4
+  elevation: -5.0
+  azimuth_offset: 45.0
+  lookat_height: 0.5
+  track_body: null
+strobe:
+  start_step: 24
+  end_step: 44
+  interval: 3
+  shift_px: 130
+  x_offset_px: 40
+  target_frames: null
+  threshold: 5.0
+  start_color:
+  - 1.0
+  - 0.88
+  - 0.66
+  - 0.7
+  final_color:
+  - 0.627
+  - 0.47
+  - 0.318
+  - 1.0
+  middle_color: null
+  crop_floor: false
+  crop_floor_frac: 0.12
+render:
+  width: 1280
+  height: 720
+  fps: 30
+  white_background: false
+  burn_in_frame_index: true
+  out_dir: outputs/figures/strobe
