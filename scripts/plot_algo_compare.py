@@ -9,9 +9,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
-from crossenbodiment.geometry import sphere16   # noqa: E402  16 z / |z| (refactor step 3)
+from crossembodiment.geometry import sphere16   # noqa: E402  16 z / |z| (refactor step 3)
 import eval_metrics as E                                                  # noqa: E402
-from crossenbodiment.palette import INK as _INK, Palette                 # noqa: E402  (refactor step 10: this figure's own colours, VARIANTS "algo_compare")
+from crossembodiment.palette import INK as _INK, Palette                 # noqa: E402  (refactor step 10: this figure's own colours, VARIANTS "algo_compare")
 INK, MUTED, GRID, SURF = (_INK["dataviz"][k] for k in ("ink", "muted", "grid", "surface"))
 ALGOS = [(a, Palette.label(k, "algo_compare"), Palette.hex(k, "algo_compare")) for a, k in (("es", "loes"), ("cem", "cem_ours"), ("random", "random"))]
 

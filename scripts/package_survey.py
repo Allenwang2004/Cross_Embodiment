@@ -11,8 +11,8 @@
   models/                      every XML the videos use; the G1's with its meshes at their relative paths
   replay.py, README.md
 Every .npz holds qpos (frames x nq) and fps (30). Cameras and colours are the ones the survey videos were made with
-(outputs/survey_preview/spec_*.json, scripts/body_overlay.py, scripts/robot_overlay.py): crossenbodiment.palette (GHOST / RED / BLUE),
-crossenbodiment.camera (robot_overlay, body_overlay); the clip folders are crossenbodiment.clips.ClipBundle's (OOP refactor step 10).
+(outputs/survey_preview/spec_*.json, scripts/body_overlay.py, scripts/robot_overlay.py): crossembodiment.palette (GHOST / RED / BLUE),
+crossembodiment.camera (robot_overlay, body_overlay); the clip folders are crossembodiment.clips.ClipBundle's (OOP refactor step 10).
 usage: uv run python scripts/package_survey.py
 """
 import json, re, shutil, sys
@@ -21,11 +21,11 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
 from model.robots import ROBOTS, target_path                     # noqa: E402
-from crossenbodiment.survey import ADULT, BODY, CLIPS, run_of   # noqa: E402  survey_body_videos' (refactor step 4)
-from crossenbodiment.camera import body_overlay, robot_overlay   # noqa: E402  (refactor step 10)
-from crossenbodiment.clips import ClipBundle                     # noqa: E402
-from crossenbodiment import paths                                # noqa: E402
-from crossenbodiment.palette import BLUE, GHOST, RED             # noqa: E402
+from crossembodiment.survey import ADULT, BODY, CLIPS, run_of   # noqa: E402  survey_body_videos' (refactor step 4)
+from crossembodiment.camera import body_overlay, robot_overlay   # noqa: E402  (refactor step 10)
+from crossembodiment.clips import ClipBundle                     # noqa: E402
+from crossembodiment import paths                                # noqa: E402
+from crossembodiment.palette import BLUE, GHOST, RED             # noqa: E402
 
 TOP = paths.write_path("outputs/user_survey"); PREV = paths.read_path("outputs/survey_preview")
 G1_SEARCH = "outputs/user_survey_search/g1_ridge"

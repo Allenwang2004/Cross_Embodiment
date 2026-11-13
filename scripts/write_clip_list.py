@@ -9,7 +9,7 @@ This cuts them.
 
 Usage:
     uv run scripts/write_clip_list.py --csv outputs/initial_cost/child/z0_cost.csv \
-        --body child --min-cost 0.3 --out datasets/crossenbodiment-10bodies/splits/child_z0gt03_clips.txt
+        --body child --min-cost 0.3 --out datasets/crossembodiment-10bodies/splits/child_z0gt03_clips.txt
 """
 
 from __future__ import annotations

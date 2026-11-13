@@ -12,7 +12,7 @@ Data: outputs/obs_canon_metrics/results.json (scripts/obs_canon_metrics.py; one 
     mapping and that of the adult's own motion (mean over frames), one dot per motion, log axis; the black bar the median.
 Paper style as the other figures: STIX, 5.5 in wide, 10 pt.
 Out: docs/figures/obs_canonicalization.{pdf,png}. usage: uv run python scripts/plot_obs_canon.py
-Inputs are read through crossenbodiment.paths.read_path ($CE_OUTPUTS_ROOT), the figure goes to $CE_FIGURES_ROOT (default docs/figures)."""
+Inputs are read through crossembodiment.paths.read_path ($CE_OUTPUTS_ROOT), the figure goes to $CE_FIGURES_ROOT (default docs/figures)."""
 import json, sys
 from pathlib import Path
 import matplotlib
@@ -23,7 +23,7 @@ import matplotlib.ticker
 import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO))
-from crossenbodiment import paths                                         # noqa: E402
+from crossembodiment import paths                                         # noqa: E402
 SRC = paths.read_path("outputs/obs_canon_metrics/results.json")
 INK, MUTED, GRID, LINE = "#22252a", "#52514e", "#e6e6e3", "#c9c8c3"
 MAPS = (("raw", "Raw observations", "#9a9994"), ("perbody", "Per-body length scaling", "#eb6834"), ("exact", r"$\Phi_\beta$ (ours)", "#2a78d6"))

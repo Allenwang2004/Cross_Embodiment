@@ -14,7 +14,7 @@ Per method: the search script (human bodies / robots), the method's own CLI flag
 the summary.json values that identify it (what the drivers' analyse steps check). tests/test_registry.py reads one existing
 run per (experiment, key) and checks these values.
 
-    from crossenbodiment.methods import METHODS, method_of, key_in, experiment_keys
+    from crossembodiment.methods import METHODS, method_of, key_in, experiment_keys
     METHODS["cem_phc"].flags                          -> "--objective phc --algo cem"
     METHODS["cem_phc"].run_key                        -> "cem" (the --algo value, and the run folders' key)
     method_of("outputs/child_52_rerun", "cem").key    -> "cem_ours"

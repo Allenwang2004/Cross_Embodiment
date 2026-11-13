@@ -69,9 +69,9 @@ A kick filmstrip (11/12; needs --moment kick; replaces the moment and top-down f
        alignment offsets, heading differences), scene.json, meshes.npz, render_blender.py, renders/}, combined/amass_<body>_<tag>_kick_sequence.png
        (24 px apart, no labels) and every panel as panels/amass_<body>_<tag>_kick_sequence_f<frame>.png
   e.g. uv run python scripts/amass_pickup_figures.py --clip Male2MartialArtsExtended__Extended_1 --body child --moment kick --tag martial_arts --cam-azimuth fit --ground --sequence 5 --overlay-adult
-OOP refactor (ported from the main tree, 11/12): the pose export is crossenbodiment/blender.py's (BlenderScene, load_model: the functions
+OOP refactor (ported from the main tree, 11/12): the pose export is crossembodiment/blender.py's (BlenderScene, load_model: the functions
 export_blender_package.py had), so scene.json carries the "version" field every refactored Blender export writes (render_blender.py
-ignores it); runs and the survey models are read through crossenbodiment.paths.read_path ($CE_OUTPUTS_ROOT), the figure folders are
+ignores it); runs and the survey models are read through crossembodiment.paths.read_path ($CE_OUTPUTS_ROOT), the figure folders are
 written under $CE_RESULTS_ROOT (default outputs/)."""
 import itertools, json, math, os, shutil, subprocess, sys
 from pathlib import Path
@@ -79,8 +79,8 @@ import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO / "scripts")); sys.path.insert(0, str(REPO))
 import mujoco                                                             # noqa: E402
-from crossenbodiment import paths                                         # noqa: E402
-from crossenbodiment.blender import BlenderScene, _geom_kinds, load_model  # noqa: E402  (export_blender_package's pose / load / GEOM, step 10)
+from crossembodiment import paths                                         # noqa: E402
+from crossembodiment.blender import BlenderScene, _geom_kinds, load_model  # noqa: E402  (export_blender_package's pose / load / GEOM, step 10)
 SCENE = BlenderScene()                                                    # the panels and the meshes their poses use (export_blender_package.meshes)
 
 ARG = lambda k, d: type(d)(sys.argv[sys.argv.index(k) + 1]) if k in sys.argv else d

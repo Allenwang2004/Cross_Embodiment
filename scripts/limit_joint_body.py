@@ -11,7 +11,7 @@ against the limit.
             the adult's keys + name / kind / parent / builder / edit; skeleton.json exported from the new XML
   retarget  data/<lock label>_lim/retargeting_motion/<clip>.npz: a copy of the lock body's reference (same angles,
             same lift), so the two bodies track the identical motion
-OOP refactor step 9: crossenbodiment/bodybuild LimitJoints + CopyReference (scripts/build_body.py limit-joints); this file keeps
+OOP refactor step 9: crossembodiment/bodybuild LimitJoints + CopyReference (scripts/build_body.py limit-joints); this file keeps
 its flags; robot.xml and the reference are byte-identical.
 usage: uv run python scripts/limit_joint_body.py --lock-body adult_lockRleg --clip move-ego-0-2/move-ego-0-2_4 [--band 1]
 """
@@ -22,9 +22,9 @@ import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
-from crossenbodiment.bodybuild.builders import LimitJoints  # noqa: E402
-from crossenbodiment.bodybuild.retarget import CopyReference  # noqa: E402
-from crossenbodiment.bodybuild.skeleton import dump_skeleton  # noqa: E402
+from crossembodiment.bodybuild.builders import LimitJoints  # noqa: E402
+from crossembodiment.bodybuild.retarget import CopyReference  # noqa: E402
+from crossembodiment.bodybuild.skeleton import dump_skeleton  # noqa: E402
 
 
 def main():
@@ -36,7 +36,7 @@ def main():
     ap.add_argument("--label", default=None)
     a = ap.parse_args()
     body = LimitJoints(a.lock_body, band=a.band, solref=a.solref, name=a.label)
-    print(f"scripts/limit_joint_body.py -> crossenbodiment.bodybuild.LimitJoints({a.lock_body!r}, band={a.band:g}, "
+    print(f"scripts/limit_joint_body.py -> crossembodiment.bodybuild.LimitJoints({a.lock_body!r}, band={a.band:g}, "
           f"solref={a.solref:g}) (= scripts/build_body.py limit-joints --lock-body {a.lock_body} --clip {a.clip})")
     body.build()
     dump_skeleton(body.xml, body.dir / "skeleton.json")

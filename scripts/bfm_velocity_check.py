@@ -44,8 +44,8 @@ def unit(B):
     return B / (np.linalg.norm(B, axis=-1, keepdims=True) + 1e-12)
 
 
-# resample lives in crossenbodiment/retiming.py (refactor step 4, unchanged); imported here for main() and old importers
-from crossenbodiment.retiming import resample                          # noqa: E402,F401
+# resample lives in crossembodiment/retiming.py (refactor step 4, unchanged); imported here for main() and old importers
+from crossembodiment.retiming import resample                          # noqa: E402,F401
 
 
 def main():

@@ -207,7 +207,7 @@ def main():
     p.add_argument("--labels", nargs="*", default=None,
                    help="panel captions, one per --checkpoint; default is "
                         "<run directory>@<update>")
-    p.add_argument("--dataset", default="datasets/crossenbodiment-10bodies")
+    p.add_argument("--dataset", default="datasets/crossembodiment-10bodies")
     p.add_argument("--bodies", nargs="*", default=None,
                    help="default: splits/test_bodies.txt, i.e. the bodies held "
                         "out of training")

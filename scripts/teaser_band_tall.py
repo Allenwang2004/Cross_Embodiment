@@ -18,11 +18,11 @@ import numpy as np
 import yaml
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO))
-from crossenbodiment import paths                                         # noqa: E402
-from crossenbodiment.blender import BlenderScene, body_height as height, load_model, panel   # noqa: E402
-from crossenbodiment.camera import BLENDER_AZIMUTH                        # noqa: E402
-from crossenbodiment.figstyle import FigureStyle                          # noqa: E402
-from crossenbodiment.palette import INK                                   # noqa: E402
+from crossembodiment import paths                                         # noqa: E402
+from crossembodiment.blender import BlenderScene, body_height as height, load_model, panel   # noqa: E402
+from crossembodiment.camera import BLENDER_AZIMUTH                        # noqa: E402
+from crossembodiment.figstyle import FigureStyle                          # noqa: E402
+from crossembodiment.palette import INK                                   # noqa: E402
 
 ARG = lambda k, d: type(d)(sys.argv[sys.argv.index(k) + 1]) if k in sys.argv else d
 SAMPLES, THREADS = ARG("--samples", 256), ARG("--threads", 32)

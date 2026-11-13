@@ -13,7 +13,7 @@
 # memory stop.
 set -u
 REPO=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
-[ "$REPO" != "/home/allen19/crossenbodiment" ] || { echo "refusing to run in the main tree" >&2; exit 3; }
+[ "$REPO" != "/home/allen19/crossembodiment" ] || { echo "refusing to run in the main tree" >&2; exit 3; }
 [ $# -ge 1 ] || { echo "usage: $0 LABEL [name ...]" >&2; exit 3; }
 LABEL=$1; shift
 cd "$REPO" || exit 3

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""build_body.py -- build new bodies: one CLI over crossenbodiment/bodybuild (OOP refactor step 9; docs/new_body.md).
+"""build_body.py -- build new bodies: one CLI over crossembodiment/bodybuild (OOP refactor step 9; docs/new_body.md).
 
 It replaces the four copies of the pipeline (scripts/new_body_pipeline.sh, make_grid_bodies.sh, make_morph_path.sh,
 make_scaled_bodies.py, now thin wrappers that print the build_body.py line they run) and the adult-variant scripts' building
@@ -41,7 +41,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
-from crossenbodiment.bodybuild.beta import BETA_AXES, grid_beta, lerp_beta   # noqa: E402
+from crossembodiment.bodybuild.beta import BETA_AXES, grid_beta, lerp_beta   # noqa: E402
 
 SCALED_SET = [f"len{L}_wid{W}" for L in (1.4, 1.2, 0.8, 0.6) for W in (1.2, 0.8)]       # make_scaled_bodies.py BODIES order
 GRID_LEGS = (0.5, 0.625, 0.75, 0.875, 1.125, 1.25, 1.375, 1.5)                            # make_grid_bodies.sh LEGS / ARMS
@@ -102,7 +102,7 @@ def parser():
 
 def builders(a, roots):
     """the builders a recipe asks for, writing into roots.robots"""
-    from crossenbodiment.bodybuild import (ActuatorStrength, Elderly, HeavyLimb, LimitJoints, LockJoints, ScaledBody)
+    from crossembodiment.bodybuild import (ActuatorStrength, Elderly, HeavyLimb, LimitJoints, LockJoints, ScaledBody)
     kw = dict(robots_dir=roots.robots)
     r = a.recipe
     if r == "scaled":
@@ -144,7 +144,7 @@ def builders(a, roots):
 
 
 def gains(a):
-    from crossenbodiment.bodybuild import GainScaler
+    from crossembodiment.bodybuild import GainScaler
     if (a.m is None) == (a.kp is None or a.kd is None):
         raise SystemExit("give --m, or --kp and --kd")
     g = GainScaler.k(a.m) if a.m is not None else GainScaler(a.kp, a.kd)
@@ -157,7 +157,7 @@ def main(argv=None):
     a = parser().parse_args(argv)
     if a.recipe == "gains":
         return gains(a)
-    from crossenbodiment.bodybuild import BodyPipeline, BuildRoots, run_many
+    from crossembodiment.bodybuild import BodyPipeline, BuildRoots, run_many
     roots = BuildRoots(Path(a.root).resolve()) if a.root else BuildRoots()
     steps = a.steps.split(",") if a.steps else None
     amass = None

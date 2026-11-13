@@ -1,6 +1,6 @@
 # 新增一具身體：從 β 到可訓練的 MJCF
 
-這份是 runbook。一行指令就會得到這幾樣東西（`scripts/build_body.py`，2026-11-12 起；程式在 `crossenbodiment/bodybuild/`）：
+這份是 runbook。一行指令就會得到這幾樣東西（`scripts/build_body.py`，2026-11-12 起；程式在 `crossembodiment/bodybuild/`）：
 
 ```
 assets/robots/<body>/robot.xml                          身形，actuator 與 joint 都是 adult 原值
@@ -61,7 +61,7 @@ uv run python scripts/build_body.py gains --src assets/robots/g1/gains_perjoint.
 `heavy_arm_body.py`、`lock_joint_body.py`、`limit_joint_body.py`、`elderly_body.py` 呼叫同一套類別。只有
 `torque_scale_actuators.py`（單一 clip 的舊路線）移到了 `archive/scripts/`。
 
-| 類別（`crossenbodiment/bodybuild/`） | 一個工作 | 取代 |
+| 類別（`crossembodiment/bodybuild/`） | 一個工作 | 取代 |
 |---|---|---|
 | `ScaledBody`、`HeavyLimb`、`LockJoints`、`LimitJoints`、`Elderly`、`ActuatorStrength`（`BodyBuilder`） | 讀 adult → 改 → 骨盆貼地 → robot.xml + parameter.json | scale_robot.py、heavy_arm / lock_joint / limit_joint / elderly_body.py、strength_rollout.py 的 build |
 | `SameTopologyRetargeter`（`Retargeter`） | adult 的 clip → 這具身體的參考動作 | qpos_retarget.py |
@@ -117,7 +117,7 @@ uv run scripts/export_skeleton_json.py \
 
 舊的 `scale_robot.py` 整個覆寫 `parameter.json`，只寫 `label` + `scale_actuators` + 8 個軸，`"split"` 會不見。現在
 `ScaledBody` 照舊寫這些欄位（`model/dataset.py` 的 `load_beta` 讀 8 個軸；8 軸的順序只有一份：
-`crossenbodiment/bodybuild/beta.py` 的 `BETA_AXES`），後面多加 `name`、`kind`、`parent`、`builder`、`edit`（例如 len / wid），
+`crossembodiment/bodybuild/beta.py` 的 `BETA_AXES`），後面多加 `name`、`kind`、`parent`、`builder`、`edit`（例如 len / wid），
 目的地或 repo 裡同名身體原有的 `"split"` 會保留。`split` 只有 `scripts/build_dataset.py`（manifest）會讀；新身體要分
 train / test 時改 `model/bodies.py` 再跑：
 
@@ -472,7 +472,7 @@ Froude 時鐘照預期跟著 s_eff 走：
 #### 這批資料餵給誰
 
 `scripts/build_dataset.py` 把 `data/<body>/retargeting_motion` 與 `assets/robots/<body>/parameter.json`
-組成 `datasets/crossenbodiment-10bodies`（540 clips × 10 bodies = 5400 列，8 train / 2 test）。
+組成 `datasets/crossembodiment-10bodies`（540 clips × 10 bodies = 5400 列，8 train / 2 test）。
 它用 symlink 而不是複製，所以那 2.9 GB 只存在一份。`model/simple/train.py` 直接吃這個 manifest，
 每個 update 抽一具身體。
 

@@ -35,10 +35,10 @@ ADULT = REPO / "assets/robots/adult"
 
 def build(label, scale, what):
     """assets/robots/<label>/robot.xml: the adult with every actuator's gear (what="gear") or forcerange ("cap") x scale
-    (crossenbodiment/bodybuild ActuatorStrength, OOP refactor step 9: the same MjSpec edit, byte-identical robot.xml;
+    (crossembodiment/bodybuild ActuatorStrength, OOP refactor step 9: the same MjSpec edit, byte-identical robot.xml;
     parameter.json is the adult's keys + name / kind / parent / builder / edit, skeleton.json exported from the new XML)"""
-    from crossenbodiment.bodybuild.builders import ActuatorStrength
-    from crossenbodiment.bodybuild.skeleton import dump_skeleton
+    from crossembodiment.bodybuild.builders import ActuatorStrength
+    from crossembodiment.bodybuild.skeleton import dump_skeleton
     b = ActuatorStrength(label, scale, what)
     b.build(log=lambda *_: None)
     dump_skeleton(b.xml, b.dir / "skeleton.json")

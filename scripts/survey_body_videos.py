@@ -16,17 +16,17 @@ import argparse, json, os, subprocess, sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-# the survey's data (clips, bodies, runs) and colours live in the package since refactor step 4 (crossenbodiment/survey.py,
-# configs/survey.yaml, configs/clips/user_survey.txt, crossenbodiment/palette.py); imported back so this script and
+# the survey's data (clips, bodies, runs) and colours live in the package since refactor step 4 (crossembodiment/survey.py,
+# configs/survey.yaml, configs/clips/user_survey.txt, crossembodiment/palette.py); imported back so this script and
 # `from survey_body_videos import ...` keep working. REPO stays the main tree's absolute path, as before (renders and the
 # run lookup use it); the package is found from this file.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from crossenbodiment import survey as _survey                                                    # noqa: E402
-from crossenbodiment.camera import body_overlay as overlay_view, survey_track                    # noqa: E402  (step 10)
-from crossenbodiment.palette import BLUE, GREY, RED                                              # noqa: E402,F401
-from crossenbodiment.survey import ADULT, ADULT_H, BODY, CLIPS, SUFFIXES                         # noqa: E402,F401
+from crossembodiment import survey as _survey                                                    # noqa: E402
+from crossembodiment.camera import body_overlay as overlay_view, survey_track                    # noqa: E402  (step 10)
+from crossembodiment.palette import BLUE, GREY, RED                                              # noqa: E402,F401
+from crossembodiment.survey import ADULT, ADULT_H, BODY, CLIPS, SUFFIXES                         # noqa: E402,F401
 
-REPO = Path("/home/allen19/crossenbodiment"); PREV = REPO / "outputs/survey_preview"
+REPO = Path("/home/allen19/crossembodiment"); PREV = REPO / "outputs/survey_preview"
 ENV = {**os.environ, "MUJOCO_GL": "egl", "MUJOCO_EGL_DEVICE_ID": "2", "CUDA_VISIBLE_DEVICES": "2"}
 
 

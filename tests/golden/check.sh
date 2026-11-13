@@ -4,7 +4,7 @@
 # Exit code: 0 only if every case ran (exit 0) and everything is identical to outputs/refactor_golden/baseline.
 set -u
 REPO=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
-[ "$REPO" != "/home/allen19/crossenbodiment" ] || { echo "refusing to run in the main tree" >&2; exit 3; }
+[ "$REPO" != "/home/allen19/crossembodiment" ] || { echo "refusing to run in the main tree" >&2; exit 3; }
 [ $# -eq 1 ] || { echo "usage: $0 LABEL" >&2; exit 3; }
 LABEL=$1; cd "$REPO" || exit 3
 [ "$LABEL" != baseline ] || { echo "LABEL baseline is the reference; use another label" >&2; exit 3; }

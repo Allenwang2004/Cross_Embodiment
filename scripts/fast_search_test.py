@@ -19,7 +19,7 @@ import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
-from crossenbodiment.geometry import sphere16   # noqa: E402  16 z / |z| (refactor step 3)
+from crossembodiment.geometry import sphere16   # noqa: E402  16 z / |z| (refactor step 3)
 OUT = REPO / "outputs/fast_search"
 LOG = REPO / "outputs/train_logs/fast_search"
 PER_CAT = 2

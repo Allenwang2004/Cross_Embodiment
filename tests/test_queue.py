@@ -1,4 +1,4 @@
-"""Tests of OOP refactor step 8's queue runner (crossenbodiment/queue.py, scripts/run_queue.py) with fake commands: sleep, exit
+"""Tests of OOP refactor step 8's queue runner (crossembodiment/queue.py, scripts/run_queue.py) with fake commands: sleep, exit
 codes, retries, the memory-estimate gate, the job cap, dependencies by sentinel file, the emergency stop, old shell queues' folders,
 and the dry run. Everything runs in outputs/refactor_tests/test_queue (inside the worktree) with `bash -c` one-liners; no GPU.
 
@@ -18,7 +18,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 
-from crossenbodiment.queue import CommandQueue, ResourceGate, mem_estimate, parse_lines, stamp  # noqa: E402
+from crossembodiment.queue import CommandQueue, ResourceGate, mem_estimate, parse_lines, stamp  # noqa: E402
 
 WORK = REPO / "outputs/refactor_tests/test_queue"
 FAST = dict(poll_s=0.05, stagger_s=0.0, echo=False, env={})

@@ -14,7 +14,7 @@ import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
-from crossenbodiment.geometry import smpl_heading        # noqa: E402  humenv's heading (refactor step 3)
+from crossembodiment.geometry import smpl_heading        # noqa: E402  humenv's heading (refactor step 3)
 RUNS = REPO / "outputs/single_z_seeds_s005_5k"
 REF = REPO / "data/child/retargeting_motion/move-ego-0-2/move-ego-0-2_4.npz"
 XML = REPO / "assets/robots_torque/child/robot_torque_full.xml"

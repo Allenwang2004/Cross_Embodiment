@@ -1,6 +1,6 @@
 """paths.py -- where things live in the repository, in one place (OOP refactor step 2, docs/refactor/PLAN.md).
 
-REPO is found from this file (crossenbodiment/paths.py -> the repository root), as every script finds it from its own path.
+REPO is found from this file (crossembodiment/paths.py -> the repository root), as every script finds it from its own path.
 
 Two spellings of every location, because the old code uses both and writes both into its outputs:
   *_REL   the repository-relative POSIX string, as the drivers put it on the command line (and single_z_search.py
@@ -87,7 +87,7 @@ def z0_rollout(run_dir):
 
 
 def retargeting_motion(body, clip):
-    """a body's own task clip (crossenbodiment/bodybuild Retargeter; scripts/build_body.py, qpos_retarget.py):
+    """a body's own task clip (crossembodiment/bodybuild Retargeter; scripts/build_body.py, qpos_retarget.py):
     data/<body>/retargeting_motion/<clip>.npz"""
     return f"{DATA_REL}/{body}/retargeting_motion/{clip}.npz"
 
@@ -146,7 +146,7 @@ def results_root():
 
 
 def writable(path):
-    """`path` if it lies inside REPO (symlinks resolved), else RuntimeError: the results writers (crossenbodiment/results.py,
+    """`path` if it lies inside REPO (symlinks resolved), else RuntimeError: the results writers (crossembodiment/results.py,
     reroll.py) call this, so a CE_OUTPUTS_ROOT pointing at another tree without CE_RESULTS_ROOT cannot write into that tree"""
     path = Path(path)
     if not path.resolve().is_relative_to(REPO):

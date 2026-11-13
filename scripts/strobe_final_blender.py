@@ -7,17 +7,17 @@ of this script until OOP refactor step 10, with the user's reasons for each pick
 leg / G1 from the 52-motion runs of 11/09 (seed 0, LOES's best after 2,048 rollouts); child from outputs/child_52_rerun (the
 corrected-alignment runs of the Task page; outputs/child_52 holds the older runs, used by mistake until 11/10). Trajectories are in the
 survey's frame alignment (references from their second frame; a rollout's frame t against the reference's frame t + 1), copied or
-packaged into trajectories/<example>/ (crossenbodiment.clips: ClipBundle, strobe_source routes "child_52", "child_52_s<k>", "c540",
+packaged into trajectories/<example>/ (crossembodiment.clips: ClipBundle, strobe_source routes "child_52", "child_52_s<k>", "c540",
 "tall_body_52", "body_52/<body>", "kpkd:<folder>" or a survey-format folder).
 View: "fixed" = one world view for every panel (azimuth 140, the survey videos'); "path" = side-on to each panel's own path
 (path heading + 90 deg). split-1_7 (limited leg): z0's and LOES's poses are each turned about the root to the reference's heading at
 that frame (LOES had turned about 90 deg); likewise move-ego-low-90-2_9 (the reference turns left about a full circle, z0 and LOES
-turn right). The user labels both in the figure. (crossenbodiment.strobe.StrobeLayout)
+turn right). The user labels both in the figure. (crossembodiment.strobe.StrobeLayout)
 Look: scripts/render_blender.py (Cycles, 256 samples): one body colour (the G1 black), payload weight amber, the limited leg's locked right leg red,
 poses at one depth fading from light (early) to full colour (late).
 The payload and limited-leg sources (outputs/payload_all52, outputs/limit_leg_all52) were deleted on 11/10 after the export; their copies are in
 outputs/strobe_task52_blender/trajectories, and scene.json + meshes.npz there re-render everything with render_blender.py.
-Inputs are read through crossenbodiment.paths.read_path ($CE_OUTPUTS_ROOT), outputs written under $CE_RESULTS_ROOT (both default outputs/).
+Inputs are read through crossembodiment.paths.read_path ($CE_OUTPUTS_ROOT), outputs written under $CE_RESULTS_ROOT (both default outputs/).
 usage: uv run python scripts/strobe_final_blender.py [export] [render] [combine]   (none: all three)
        uv run python scripts/strobe_final_blender.py update <example> ...   (re-make single examples in place)
        uv run python scripts/strobe_final_blender.py cem [<example> ...]      (add the CEM panel to examples already made)
@@ -29,13 +29,13 @@ import numpy as np
 import yaml
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO))
-from crossenbodiment import paths                                         # noqa: E402
-from crossenbodiment.blender import BlenderScene, load_model              # noqa: E402
-from crossenbodiment.clips import ClipBundle, copy_folder, strobe_source  # noqa: E402
-from crossenbodiment.geometry import root_yaw as yaw                      # noqa: E402  root quaternion yaw (refactor step 3)
-from crossenbodiment.palette import ACCENTS                               # noqa: E402
-from crossenbodiment.sheet import hcat                                    # noqa: E402
-from crossenbodiment.strobe import StrobeLayout, strobe_size              # noqa: E402
+from crossembodiment import paths                                         # noqa: E402
+from crossembodiment.blender import BlenderScene, load_model              # noqa: E402
+from crossembodiment.clips import ClipBundle, copy_folder, strobe_source  # noqa: E402
+from crossembodiment.geometry import root_yaw as yaw                      # noqa: E402  root quaternion yaw (refactor step 3)
+from crossembodiment.palette import ACCENTS                               # noqa: E402
+from crossembodiment.sheet import hcat                                    # noqa: E402
+from crossembodiment.strobe import StrobeLayout, strobe_size              # noqa: E402
 
 OUT_REL = "outputs/strobe_task52_blender"; OUT = paths.write_path(OUT_REL); THREADS = int(os.environ.get("STROBE_THREADS", 32))
 CONFIG = yaml.safe_load((paths.FIGURE_CONFIGS / "strobe_examples.yaml").read_text())

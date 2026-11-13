@@ -14,7 +14,7 @@ Writes outputs/eval_metrics/<set>.json. usage: uv run python scripts/eval_metric
 
 Moved from scripts/eval_metrics.py into the package in OOP refactor step 8 (docs/refactor/PLAN.md), unchanged; scripts/eval_metrics.py
 re-exports this module (one module object, one Body class: `import eval_metrics as E` there is this module), and its CLI is main().
-main() reads outputs_root()/user_survey and writes results_root()/eval_metrics (crossenbodiment/paths.py; both REPO/outputs by default)."""
+main() reads outputs_root()/user_survey and writes results_root()/eval_metrics (crossembodiment/paths.py; both REPO/outputs by default)."""
 import glob, json, sys
 from pathlib import Path
 import mujoco
@@ -85,7 +85,7 @@ class Body:
         m, d = self.m, self.d; B = m.nbody - 2; P = np.empty((len(Q), B, 3)); O = np.empty((len(Q), B + 1, 6))
         for t, q in enumerate(Q):
             d.qpos[:] = q; mujoco.mj_kinematics(m, d)
-            h = heading_humenv_one(d.xquat[1]) if self.smpl else robot_yaw(d.xmat[1])     # crossenbodiment.geometry
+            h = heading_humenv_one(d.xquat[1]) if self.smpl else robot_yaw(d.xmat[1])     # crossembodiment.geometry
             c, s = np.cos(-h), np.sin(-h); Z = np.array([[c, -s, 0], [s, c, 0], [0, 0, 1]])
             P[t] = (d.xpos[2:] - d.xpos[1]) @ Z.T
             O[t] = (Z @ d.xmat[1:].reshape(-1, 3, 3))[:, :, [0, 2]].transpose(0, 2, 1).reshape(-1, 6)

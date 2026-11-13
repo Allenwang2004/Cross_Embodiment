@@ -29,7 +29,7 @@ for p in (str(REPO / "scripts"), str(REPO)):
 import numpy as np  # noqa: E402
 
 BASE = "d299653"
-MAIN = Path(os.environ.get("CROSSENBODIMENT_MAIN", "/home/allen19/crossenbodiment"))   # read only
+MAIN = Path(os.environ.get("CROSSENBODIMENT_MAIN", "/home/allen19/crossembodiment"))   # read only
 WORK = REPO / "outputs/refactor_tests/test_experiments"
 PY = sys.executable
 DRIVERS = ("child_52_rerun", "child_52_cem_phc", "child_52_lso", "body_52_test", "g1_small_test", "kpkd_test", "loes_noanchor",
@@ -73,7 +73,7 @@ def fake_repo():
     (root / "data").symlink_to(REPO / "data")
     lw = root / "outputs/loes_weight_test"; lw.mkdir(parents=True)
     shutil.copy(MAIN / "outputs/loes_weight_test/clips.txt", lw / "clips.txt")
-    from crossenbodiment.paths import CHILD_52_TASK, read_clips
+    from crossembodiment.paths import CHILD_52_TASK, read_clips
     clips = read_clips(CHILD_52_TASK)
     for b, keep in (("child", clips[::2]), ("payload", clips[:10]), ("limit_leg", clips[5:9]), ("g1", clips[-3:])):
         for c in keep:
@@ -166,7 +166,7 @@ class TestReroll(unittest.TestCase):
         I = prepare_new()
         old_dir, new_dir = env["_old_dir"], env["_new_dir"]
         self.assertEqual((new_dir / "z.npy").read_bytes(), (old_dir / "z.npy").read_bytes())
-        from crossenbodiment.reroll import Reroller
+        from crossembodiment.reroll import Reroller
         O = Reroller.read(old_dir, budgets, gens); N = Reroller.read(new_dir)
         self.assertEqual(N.schema, 2); self.assertEqual(O.schema, 1)
         self.assertEqual(O.runs, N.runs)
@@ -176,7 +176,7 @@ class TestReroll(unittest.TestCase):
 
     def test_child_style(self):
         """child_52_rerun.prepare: every generation's distinct best + centres (schema 'generation')"""
-        from crossenbodiment.reroll import Reroller
+        from crossembodiment.reroll import Reroller
         runs = [f"x_{a}_s{s}" for a in ("es", "cem") for s in range(2)]; traces(self.d / "runs", runs, 64)
         old_dir, new_dir = self.d / "old/rollouts/x", self.d / "new/rollouts/x"
         G = (4, 8, 16, 32, 64)
@@ -194,7 +194,7 @@ class TestReroll(unittest.TestCase):
 
     def test_budget_style(self):
         """body_52_test.prepare / g1_small_test.prepare: the best and the centre at each budget (schema 'budget')"""
-        from crossenbodiment.reroll import Reroller
+        from crossembodiment.reroll import Reroller
         G = (4, 8, 16, 32, 64, 128); runs = ["x_es_s0"]; traces(self.d / "runs/payload", runs, 128, 1)
         old_dir, new_dir = self.d / "old/payload/rollouts/x", self.d / "new/payload/rollouts/x"
         env = dict(np=np, json=json, BODIES={"payload": None}, CLIPS=("t/x",), ALGOS=["es"], SEEDS=(0,), G=G, GENS=128, OUT=self.d / "runs",
@@ -212,7 +212,7 @@ class TestReroll(unittest.TestCase):
 
     def test_last_style(self):
         """loes_weight_test.prepare: map[run] = the best latent after 64 generations (schema 'last')"""
-        from crossenbodiment.reroll import Reroller
+        from crossembodiment.reroll import Reroller
         runs = [f"x_{k}_s{s}" for k in ("w0", "w0.05") for s in range(3)]; traces(self.d / "runs", runs, 64, 2)
         old_dir, new_dir = self.d / "old/rollouts/x", self.d / "new/rollouts/x"
         env = dict(np=np, json=json, clips=lambda: ["t/x"], ROLL=self.d / "old/rollouts", NEW={"w0": 0, "w0.05": 0}, SEEDS=range(3),
@@ -225,7 +225,7 @@ class TestReroll(unittest.TestCase):
                      (64,), 64, lists)
 
     def test_readers_and_curve_check(self):
-        from crossenbodiment.reroll import RerollIndex, check_vs_curve
+        from crossembodiment.reroll import RerollIndex, check_vs_curve
         tiny = RerollIndex({"map": {"a_es_s0": {"best": [0]}}})          # tests/golden/metrics_golden.py's minimal index
         self.assertEqual(tiny.best_last("a_es_s0"), 0); self.assertEqual(tiny.layout("a_es_s0"), "unknown")
         with self.assertRaises(ValueError):
@@ -239,7 +239,7 @@ class TestReroll(unittest.TestCase):
 
 class TestExperiment(unittest.TestCase):
     def test_grid_names_lines(self):
-        from crossenbodiment.experiment import ClipSet, Experiment
+        from crossembodiment.experiment import ClipSet, Experiment
         E = Experiment("outputs/body_52", clips=ClipSet(["a/a_1", "b/b_2"]), methods=("es", "lso"), seeds=(0, 1), bodies=("payload",),
                        name="{body}/{stem}_{method}_s{seed}", order=("seed", "clip", "method"))
         self.assertEqual([r.dir for r in E.runs()][:3], ["outputs/body_52/payload/a_1_es_s0", "outputs/body_52/payload/a_1_lso_s0",
@@ -257,8 +257,8 @@ class TestExperiment(unittest.TestCase):
 
     def test_roots(self):
         """CE_OUTPUTS_ROOT / CE_RESULTS_ROOT; a write outside the repository is refused"""
-        from crossenbodiment import paths
-        from crossenbodiment.results import write_json
+        from crossembodiment import paths
+        from crossembodiment.results import write_json
         old = {k: os.environ.pop(k, None) for k in (paths.OUTPUTS_ROOT_ENV, paths.RESULTS_ROOT_ENV)}
         try:
             self.assertEqual(paths.output("x"), REPO / "outputs/x"); self.assertEqual(paths.result("x"), REPO / "outputs/x")
@@ -317,7 +317,7 @@ class TestAmassAnalyse(unittest.TestCase):
 
 class TestResults(unittest.TestCase):
     def test_reductions_match_the_drivers(self):
-        from crossenbodiment.results import ResultsTable
+        from crossembodiment.results import ResultsTable
         rng = np.random.default_rng(3); K = ("ratio", "fall_s", "success", "mpjpe")
         A = rng.standard_normal((52, 5, 64, 4)); C = rng.standard_normal((52, 5, 5, 4))
         m = lambda A: {k: float(A[..., i].mean()) for i, k in enumerate(K)}                       # child_52_rerun's m
@@ -338,7 +338,7 @@ class TestResults(unittest.TestCase):
         self.assertEqual(T.se("es_best", 2), dict(zip(K, (Y.std(0, ddof=1) / np.sqrt(len(Y))).tolist())))
 
     def test_markdown_checks_report(self):
-        from crossenbodiment.results import Checks, ReportWriter, ResultsTable
+        from crossembodiment.results import Checks, ReportWriter, ResultsTable
         v = dict(fall_s=0.12345, success=0.5, mpjpe=3.14159)
         cols = (("Fall (s)", "fall_s", "{:.3f}"), ("Success", "success", "{:.1f}%", 100), ("MPJPE", "mpjpe", "{:.2f}"))
         L = ResultsTable.markdown([("LOES", v)], cols)

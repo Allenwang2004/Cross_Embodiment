@@ -70,7 +70,7 @@ class ViewSpec:
 
 def project(renderer, pts, W, H):
     """world points -> pixel (u, v) through the renderer's current camera (pinhole, symmetric frustum): the formula of
-    crossenbodiment.draw.project and robot_overlay.py's two copies (main view and --split panels)"""
+    crossembodiment.draw.project and robot_overlay.py's two copies (main view and --split panels)"""
     c = renderer.scene.camera[0]
     f, up = np.array(c.forward), np.array(c.up); right = np.cross(f, up)
     k = c.frustum_near / c.frustum_top

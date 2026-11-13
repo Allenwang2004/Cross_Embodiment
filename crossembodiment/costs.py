@@ -1,6 +1,6 @@
 """costs.py -- the search costs as CostTerm objects and their CompositeCost (OOP refactor step 6, docs/refactor/PLAN.md).
 
-A term scores one batch rollout (a ScoreContext: the latents, the Rollout of crossenbodiment/rollout.py and arrays derived
+A term scores one batch rollout (a ScoreContext: the latents, the Rollout of crossembodiment/rollout.py and arrays derived
 from it, plus a memo so a heading or an embedding is computed once per batch). Most terms have two forms:
   batch(ctx)     (n,) one number per rollout: the single-latent searches (single_z_search.py, robot_z_search.py)
   per_step(ctx)  (n, S) one number per control step: the latent-sequence searches' per-step reward (lso_search.py,
@@ -32,7 +32,7 @@ anchor_dist, ik / ik_arm / atlim, ik_deg, mse, mse_frames, phc, dtw / done / pac
 CompositeCost(main, terms, log, form) returns (cost, parts): cost = main + w_1 t_1 + w_2 t_2 + ... (batch form) or
 reward = main - w_1 t_1 - w_2 t_2 - ... (per-step form), added left to right in the given order -- the exact expressions and
 summation order of the scripts at fa6c5f9 (which terms a script adds, and when, is the composition the problems in
-crossenbodiment/problems.py build). `log` terms are computed for parts only. It replaces single_z_search's `extra`
+crossembodiment/problems.py build). `log` terms are computed for parts only. It replaces single_z_search's `extra`
 side-channel dict, lso_search / robot_lso_search's rollout.parts / rollout.keep function attributes and robot_z_search's
 score dict. Every term's arithmetic is the scripts' own, operation for operation (golden runs: bit-identical).
 """
@@ -178,7 +178,7 @@ class BFMSimilarity(CostTerm):
 class Heading(CostTerm):
     """humenv's SMPL pelvis heading against the reference's: (1 - cos(h - h_ref)) / 2, per step or its mean over the steps.
     src: the ctx attribute holding the SMPL qpos ("q" for a human body, "qs" for a robot's SMPL-equivalent); the heading
-    is crossenbodiment.geometry.smpl_heading(fk, qpos, d, batched) (d: a scratch MjData or None for a new one; batched:
+    is crossembodiment.geometry.smpl_heading(fk, qpos, d, batched) (d: a scratch MjData or None for a new one; batched:
     one calc_heading over all frames, as lso_search / robot_z_search, else frame by frame). The batch form scores the
     first min(T, len(ref_h)) states (single_z_search's global_terms)."""
     name = "head"
@@ -382,7 +382,7 @@ class TrackingMSE(CostTerm):
 
 
 class AlignPhys(CostTerm):
-    """crossenbodiment.align_cost.compute_batch_cost: cfg.lambda_align * L_align + cfg.lambda_phys * L_phys against goal
+    """crossembodiment.align_cost.compute_batch_cost: cfg.lambda_align * L_align + cfg.lambda_phys * L_phys against goal
     (float32; logs align, phys). one(qi): (L_align, L_phys) of one rollout."""
     name = "align"
 

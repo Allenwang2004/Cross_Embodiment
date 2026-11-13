@@ -5,7 +5,7 @@
 # examples: name (the panel / file prefix), body (payload | limit_leg | g1 | child | tall: the model drawn, the target clip),
 #   clip (the task clip's stem), source (where the trajectories come from: a survey-format clip folder whose <clip>/ is copied, or
 #   one of "child_52", "child_52_s<k>", "c540", "tall_body_52", "body_52/<body>", "kpkd:<folder>": a single-latent run + the body's
-#   target, packaged by crossenbodiment.clips.ClipBundle), range [start, end, step] or frames [an explicit list], view (fixed | path),
+#   target, packaged by crossembodiment.clips.ClipBundle), range [start, end, step] or frames [an explicit list], view (fixed | path),
 #   and optional az (fixed view: the camera's world azimuth, default 140), align (each pose turned to the reference's heading at
 #   its frame), H (panel height, m), dx (m between poses), px, feet, wider, nudge, elev.
 # The payload and limited-leg sources outputs/payload_all52, outputs/limit_leg_all52 were deleted on 11/10 after the export; their

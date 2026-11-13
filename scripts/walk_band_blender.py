@@ -7,7 +7,7 @@ The band runs into the scene at PHI degrees from the image plane and the camera 
 to the upper right; the camera is far away (nearly orthographic), so the far bodies are not shrunk. Spacing scales with each body's
 standing height (the teaser's 0.57 m within a group and 1.65 m between groups, for the adult's 1.81 m), so a taller body takes more room.
 Rollouts: outputs/walk_bodies/<body>_es_s0/best.npz (LOES, 2,048 rollouts, seed 0); poses at the nearest frames with a foot down, set on
-the floor (crossenbodiment.blender.contact_frames), each turned to walk along the band.
+the floor (crossembodiment.blender.contact_frames), each turned to walk along the band.
 Out: outputs/walk_bodies/band/{scene.json, meshes.npz, render_blender.py, renders/} and outputs/walk_bodies/walk_band.png
 (+ walk_band_labeled.png with the body names under the solid poses).
 usage: uv run python scripts/walk_band_blender.py [export] [render] [combine] [--el 15] [--phi 35] [--samples 128] [--threads 32]"""
@@ -16,10 +16,10 @@ from pathlib import Path
 import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO))
-from crossenbodiment import paths                                         # noqa: E402
-from crossenbodiment.blender import BlenderScene, body_height as height, contact_frames, heading, load_model   # noqa: E402
-from crossenbodiment.camera import BLENDER_AZIMUTH                        # noqa: E402
-from crossenbodiment.sheet import font                                    # noqa: E402
+from crossembodiment import paths                                         # noqa: E402
+from crossembodiment.blender import BlenderScene, body_height as height, contact_frames, heading, load_model   # noqa: E402
+from crossembodiment.camera import BLENDER_AZIMUTH                        # noqa: E402
+from crossembodiment.sheet import font                                    # noqa: E402
 
 ARG = lambda k, d: type(d)(sys.argv[sys.argv.index(k) + 1]) if k in sys.argv else d
 EL, PHI = ARG("--el", 15.0), ARG("--phi", 35.0); SAMPLES = ARG("--samples", 128); THREADS = ARG("--threads", 32)

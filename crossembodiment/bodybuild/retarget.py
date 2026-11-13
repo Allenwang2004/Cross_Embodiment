@@ -2,7 +2,7 @@
 
 A Retargeter has one job: the adult's clip (qpos, 30 fps) -> the same motion as the target body should perform it, frame for
 frame. It writes `<data>/<body>/retargeting_motion/<task>/<stem>.npz` (key qpos, plus fps), the layout every search reads
-(crossenbodiment.paths.retargeting_motion), and for AMASS clips `<data>/<body>/amass_retargeting_motion/ACCAD/<clip>.npz` (the
+(crossembodiment.paths.retargeting_motion), and for AMASS clips `<data>/<body>/amass_retargeting_motion/ACCAD/<clip>.npz` (the
 layout made for len1.4_wid0.8; the child's AMASS clips live in amass_data/amass_retargeting_motion/ACCAD).
 
   SameTopologyRetargeter   scripts/qpos_retarget.py: the body shares the adult's joints (a ScaledBody), so every hinge angle
@@ -18,7 +18,7 @@ Elderly's reference (slowed walk, stooped spine, half arm swing) is planned toge
 builder (bodybuild/elderly.py) and only shares ground_correct_qpos.
 
 Robots are not retargeted here: model/robot_map.py RobotMap maps SMPL qpos onto a robot's own joints (IK per paired link) and
-scripts/robot_roundtrip.py writes outputs/<robot>/roundtrip/<stem>/{robot.npz | g1.npz} (crossenbodiment.paths.roundtrip), the
+scripts/robot_roundtrip.py writes outputs/<robot>/roundtrip/<stem>/{robot.npz | g1.npz} (crossembodiment.paths.roundtrip), the
 robots' reference; that route is a different problem (another topology) and is left as it is.
 
 Plain functions (as qpos_retarget.py had them; other scripts import them): retarget_qpos, min_geom_z (_min_geom_z),

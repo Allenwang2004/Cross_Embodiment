@@ -24,12 +24,12 @@ sys.path.insert(0, str(REPO))
 from model.g1_env import G1Env, G1_SCENE   # noqa: E402
 from model import bfm_align             # noqa: E402
 sys.path.insert(0, str(REPO / "scripts"))
-from crossenbodiment.geometry import project_z   # noqa: E402  single_z_search re-exported it (refactor step 4)
+from crossembodiment.geometry import project_z   # noqa: E402  single_z_search re-exported it (refactor step 4)
 
 
-# act, g1_up_z and motion live in crossenbodiment/robot_rollout.py (refactor step 4, unchanged); imported here so this
+# act, g1_up_z and motion live in crossembodiment/robot_rollout.py (refactor step 4, unchanged); imported here so this
 # script and `from g1_z0_rollout import act, motion` keep working
-from crossenbodiment.robot_rollout import act, g1_up_z, motion   # noqa: E402,F401
+from crossembodiment.robot_rollout import act, g1_up_z, motion   # noqa: E402,F401
 
 
 def main():

@@ -29,10 +29,10 @@ import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
-from crossenbodiment.geometry import sphere16   # noqa: E402  16 z / |z| (refactor step 3)
+from crossembodiment.geometry import sphere16   # noqa: E402  16 z / |z| (refactor step 3)
 # the experiment's layout (bodies, seeds, budgets, analysis-E arms, folders) and its path helpers live in
-# crossenbodiment/multibody_study.py since refactor step 4 (unchanged); imported back
-from crossenbodiment.multibody_study import (ADULT, AXIS, BETA_KEYS, BODIES, E_ARMS, E_K, E_TEST, GENS, GRID, GROUPS,  # noqa: E402,F401
+# crossembodiment/multibody_study.py since refactor step 4 (unchanged); imported back
+from crossembodiment.multibody_study import (ADULT, AXIS, BETA_KEYS, BODIES, E_ARMS, E_K, E_TEST, GENS, GRID, GROUPS,  # noqa: E402,F401
                                              LOG, N_RANDOM, NAMED, OUT, PAIRS, SEEDS, beta, cell_dir, clips, ref_path)
 
 

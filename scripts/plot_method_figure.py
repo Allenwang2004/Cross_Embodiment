@@ -7,7 +7,7 @@ only the latent z does. Replaces scripts/plot_method_diagram.py, whose figure st
   first    the first layout with Blender bodies: docs/figures/method_figure_first.{pdf,svg,png}, and method_figure_first_no_loes without the word LOES
 
 Change the rollouts in configs/figures/method.yaml (cutouts: the MuJoCo cut-outs; blender: the Blender panels) when the final searches
-exist. Colours: crossenbodiment/palette.py INK["paper"]; style, canvas and the txt / arrow helpers: crossenbodiment/figstyle.py (OOP
+exist. Colours: crossembodiment/palette.py INK["paper"]; style, canvas and the txt / arrow helpers: crossembodiment/figstyle.py (OOP
 refactor step 10). Figures are written to $CE_FIGURES_ROOT (default docs/figures); renders and cut-outs are read from docs/figures.
 usage: MUJOCO_EGL_DEVICE_ID=2 MUJOCO_GL=egl uv run python scripts/plot_method_figure.py render | draw | simple | first"""
 import json, sys
@@ -24,9 +24,9 @@ from PIL import Image
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from figure_bodies import BG, BODY_RGBA, place, poses                # noqa: E402
 sys.path.insert(1, str(Path(__file__).resolve().parent.parent))
-from crossenbodiment import paths                                     # noqa: E402
-from crossenbodiment.figstyle import FigureStyle, arrow as _arrow, txt as _txt   # noqa: E402
-from crossenbodiment.palette import INK as _INK                       # noqa: E402
+from crossembodiment import paths                                     # noqa: E402
+from crossembodiment.figstyle import FigureStyle, arrow as _arrow, txt as _txt   # noqa: E402
+from crossembodiment.palette import INK as _INK                       # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent; RENDERS = paths.FIGURES / "blender_renders"; PARTS = paths.FIGURES / "method_parts"
 CFG = yaml.safe_load((paths.FIGURE_CONFIGS / "method.yaml").read_text())

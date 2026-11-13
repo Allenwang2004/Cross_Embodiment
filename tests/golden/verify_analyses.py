@@ -7,7 +7,7 @@ the MAIN tree's finished experiments, READ ONLY (CE_OUTPUTS_ROOT=<main>/outputs)
   .md     byte-identical text (the docstring included: the drivers' docstrings are unchanged)
   prepare z.npy byte-identical to the main tree's, and the schema-2 index.json read back gives the same lists as the main tree's
           old-layout index (best per generation / per budget / last, centre per budget) for every run
-Nothing under the main tree is written: the drivers' writers refuse paths outside the worktree (crossenbodiment/paths.writable).
+Nothing under the main tree is written: the drivers' writers refuse paths outside the worktree (crossembodiment/paths.writable).
 
 usage: uv run python tests/golden/verify_analyses.py LABEL [case ...] [--workers N] [--compare-only] [--list]
        (cases run one after the other; each case's stdout/stderr in outputs/refactor_step8/<label>/_logs/<case>.log)
@@ -20,7 +20,7 @@ import time
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-MAIN = Path(os.environ.get("CROSSENBODIMENT_MAIN", "/home/allen19/crossenbodiment"))
+MAIN = Path(os.environ.get("CROSSENBODIMENT_MAIN", "/home/allen19/crossembodiment"))
 sys.path.insert(0, str(REPO))
 import numpy as np  # noqa: E402
 
@@ -109,7 +109,7 @@ def compare_file(new, old):
 
 
 def compare_prepare(res, rel, budgets, gens):
-    from crossenbodiment.reroll import Reroller
+    from crossembodiment.reroll import Reroller
     n, bad = 0, []
     for old_dir in sorted((MAIN / "outputs").glob(rel + "/*")):
         if not (old_dir / "index.json").exists():

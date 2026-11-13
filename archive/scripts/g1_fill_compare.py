@@ -13,7 +13,7 @@ import numpy as np
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
 from model.robot_map import RobotMap, SMPL_XML     # noqa: E402
-from crossenbodiment.survey import CLIPS   # noqa: E402  survey_body_videos' (refactor step 4)
+from crossembodiment.survey import CLIPS   # noqa: E402  survey_body_videos' (refactor step 4)
 
 
 def main():

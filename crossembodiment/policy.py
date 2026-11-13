@@ -15,7 +15,7 @@ then .cpu().numpy(). The copies differed only in what does not change a bit: tor
 in test_exact_obs: the model has requires_grad False, autograd records nothing either way) and calling .cpu().numpy() once or
 twice (single_z_search with act_out: two equal copies; here one array serves both). The z tensor is passed through unchanged
 (a (n, T, 256) tensor's slice z[:, t] as the sequence loops took it; the actor concatenates it with the observation).
-NOT covered: crossenbodiment/robot_rollout.act (the G1 line's single-observation call computed in a batch of 16 identical rows;
+NOT covered: crossembodiment/robot_rollout.act (the G1 line's single-observation call computed in a batch of 16 identical rows;
 its batch size changes the GPU's last bits), which stays as it is.
 
 `eval_mode`: single_z_search, lso_search, robot_lso_search, rank_initial_cost, rollout_z_trace and test_exact_obs call

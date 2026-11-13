@@ -24,21 +24,21 @@ from pathlib import Path
 import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts")); OUT = "outputs/noanchor"
-from crossenbodiment.bodies import BODIES
-from crossenbodiment.paths import CHILD_XML_REL
-from crossenbodiment.metrics import MetricSuite, metric_body, world_positions
-from crossenbodiment.paths import CHILD_52_TASK, read_clips   # noqa: E402  configs/clips/child_52_task.txt = outputs/child_52/clips.txt (refactor step 4)
-from crossenbodiment import paths
-from crossenbodiment.experiment import ClipSet, Experiment, parse_flag, workers
-from crossenbodiment.methods import key_in
-from crossenbodiment.reroll import EvalRollouts, Reroller, read_best_so_far
-from crossenbodiment.results import Checks, ReportWriter, ResultsTable, write_json
+from crossembodiment.bodies import BODIES
+from crossembodiment.paths import CHILD_XML_REL
+from crossembodiment.metrics import MetricSuite, metric_body, world_positions
+from crossembodiment.paths import CHILD_52_TASK, read_clips   # noqa: E402  configs/clips/child_52_task.txt = outputs/child_52/clips.txt (refactor step 4)
+from crossembodiment import paths
+from crossembodiment.experiment import ClipSet, Experiment, parse_flag, workers
+from crossembodiment.methods import key_in
+from crossembodiment.reroll import EvalRollouts, Reroller, read_best_so_far
+from crossembodiment.results import Checks, ReportWriter, ResultsTable, write_json
 # refactor step 8: --bodies is read in main (not at import); runs are read under paths.outputs_root() ($CE_OUTPUTS_ROOT), results
 # written under paths.results_root() ($CE_RESULTS_ROOT), both REPO/outputs by default; prepare writes the schema-2 index
-# (crossenbodiment/reroll.py), analyse reads any. body_52_test / g1_small_test are imported for their builders (g1: configure("52")).
+# (crossembodiment/reroll.py), analyse reads any. body_52_test / g1_small_test are imported for their builders (g1: configure("52")).
 CLIPS = read_clips(CHILD_52_TASK)
 ORDER = sorted(CLIPS, key=lambda c: -len(np.load(REPO / f"data/origin_motion/{c}.npz")["qpos"]))
-# run-directory keys (crossenbodiment/methods.py RUNS): LOES without the anchor is "es" here; the anchored LOES it is compared with is
+# run-directory keys (crossembodiment/methods.py RUNS): LOES without the anchor is "es" here; the anchored LOES it is compared with is
 # "es" too in child_52_rerun, g1_52 and body_52/<body> (and their results.json method key)
 LOES = key_in("outputs/noanchor/<body>", "loes")
 ANCHORED = key_in("outputs/child_52_rerun", "loes_anchor")
@@ -137,7 +137,7 @@ def ref_of(b, c):
 
 def stats(body, q, ref, Pw, Dr, s):
     """body_52_test.py / g1_small_test.py's stats (the Task page's metrics), with the success threshold 0.5 m x the root scale s:
-    [fall_s, success, mpjpe, mmpjpe, mpjae, drift (the body's metres)] (crossenbodiment.metrics.MetricSuite.task_page)"""
+    [fall_s, success, mpjpe, mmpjpe, mpjae, drift (the body's metres)] (crossembodiment.metrics.MetricSuite.task_page)"""
     return MetricSuite.task_page(body, s).reference(ref, Pw, Dr).values(q)
 
 

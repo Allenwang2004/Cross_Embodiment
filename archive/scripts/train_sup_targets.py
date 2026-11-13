@@ -28,7 +28,7 @@ import torch.nn.functional as F
 REPO = Path(__file__).resolve().parent.parent
 sys.path.append(str(REPO))
 DATA = REPO / "outputs/b500_targets/sup_dataset"
-DS = REPO / "datasets/crossenbodiment-child-balanced"
+DS = REPO / "datasets/crossembodiment-child-balanced"
 ES_DIR = REPO / "outputs/simple_es/child_balanced/b500_global_anchor"
 
 

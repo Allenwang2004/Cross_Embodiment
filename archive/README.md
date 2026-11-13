@@ -22,7 +22,7 @@ history of a removed route). Two files archived together import each other only 
 | scripts/child_52_mean_z.py | rollouts of every run's mean z after 4..64 generations | done: outputs stay in outputs/child_52_mean_z (read by child_52_means.py); no references |
 | scripts/child_52_sd.py | mean +- sd figure from outputs/child_52_curves/per_run.npz | one-off figure; no references |
 | scripts/child_52_aligned.py | Comparison A re-scored with q[t] against ref[t + 1] | superseded: that alignment is built into the Task-page metrics (eval_metrics.py, tests/golden); no references |
-| scripts/child_52_means.py | Comparison A by means: per_run.npz / means.json / convergence_metrics_mean.png in outputs/child_52_curves (archived in step 4) | done: its outputs stay in outputs/child_52_curves (per_run.npz read by child_52_cmaes.py); its inputs' makers (child_52_curves.py, child_52_mean_z.py) are archived; its `full` / `KEYS` / `hand_fall` moved to crossenbodiment/metrics.py (legacy_metrics / LEGACY_KEYS / body_hand_fall), which the 5 drivers and tests/golden/metrics_golden.py import now; no other references |
+| scripts/child_52_means.py | Comparison A by means: per_run.npz / means.json / convergence_metrics_mean.png in outputs/child_52_curves (archived in step 4) | done: its outputs stay in outputs/child_52_curves (per_run.npz read by child_52_cmaes.py); its inputs' makers (child_52_curves.py, child_52_mean_z.py) are archived; its `full` / `KEYS` / `hand_fall` moved to crossembodiment/metrics.py (legacy_metrics / LEGACY_KEYS / body_hand_fall), which the 5 drivers and tests/golden/metrics_golden.py import now; no other references |
 
 ## Abandoned adapter-training line
 
@@ -113,7 +113,7 @@ history of a removed route). Two files archived together import each other only 
 
 | file | what it was | why archived (2026-11-11) |
 |---|---|---|
-| scripts/batch_z_search.py | one antithetic ES search per (clip, body) of a datasets/crossenbodiment-10bodies split in one process (sigma 0.25, lr 0.5, L_align; outputs/batch_z_search{,_seed777}) | an older driver, superseded by single_z_search.py and the experiment drivers; no .py / .sh of the worktree imports or launches it, no queue script of the main tree (`outputs/**/*.sh`) names it, nothing reads its targets.npz; its dataset (datasets/) is not even in the worktree. It imported `rollout` / `project_z` / `rank_normalize` / `device_arg` from scripts.single_z_search, which still exports them |
+| scripts/batch_z_search.py | one antithetic ES search per (clip, body) of a datasets/crossembodiment-10bodies split in one process (sigma 0.25, lr 0.5, L_align; outputs/batch_z_search{,_seed777}) | an older driver, superseded by single_z_search.py and the experiment drivers; no .py / .sh of the worktree imports or launches it, no queue script of the main tree (`outputs/**/*.sh`) names it, nothing reads its targets.npz; its dataset (datasets/) is not even in the worktree. It imported `rollout` / `project_z` / `rank_normalize` / `device_arg` from scripts.single_z_search, which still exports them |
 
 Kept although step 6 listed it for retirement: **scripts/g1_z_search.py**. `robot_z_search.py --robot g1 --sampling antithetic
 --frame-offset 0` reproduces it for the per-joint gains, but its `--gains mass` (model/g1_env.py's first, pre-10/20 gains: kp x
@@ -146,19 +146,19 @@ originals as archived); their outputs stay where they are.
 | scripts/g1_roundtrip.py | the clip mapped onto the G1 and back (outputs/g1/roundtrip/<stem>/{g1.npz, smpl_rt.npz, summary.json}) | `robot_roundtrip.py --robot g1` writes the same g1.npz / smpl_rt.npz (the 10/20 files re-made bit for bit); its summary.json lacked only rt_orient_deg / rt_pos_cm, which nothing reads; its one caller was g1_z0_rollout.py |
 | scripts/g1_gain_scaling.py | wrote assets/robots/g1/gains_perjoint.json (kept) | `robot_gain_scaling.py --robot g1` re-makes that json's kp / kd / k bit for bit with its 18 clips in this script's order (sorted by stem: tests/test_g1_generic.py); in outputs/g1/search_clips.txt's order the last bit differs (<= 3e-16 relative, summation order), so the json stays the G1's gains |
 | scripts/g1_feasibility_compare.py | did the IK penalty make the latent ask the G1 for reachable poses (G1VecEnv, G1Map) | `robot_feasibility_compare.py --robot g1`: the same loop on RobotVecEnv / RobotMap |
-| scripts/g1_z0_rollout.py | z0 rolled out on the G1 (outputs/g1/z0_perjoint/<stem>; `--gains mass`: outputs/g1/z0, gone) | `robot_z0.py --robot g1` (writes outputs/g1/z0_perjoint); its act / motion / g1_up_z are crossenbodiment/robot_rollout.py's since step 4 |
+| scripts/g1_z0_rollout.py | z0 rolled out on the G1 (outputs/g1/z0_perjoint/<stem>; `--gains mass`: outputs/g1/z0, gone) | `robot_z0.py --robot g1` (writes outputs/g1/z0_perjoint); its act / motion / g1_up_z are crossembodiment/robot_rollout.py's since step 4 |
 | scripts/g1_z0_summary.py | z0 on the G1 across clips (perjoint vs mass) | `robot_z0_summary.py` (reads outputs/g1/z0_perjoint); the mass column is dropped |
 | scripts/g1_fill_compare.py | the G1 survey searches with the fixed vs the ridge fill (10/30, outputs/map_error/g1_fill_compare.json) | finished; no references (it already used RobotMap) |
 | scripts/g1_overlay.py | several G1 trajectories of one clip in one scene | superseded by `robot_overlay.py --robot g1` |
 | scripts/g1_amass_video.py | side-by-side video of a robot_lso_search.py AMASS run | superseded by `package_amass_lso_survey.py --body g1` (the survey's format, replay.py's videos); no references |
-| scripts/g1_axes_demo.py | explanation figures of the G1 map (outputs/g1/explain: frames, pairs, g1_to_smpl, pitch_roll_yaw, ...) | one-off; its drawing helpers are crossenbodiment/draw.py since step 4 (tests/test_moves.py reads this file at 68c95f4 through git), `robot_pairs.py --robot g1 [--to-smpl]` draws pairs / to-smpl for any robot; no references |
+| scripts/g1_axes_demo.py | explanation figures of the G1 map (outputs/g1/explain: frames, pairs, g1_to_smpl, pitch_roll_yaw, ...) | one-off; its drawing helpers are crossembodiment/draw.py since step 4 (tests/test_moves.py reads this file at 68c95f4 through git), `robot_pairs.py --robot g1 [--to-smpl]` draws pairs / to-smpl for any robot; no references |
 | scripts/g1_side_render.py | one clip frame from the side, adult vs G1 target (outputs/g1/explain/*_side_*.png) | one-off figure; no references |
 | scripts/g1_floating_figure.py | where the kinematic G1 target floats (outputs/g1/explain/*_floating.png) | one-off figure; no references |
 | scripts/g1_static_torque.py | can the G1 hold a clip's support poses quasi-statically within its torque limits (10/20; outputs/g1/static_torque: headstand_6 / 9 / 37) | finished; no references anywhere; no generic version (robot_torque_limit.py measures the PD demand in rollouts, a different question); to run it again, move it back |
 
 Kept: scripts/g1_small_test.py (a live Task-page driver: generic robot code only; loes_noanchor.py imports it, the main tree's
 queues run it). File names the G1's existing outputs use stay G1-specific in the generic code: the shared fill
-assets/robots/g1/smpl_fill.json, the target name g1.npz (model/robots.py target_path, crossenbodiment/paths.py roundtrip),
+assets/robots/g1/smpl_fill.json, the target name g1.npz (model/robots.py target_path, crossembodiment/paths.py roundtrip),
 outputs/g1/z0_perjoint (robot_z0.py, robot_z0_summary.py), the `_g1mse` run tag and `--objective g1mse`.
 
 ## Step 9: the body-building pipeline (2026-11-12)
@@ -166,24 +166,24 @@ outputs/g1/z0_perjoint (robot_z0.py, robot_z0_summary.py), the `_g1mse` run tag 
 The four copies of the pipeline (scripts/new_body_pipeline.sh, make_grid_bodies.sh, make_morph_path.sh, make_scaled_bodies.py) are
 thin wrappers over scripts/build_body.py now, and the building scripts (scale_robot, export_skeleton_json, qpos_retarget,
 torque_ratio_across_motions, torque_aggregate_motion_k, scale_body_gains, heavy_arm_body, lock_joint_body, limit_joint_body,
-elderly_body, strength_rollout's build) keep their flags over crossenbodiment/bodybuild; all of them stay in scripts/ (docs and
+elderly_body, strength_rollout's build) keep their flags over crossembodiment/bodybuild; all of them stay in scripts/ (docs and
 the other scripts name them). One file is archived:
 
 | file | what it was | why archived (2026-11-12) |
 |---|---|---|
-| scripts/torque_scale_actuators.py | the library of the torque calibration (choose_k, symmetrize_k, mirror checks, scale_line, verify, joint_targets, closed_loop, write_scaled_xml) plus a CLI writing robots_torque.xml from ONE clip's k (outputs/torque_ratio_per_joint/<clip>/_ratios.csv) | the library moved verbatim to crossenbodiment/bodybuild/torque.py (TorqueCalibrator; robot_torque_full.xml of len0.8_wid1.2 and the child re-made byte-identical, tests/golden/verify_bodies.py); the one-clip CLI is the route torque_aggregate_motion_k.py replaced (the aggregate over every motion), its robots_torque.xml / robots_torque_move_only.xml are stale (docs/new_body.md); its only importer, torque_aggregate_motion_k.py, uses the package; no .sh / queue script launches it |
+| scripts/torque_scale_actuators.py | the library of the torque calibration (choose_k, symmetrize_k, mirror checks, scale_line, verify, joint_targets, closed_loop, write_scaled_xml) plus a CLI writing robots_torque.xml from ONE clip's k (outputs/torque_ratio_per_joint/<clip>/_ratios.csv) | the library moved verbatim to crossembodiment/bodybuild/torque.py (TorqueCalibrator; robot_torque_full.xml of len0.8_wid1.2 and the child re-made byte-identical, tests/golden/verify_bodies.py); the one-clip CLI is the route torque_aggregate_motion_k.py replaced (the aggregate over every motion), its robots_torque.xml / robots_torque_move_only.xml are stale (docs/new_body.md); its only importer, torque_aggregate_motion_k.py, uses the package; no .sh / queue script launches it |
 
 ## Step 10: the visualisation layer (2026-11-12)
 
-The Blender / video / figure scripts are built on crossenbodiment's palette, figstyle, camera, clips, blender, strobe, video and sheet
+The Blender / video / figure scripts are built on crossembodiment's palette, figstyle, camera, clips, blender, strobe, video and sheet
 modules now (tests/golden/verify_vis.py, tests/test_vis.py). One file is archived:
 
 | file | what it was | why archived (2026-11-12) |
 |---|---|---|
-| scripts/export_strobe_blender.py | Blender panels of the 12 user-survey picks (outputs/strobe_task52_blender_picks, from the strobe_figures recipes) + their overview pages; its `clip_panels` was the recipe -> panels code body_all_blender.py and payload_fall_candidates.py imported | superseded by strobe_final_blender.py (outputs/strobe_task52_blender, the user's final picks, 11/10); `clip_panels` / `path_heading` / `DX` moved to crossenbodiment/strobe.py (recipe_panels, path_heading, RECIPE_DX: limit_leg_all52/blender/scene.json re-made identical), its overview to crossenbodiment/sheet.py ContactSheet; no .py / .sh of the worktree and no queue script of the main tree (`outputs/**/*.sh`, `*.cmds`) launches it; its only importers were body_all_blender.py, payload_fall_candidates.py (ported) and archive/scripts/payload_all_blender.py |
+| scripts/export_strobe_blender.py | Blender panels of the 12 user-survey picks (outputs/strobe_task52_blender_picks, from the strobe_figures recipes) + their overview pages; its `clip_panels` was the recipe -> panels code body_all_blender.py and payload_fall_candidates.py imported | superseded by strobe_final_blender.py (outputs/strobe_task52_blender, the user's final picks, 11/10); `clip_panels` / `path_heading` / `DX` moved to crossembodiment/strobe.py (recipe_panels, path_heading, RECIPE_DX: limit_leg_all52/blender/scene.json re-made identical), its overview to crossembodiment/sheet.py ContactSheet; no .py / .sh of the worktree and no queue script of the main tree (`outputs/**/*.sh`, `*.cmds`) launches it; its only importers were body_all_blender.py, payload_fall_candidates.py (ported) and archive/scripts/payload_all_blender.py |
 
 Kept, not generated from the package: scripts/survey_replay.py (the survey's standalone replay.py, copied into outputs/user_survey by
-package_survey.py; it needs only mujoco, numpy and imageio): tests/test_vis.py shows crossenbodiment.video.VideoRenderer draws the same
+package_survey.py; it needs only mujoco, numpy and imageio): tests/test_vis.py shows crossembodiment.video.VideoRenderer draws the same
 scenes as its side_by_side / overlay. scripts/render_blender.py stays one standalone file (it renders a scene folder without the
 repository); it ignores scene.json's new "version" field. strobe_figures/ (its own replay) unchanged.
 
@@ -198,7 +198,7 @@ model/networks.py (removing its unused heads is a code edit, not a move); g1_ove
 G1 line (step 7: archived, above), export_strobe_blender.py (step 10: archived, above).
 
 Step 4 (2026-11-11) moved `compute_batch_cost` and the settings single_z_search.py read from model/simple into
-crossenbodiment/align_cost.py (model/simple/train.py re-exports it; rollout_z_trace.py, rank_initial_cost.py and score_z_matrix.py
+crossembodiment/align_cost.py (model/simple/train.py re-exports it; rollout_z_trace.py, rank_initial_cost.py and score_z_matrix.py
 use the package too), but model/simple, model/dataset.py, model/networks.py and scripts/build_dataset.py stay: still live are
 scripts/dump_heldout_clips.py (KEEP list: model.dataset and model.simple.train_es.clip_index), scripts/test_exact_obs.py
 (model.dataset, model.simple.train make_body_ctx, train_es.set_init_qpos, and unpickling checkpoints' TrainConfig / ESConfig),

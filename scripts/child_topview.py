@@ -17,14 +17,14 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-# (topview.md quotes this docstring, so notes go here.) OOP refactor step 10: colours / labels from crossenbodiment/palette.py; the
-# trajectories and index.md are read where child_all_blender.py wrote them (crossenbodiment.paths.own_path), outputs go under
+# (topview.md quotes this docstring, so notes go here.) OOP refactor step 10: colours / labels from crossembodiment/palette.py; the
+# trajectories and index.md are read where child_all_blender.py wrote them (crossembodiment.paths.own_path), outputs go under
 # $CE_RESULTS_ROOT (default outputs/).
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
-from crossenbodiment import paths                              # noqa: E402
-from crossenbodiment.geometry import facing                    # noqa: E402  root yaw - 90 deg (refactor step 3)
-from crossenbodiment.palette import INK, Palette               # noqa: E402
+from crossembodiment import paths                              # noqa: E402
+from crossembodiment.geometry import facing                    # noqa: E402  root yaw - 90 deg (refactor step 3)
+from crossembodiment.palette import INK, Palette               # noqa: E402
 OUT = paths.write_path("outputs/child_all52"); T = paths.own_path("outputs/child_all52/trajectories")
 LINES = tuple((f, Palette.label(k), Palette.hex(k), ls, lw) for f, k, ls, lw in
               (("reference_body", "ref", "-", 2.0), ("z0", "frozen", "--", 1.4), ("cem", "cem_phc", "-", 1.6), ("best", "loes", "-", 1.6)))

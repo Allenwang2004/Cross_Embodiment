@@ -39,9 +39,9 @@ import torch  # noqa: F401
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
-from crossenbodiment.optim import colored_noise                     # noqa: E402,F401  (lso_search's, as before)
+from crossembodiment.optim import colored_noise                     # noqa: E402,F401  (lso_search's, as before)
 from model.robots import ROBOTS                                     # noqa: E402
-# OOP refactor step 6: the search lives in the package (crossenbodiment/problems.py RobotSequenceProblem: robot, reference,
+# OOP refactor step 6: the search lives in the package (crossembodiment/problems.py RobotSequenceProblem: robot, reference,
 # simulator, policy, per-step reward; costs.py the terms; optim.py LSO / TrajectoryAdaptation; search.py SequenceSearchLoop;
 # records.py RunRecorder).
 
@@ -83,12 +83,12 @@ def build_parser():
 
 
 def main():
-    """parse -> RobotSequenceProblem (crossenbodiment/problems.py) -> LSO / TrajectoryAdaptation (optim.py) ->
+    """parse -> RobotSequenceProblem (crossembodiment/problems.py) -> LSO / TrajectoryAdaptation (optim.py) ->
     SequenceSearchLoop (search.py) -> RunRecorder (records.py)"""
     a = build_parser().parse_args()
-    from crossenbodiment.problems import RobotSequenceProblem
-    from crossenbodiment.records import RunRecorder
-    from crossenbodiment.search import SequenceSearchLoop
+    from crossembodiment.problems import RobotSequenceProblem
+    from crossembodiment.records import RunRecorder
+    from crossembodiment.search import SequenceSearchLoop
 
     P = RobotSequenceProblem(a)                        # spawns the robot workers before CUDA is touched, as before
     rec = RunRecorder(P.out)

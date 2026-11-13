@@ -12,7 +12,7 @@ with LOES and the single-latent baselines (outputs/child_52_rerun, outputs/child
 5 seeds, 64 iterations x 16 rollouts (+ one logged rollout of the mean, never the result), the reference velocity at the
 start, the state after step t scored against reference frame t + 1.
   commands  "<out dir> <command>" per search, into outputs/child_52_lso/<stem>_<method>_s<seed>
-  analyse   metrics (scripts/eval_metrics.py via crossenbodiment.metrics.legacy_metrics, child_52_means.full until step 4) of the saved rollouts: the best sequence so far
+  analyse   metrics (scripts/eval_metrics.py via crossembodiment.metrics.legacy_metrics, child_52_means.full until step 4) of the saved rollouts: the best sequence so far
             (q_best_it<k>) and the mean sequence (q_mean_it<k>) after 4, 8, 16, 32, 64 iterations, and native tracking.
             Writes per_run.npz and means.json (by budget; LOES, frozen z0 and native tracking against each method).
             Checks: settings; 1,024 sample rollouts; the result is never the logged mean; the re-rolled best matches the
@@ -24,16 +24,16 @@ from pathlib import Path
 import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
-from crossenbodiment import paths   # noqa: E402
-from crossenbodiment.experiment import ClipSet, Experiment, workers   # noqa: E402
-from crossenbodiment.methods import experiment_keys, key_in   # noqa: E402
-from crossenbodiment.metrics import metric_body   # noqa: E402  one Body per (xml, smpl) and process (refactor step 3)
-from crossenbodiment.paths import CHILD_52_TASK   # noqa: E402
-from crossenbodiment.results import Checks, ResultsTable, save_npz, write_json   # noqa: E402
+from crossembodiment import paths   # noqa: E402
+from crossembodiment.experiment import ClipSet, Experiment, workers   # noqa: E402
+from crossembodiment.methods import experiment_keys, key_in   # noqa: E402
+from crossembodiment.metrics import metric_body   # noqa: E402  one Body per (xml, smpl) and process (refactor step 3)
+from crossembodiment.paths import CHILD_52_TASK   # noqa: E402
+from crossembodiment.results import Checks, ResultsTable, save_npz, write_json   # noqa: E402
 # refactor step 8: runs are read under paths.outputs_root() ($CE_OUTPUTS_ROOT), results written under paths.results_root()
 # ($CE_RESULTS_ROOT); both REPO/outputs by default
 SRC = paths.output("child_52"); OUT = paths.output("child_52_lso"); RERUN = paths.output("child_52_rerun"); RES = paths.result("child_52_lso")
-# the run-directory keys here (crossenbodiment/methods.py RUNS; also the per_run.npz / means.json keys): "lsor" is LSO + ranks with
+# the run-directory keys here (crossembodiment/methods.py RUNS; also the per_run.npz / means.json keys): "lsor" is LSO + ranks with
 # BFMTrack's own cost (lsor_bfm) in this experiment, the 0.05 / 0.005 variant is "lsor_w005"; RERUN_LOES: child_52_rerun's LOES ("es")
 K = experiment_keys("outputs/child_52_lso"); RERUN_LOES = key_in("outputs/child_52_rerun", "loes_anchor")
 LSO, LSOR_BFM, TA, LSOR_OURS, LSOR_W005 = (K[m] for m in ("lso", "lsor_bfm", "ta", "lsor_ours", "lsor_w005"))
@@ -49,7 +49,7 @@ body = None
 
 
 def clips():
-    from crossenbodiment.paths import CHILD_52_TASK, read_clips   # configs/clips/child_52_task.txt = outputs/child_52/clips.txt (refactor step 4)
+    from crossembodiment.paths import CHILD_52_TASK, read_clips   # configs/clips/child_52_task.txt = outputs/child_52/clips.txt (refactor step 4)
     return read_clips(CHILD_52_TASK)
 
 
@@ -61,7 +61,7 @@ def commands():
 def clip(c):
     global body
     import eval_metrics as E
-    from crossenbodiment.metrics import LEGACY_KEYS as KEYS, legacy_metrics as full   # child_52_means' (refactor step 4)
+    from crossembodiment.metrics import LEGACY_KEYS as KEYS, legacy_metrics as full   # child_52_means' (refactor step 4)
     body = body or metric_body(E.XML["child"], True); stem = c.split("/")[1]
     ref = np.load(REPO / f"data/child/retargeting_motion/{c}.npz")["qpos"].astype(np.float64)[1:]
     met = lambda q, ratio: [full(body, q.astype(np.float64), ref, ratio)[k] for k in KEYS]
@@ -81,7 +81,7 @@ def clip(c):
 
 
 def analyse():
-    from crossenbodiment.metrics import LEGACY_KEYS as KEYS   # child_52_means.KEYS (refactor step 4)
+    from crossembodiment.metrics import LEGACY_KEYS as KEYS   # child_52_means.KEYS (refactor step 4)
     cl = clips()
     with Pool(workers(24)) as p:
         res = p.map(clip, cl)

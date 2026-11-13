@@ -70,10 +70,10 @@ SURFACE = "#fcfcfb"
 SHADE = "#f0efe9"
 
 
-# OOP refactor step 9: the fitting math lives in crossenbodiment/bodybuild/torque.py (TorqueCalibrator uses it for every motion);
+# OOP refactor step 9: the fitting math lives in crossembodiment/bodybuild/torque.py (TorqueCalibrator uses it for every motion);
 # this script keeps its one-clip figures and imports it from there (torque_ratio_across_motions.py and
 # torque_aggregate_motion_k.py import it from the package too).
-from crossenbodiment.bodybuild.torque import fit_ratio, joint_torques, predicted_ratios  # noqa: E402,F401
+from crossembodiment.bodybuild.torque import fit_ratio, joint_torques, predicted_ratios  # noqa: E402,F401
 
 
 def draw_joint(name, ta, tc, contact, k, r2, out_path,

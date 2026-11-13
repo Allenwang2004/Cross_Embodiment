@@ -18,8 +18,8 @@ ranked by that gain; values cached in outputs/child_52_rerun/phc_reward.json (z0
 docs/figures/child_improvement_bars_phc.*
 --short: abbreviated task names (short()); --rot 90: vertical labels (spacing = label height, more motions fit).
 Legend: our method is "Ours" (user, 11/10). Both bar parts have the same 0.6 pt blue outline, so the solid and hatched parts are equally wide.
-Colours: crossenbodiment/palette.py (Palette.hex("loes"), INK["bars"]); style and save: crossenbodiment/figstyle.py (OOP refactor
-step 10). Runs are read through crossenbodiment.paths.read_path ($CE_OUTPUTS_ROOT); a missing PHC cache is written next to LOES's runs
+Colours: crossembodiment/palette.py (Palette.hex("loes"), INK["bars"]); style and save: crossembodiment/figstyle.py (OOP refactor
+step 10). Runs are read through crossembodiment.paths.read_path ($CE_OUTPUTS_ROOT); a missing PHC cache is written next to LOES's runs
 under $CE_RESULTS_ROOT; the figure goes to $CE_FIGURES_ROOT (default docs/figures).
 usage: uv run python scripts/plot_child_improvement.py [--width 5.5] [--font 10] [--n N] [--metric mpjpe|phc] [--short] [--rot 45|90]   (N: fewer motions than the maximum)"""
 import argparse, math
@@ -33,9 +33,9 @@ from matplotlib.patches import Patch
 REPO = Path(__file__).resolve().parent.parent
 import sys as _sys
 _sys.path.insert(0, str(REPO))
-from crossenbodiment import paths                                   # noqa: E402
-from crossenbodiment.figstyle import FigureStyle                    # noqa: E402
-from crossenbodiment.palette import INK as _INK, Palette            # noqa: E402
+from crossembodiment import paths                                   # noqa: E402
+from crossembodiment.figstyle import FigureStyle                    # noqa: E402
+from crossembodiment.palette import INK as _INK, Palette            # noqa: E402
 # --loes-dir: where LOES's runs are (default the anchored outputs/child_52_rerun; outputs/noanchor/child = LOES without the anchor term,
 # user 11/11); z0 and CEM stay the same runs. The PHC cache is written next to LOES's runs.
 LOES_REL = _sys.argv[_sys.argv.index("--loes-dir") + 1] if "--loes-dir" in _sys.argv else "outputs/child_52_rerun"
@@ -74,7 +74,7 @@ def phc_data():
     f = paths.own_path(f"{LOES_REL}/phc_reward.json")
     if not f.exists():
         from multiprocessing import Pool
-        from crossenbodiment.paths import CHILD_52_TASK, read_clips   # configs/clips/child_52_task.txt = outputs/child_52/clips.txt (refactor step 4)
+        from crossembodiment.paths import CHILD_52_TASK, read_clips   # configs/clips/child_52_task.txt = outputs/child_52/clips.txt (refactor step 4)
         clips = read_clips(CHILD_52_TASK); f = paths.write_path(f"{LOES_REL}/phc_reward.json")
         with Pool(16) as p:
             f.write_text(json.dumps(dict(p.map(phc_one, clips)), indent=1))

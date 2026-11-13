@@ -197,10 +197,10 @@ ending early mid-rollout just resets that slot and keeps stepping; we don't
 special-case it since cfg.steps_per_episode is short enough that this is rare
 and losing part of one sub-episode to a reset boundary doesn't bias the batch).
 
-NOTE on the L_align term: it is live again. datasets/crossenbodiment-1-datasets (the
+NOTE on the L_align term: it is live again. datasets/crossembodiment-1-datasets (the
 old single-body manifest) has no retargeted_motion, so qpos_ref was None on
 every row and L_align was identically zero. The default dataset is now
-datasets/crossenbodiment-10bodies, where every one of the 5400 rows carries a
+datasets/crossembodiment-10bodies, where every one of the 5400 rows carries a
 per-body retargeted reference produced by docs/new_body.md Step 2, so
 functional_equivalence has something to compare against on all of them.
 
@@ -210,7 +210,7 @@ robot_<label>.xml skeleton used for the live rollout (target_xml in
 config.py) -- so L_align is comparing two trajectories on the same bone lengths,
 as intended.
 
-Usage (from project root, once datasets/crossenbodiment-1-datasets exists):
+Usage (from project root, once datasets/crossembodiment-1-datasets exists):
     uv run model/simple/train.py
     uv run model/simple/run_train.py --gpu 1
 """
@@ -574,9 +574,9 @@ def ppo_update(cfg, model, adapter, value_net, optimizer, ep, z0_t, beta_t, rewa
     return out
 
 
-# _phys_weight_table and compute_batch_cost live in crossenbodiment/align_cost.py (OOP refactor step 4, unchanged);
+# _phys_weight_table and compute_batch_cost live in crossembodiment/align_cost.py (OOP refactor step 4, unchanged);
 # imported here so `from model.simple.train import compute_batch_cost` and this trainer keep working
-from crossenbodiment.align_cost import _phys_weight_table, compute_batch_cost  # noqa: E402,F401
+from crossembodiment.align_cost import _phys_weight_table, compute_batch_cost  # noqa: E402,F401
 
 
 def plot_loss_curve(loss_history, align_history, l_phys_history, out_path, body_history=None):

@@ -16,7 +16,7 @@ scripts/                       CLIs only: argparse + main(); every number is com
   figures, videos              plot_*.py, render_panels.py, body_overlay.py, robot_overlay.py, *_blender.py, render_blender.py (standalone)
         |
         v
-crossenbodiment/               the library (importing it imports nothing heavy; torch / mujoco / humenv load with the modules that need them)
+crossembodiment/               the library (importing it imports nothing heavy; torch / mujoco / humenv load with the modules that need them)
   data            paths ........ every location (REPO from the package's own path), $CE_OUTPUTS_ROOT / $CE_RESULTS_ROOT / $CE_FIGURES_ROOT
                   bodies ....... BodyRegistry over configs/bodies.yaml (+ RobotSpec over model/robots.py)
                   methods ...... MethodSpec registry: canonical method keys, flags, settings, run-directory keys per experiment

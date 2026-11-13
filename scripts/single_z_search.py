@@ -103,16 +103,16 @@ import torch  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
-# OOP refactor step 6: the search lives in the package -- the cost terms (crossenbodiment/costs.py), the problem
-# (crossenbodiment/problems.py HumanLatentProblem: body, reference, observation mapper, simulator, policy, cost), the
-# optimisers (crossenbodiment/optim.py: ES, CEM, CMAES, RandomSearch), the loop (crossenbodiment/search.py SearchLoop) and the
-# output files (crossenbodiment/records.py RunRecorder). OBJECTIVES ((lambda_align, lambda_phys) per --objective) moved
+# OOP refactor step 6: the search lives in the package -- the cost terms (crossembodiment/costs.py), the problem
+# (crossembodiment/problems.py HumanLatentProblem: body, reference, observation mapper, simulator, policy, cost), the
+# optimisers (crossembodiment/optim.py: ES, CEM, CMAES, RandomSearch), the loop (crossembodiment/search.py SearchLoop) and the
+# output files (crossembodiment/records.py RunRecorder). OBJECTIVES ((lambda_align, lambda_phys) per --objective) moved
 # with it and is re-exported here.
-from crossenbodiment.problems import OBJECTIVES  # noqa: E402,F401
+from crossembodiment.problems import OBJECTIVES  # noqa: E402,F401
 
-# ang_pair, project_z (metamotivo's |z| = 16 projection) and rank_normalize live in crossenbodiment/geometry.py (refactor step 3);
+# ang_pair, project_z (metamotivo's |z| = 16 projection) and rank_normalize live in crossembodiment/geometry.py (refactor step 3);
 # imported here so `from single_z_search import project_z, rank_normalize, ang_pair` keeps working
-from crossenbodiment.geometry import ang_pair, project_z, rank_normalize, smpl_heading  # noqa: E402,F401
+from crossembodiment.geometry import ang_pair, project_z, rank_normalize, smpl_heading  # noqa: E402,F401
 
 
 def rollout(model, env, z_env, steps, device, obs_mul, init_qpos=None, nv=None,
@@ -121,9 +121,9 @@ def rollout(model, env, z_env, steps, device, obs_mul, init_qpos=None, nv=None,
     and with return_obs also the RESCALED proprio of the state after each
     step, (n_envs, T, 358), index-aligned with qpos -- what B() scores.
 
-    Since OOP refactor step 5 a thin wrapper of crossenbodiment.rollout.BatchRollout (the loop every rollout script shares),
+    Since OOP refactor step 5 a thin wrapper of crossembodiment.rollout.BatchRollout (the loop every rollout script shares),
     kept with its signature for rollout_z_trace.py (and the archived scripts that import it); main() goes through
-    crossenbodiment/problems.py HumanLatentProblem (refactor step 6).
+    crossembodiment/problems.py HumanLatentProblem (refactor step 6).
 
     init_qpos overrides humenv's Default reset with a pose -- here the
     reference's own first frame, so the rollout and the trajectory it is scored
@@ -144,10 +144,10 @@ def rollout(model, env, z_env, steps, device, obs_mul, init_qpos=None, nv=None,
     act_out (list): if given, each step's actions (n_envs, n_act) are appended to it.
     qvel_out (list): if given, each step's qvel (n_envs, nv) after the step is appended to it (--eval-save-qvel).
     """
-    from crossenbodiment.obs import ExactObs, multiplier_or_raw
-    from crossenbodiment.policy import MotivoPolicy
-    from crossenbodiment.rollout import BatchRollout
-    from crossenbodiment.sim import HumenvSim
+    from crossembodiment.obs import ExactObs, multiplier_or_raw
+    from crossembodiment.policy import MotivoPolicy
+    from crossembodiment.rollout import BatchRollout
+    from crossembodiment.sim import HumenvSim
     mapper = ExactObs.wrap(exact, in_env=exact_in_env) if exact is not None else multiplier_or_raw(obs_mul)
     record = ("qpos",) + (("obs",) if return_obs else ()) + (("act",) if act_out is not None else ()) \
         + (("qvel",) if qvel_out is not None else ())
@@ -325,12 +325,12 @@ def build_parser():
 
 
 def main():
-    """parse -> the problem (body, reference, observation mapper, simulator, policy, cost: crossenbodiment/problems.py) ->
-    the optimiser (crossenbodiment/optim.py) -> SearchLoop (crossenbodiment/search.py) -> RunRecorder (records.py)"""
+    """parse -> the problem (body, reference, observation mapper, simulator, policy, cost: crossembodiment/problems.py) ->
+    the optimiser (crossembodiment/optim.py) -> SearchLoop (crossembodiment/search.py) -> RunRecorder (records.py)"""
     args = build_parser().parse_args()
-    from crossenbodiment.problems import HumanLatentProblem
-    from crossenbodiment.records import RunRecorder
-    from crossenbodiment.search import SearchLoop
+    from crossembodiment.problems import HumanLatentProblem
+    from crossembodiment.records import RunRecorder
+    from crossembodiment.search import SearchLoop
 
     P = HumanLatentProblem(args)                       # prints the run's settings as before
     P.baseline()                                       # z0's rollout (origin_z) and the kinematic floor

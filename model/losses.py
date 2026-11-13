@@ -54,7 +54,7 @@ import mujoco
 import numpy as np
 
 from . import kinematics as kin
-from crossenbodiment.geometry import quat_mul as _quat_mul   # the Hamilton product, wxyz (refactor step 3)
+from crossembodiment.geometry import quat_mul as _quat_mul   # the Hamilton product, wxyz (refactor step 3)
 
 
 # Control-step duration. The clips in datasets/ all carry fps 30.0 and the env

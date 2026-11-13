@@ -17,9 +17,9 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent; PREV = REPO / "outputs/survey_preview"
 sys.path.insert(0, str(REPO))
 from model.robots import ROBOTS, target_path                                 # noqa: E402
-from crossenbodiment.survey import ADULT, ADULT_H, CLIPS   # noqa: E402  survey_body_videos' (refactor step 4)
-from crossenbodiment.palette import BLUE, GREY, RED   # noqa: E402  survey_body_videos' (refactor step 4)
-from crossenbodiment.camera import survey_track   # noqa: E402  the survey's side-by-side camera (refactor step 10)
+from crossembodiment.survey import ADULT, ADULT_H, CLIPS   # noqa: E402  survey_body_videos' (refactor step 4)
+from crossembodiment.palette import BLUE, GREY, RED   # noqa: E402  survey_body_videos' (refactor step 4)
+from crossembodiment.camera import survey_track   # noqa: E402  the survey's side-by-side camera (refactor step 10)
 ENV = {**os.environ, "MUJOCO_GL": "egl", "MUJOCO_EGL_DEVICE_ID": "2", "CUDA_VISIBLE_DEVICES": "2"}
 
 

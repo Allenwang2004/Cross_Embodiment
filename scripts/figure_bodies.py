@@ -1,5 +1,5 @@
 """figure_bodies.py -- bodies for the paper's figures: matte cut-outs with a soft floor shadow, to be laid over a flat grey (BFMTrack's background, ReActor's body colour; both sampled from the papers' figures).
-The two colours are crossenbodiment.palette's INK["figure_bg"] / INK["figure_body"] (OOP refactor step 10)."""
+The two colours are crossembodiment.palette's INK["figure_bg"] / INK["figure_body"] (OOP refactor step 10)."""
 import sys
 from pathlib import Path
 
@@ -9,7 +9,7 @@ from PIL import Image
 from scipy.ndimage import gaussian_filter
 
 sys.path.insert(1, str(Path(__file__).resolve().parent.parent))
-from crossenbodiment.palette import INK                  # noqa: E402
+from crossembodiment.palette import INK                  # noqa: E402
 
 BG = INK["figure_bg"]; BODY_RGBA = INK["figure_body"]
 PX, SS, DIST, LOOK_Z = 1400, 2, 5.0, 0.9                # about 340 px per metre: over 600 dpi at the figures' scale

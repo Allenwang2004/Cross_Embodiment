@@ -8,7 +8,7 @@ the forms of one entry are the same colour within that rounding, that render_ble
 script's colour table equals its 8e9dc99 literals.
 
   Palette.method(key[, variant])   MethodColour(key, label, hex, video, blender): the method table, keyed by the canonical method
-                                   names of crossenbodiment/methods.py (step 11): frozen (z0), cem_phc (BFM-Zero: CEM on PHC's
+                                   names of crossembodiment/methods.py (step 11): frozen (z0), cem_phc (BFM-Zero: CEM on PHC's
                                    reward), loes (ours), random, cmaes, lso, lsor_w005, ta, native; plus ref and adult. The keys
                                    before step 11 still work (OLD_KEYS: z0 -> frozen, cem -> cem_phc, lsor -> lsor_w005)
   Palette.label / hex / rgb / video / blender_rgb(key[, variant])
@@ -152,7 +152,7 @@ def srgb_to_linear(c):
     return tuple(x / 12.92 if x <= 0.04045 else ((x + 0.055) / 1.055) ** 2.4 for x in c)
 
 
-# the palette's keys before step 11 -> the canonical method keys (crossenbodiment/methods.py); the old "cem" entry was BFM-Zero's
+# the palette's keys before step 11 -> the canonical method keys (crossembodiment/methods.py); the old "cem" entry was BFM-Zero's
 # CEM, its "algo_compare" variant plot_algo_compare.py's CEM with our cost
 OLD_KEYS = _ro(z0="frozen", cem="cem_phc", lsor="lsor_w005")
 OLD_VARIANT_KEYS = _ro({("cem", "algo_compare"): ("cem_ours", "algo_compare")})

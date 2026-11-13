@@ -29,7 +29,7 @@ computed once). MetricSuite.task_page(body, scale) gives the Task page's (fall_s
     suite = MetricSuite.task_page(body, s).reference(ref[1:])          # Pw, Dr computed here (or pass the caller's)
     suite.values(q)  -> [fall_s, success, mpjpe, mmpjpe, mpjae, drift]   suite(q) -> the same as a dict
 
-`body` is an eval_metrics.Body (crossenbodiment/eval_metrics.py) (m, d, part_floor, local, hand_floor); metric_body(xml, smpl) is one per (xml, smpl) and
+`body` is an eval_metrics.Body (crossembodiment/eval_metrics.py) (m, d, part_floor, local, hand_floor); metric_body(xml, smpl) is one per (xml, smpl) and
 process. Importing this module imports numpy only.
 """
 from __future__ import annotations
@@ -47,7 +47,7 @@ ROOT_POS, ROOT_ROT = 1.5, 45              # legacy root_success: m, deg
 
 
 def _eval_metrics():
-    """crossenbodiment/eval_metrics.py (scripts/eval_metrics.py until refactor step 8; that file now re-exports this module, so the
+    """crossembodiment/eval_metrics.py (scripts/eval_metrics.py until refactor step 8; that file now re-exports this module, so the
     scripts' `import eval_metrics` is the same module object and Body class), imported on first use (it imports mujoco and ot)"""
     from . import eval_metrics
     return eval_metrics
@@ -230,7 +230,7 @@ class MetricSuite:
 
     def __init__(self, body, metrics=TASK_PAGE, scale=1.0, drift_unit="body"):
         """metrics: names from METRICS or (name, f(rollout)) pairs; scale: the body's root scale s (success threshold 0.5 x s,
-        drift / s with drift_unit "adult"; crossenbodiment/bodies.py lists its other names)"""
+        drift / s with drift_unit "adult"; crossembodiment/bodies.py lists its other names)"""
         self.body, self.scale, self.drift_unit = body, scale, drift_unit
         self.metrics = tuple((m, METRICS[m]) if isinstance(m, str) else tuple(m) for m in metrics)
         self.ref = self._Pw = self._Dr = None

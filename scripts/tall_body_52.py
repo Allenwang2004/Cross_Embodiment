@@ -29,17 +29,17 @@ from pathlib import Path
 import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
-from crossenbodiment.metrics import MetricSuite, metric_body, world_positions   # noqa: E402
-from crossenbodiment import paths   # noqa: E402
-from crossenbodiment.experiment import ClipSet, Experiment, workers   # noqa: E402
-from crossenbodiment.methods import experiment_keys   # noqa: E402
-from crossenbodiment.results import ReportWriter, ResultsTable, write_json   # noqa: E402
+from crossembodiment.metrics import MetricSuite, metric_body, world_positions   # noqa: E402
+from crossembodiment import paths   # noqa: E402
+from crossembodiment.experiment import ClipSet, Experiment, workers   # noqa: E402
+from crossembodiment.methods import experiment_keys   # noqa: E402
+from crossembodiment.results import ReportWriter, ResultsTable, write_json   # noqa: E402
 # refactor step 8: runs are read under paths.outputs_root() ($CE_OUTPUTS_ROOT; OUT, read by one() when called), results written
 # under paths.results_root() ($CE_RESULTS_ROOT; RES); both REPO/outputs by default
 B = "len1.4_wid0.8"; XML = f"assets/robots_torque/{B}/robot_torque_full.xml"; OUT = paths.output("tall_body_52"); RES = paths.result("tall_body_52")
-from crossenbodiment.paths import CHILD_52_TASK, read_clips   # noqa: E402  configs/clips/child_52_task.txt = outputs/child_52/clips.txt (refactor step 4)
+from crossembodiment.paths import CHILD_52_TASK, read_clips   # noqa: E402  configs/clips/child_52_task.txt = outputs/child_52/clips.txt (refactor step 4)
 CLIPS = read_clips(CHILD_52_TASK)
-# the run-directory keys of the two methods (crossenbodiment/methods.py RUNS): LOES without the anchor "es", BFM-Zero's CEM "cem"
+# the run-directory keys of the two methods (crossembodiment/methods.py RUNS): LOES without the anchor "es", BFM-Zero's CEM "cem"
 K = experiment_keys("outputs/tall_body_52"); LOES, CEM = K["loes"], K["cem_phc"]
 EXP = Experiment("outputs/tall_body_52", clips=ClipSet(CLIPS), methods=(LOES, CEM), order=("clip", "method"))
 KEYS = ("mpjpe", "mmpjpe", "mpjae", "fall_s", "success", "phc", "drift")

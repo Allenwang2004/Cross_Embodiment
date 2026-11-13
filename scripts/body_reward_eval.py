@@ -29,7 +29,7 @@ import numpy as np
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
 from model.exact_obs import ExactObs, ExactObsWrapper, ADULT_XML       # noqa: E402
-from crossenbodiment.survey import BODY, run_of   # noqa: E402  survey_body_videos' (refactor step 4)
+from crossembodiment.survey import BODY, run_of   # noqa: E402  survey_body_videos' (refactor step 4)
 from child_reward_eval import reward_of, rollout, BLUE, RED, INK, MUTED, GRID, SURF   # noqa: E402
 
 OUT = REPO / "outputs/reward"
@@ -41,7 +41,7 @@ YLABEL = "mean return over the 5 tasks\n(300-step rollouts; 120 for headstand, c
 
 def tried(rng, summ, z):
     """the candidates the search scored at its point z, drawn as it drew them (--sampling; older runs: antithetic)."""
-    from crossenbodiment.geometry import project_z   # single_z_search re-exported it (refactor step 4)
+    from crossembodiment.geometry import project_z   # single_z_search re-exported it (refactor step 4)
     if summ.get("sampling", "antithetic") == "antithetic":
         eps = rng.standard_normal((summ["pairs"], z.size))
         return project_z(np.concatenate([z + summ["sigma"] * eps, z - summ["sigma"] * eps]))
@@ -70,7 +70,7 @@ def setup(body, stem):
 def evaluate(body, max_steps):
     from humenv import make_humenv
     from metamotivo.fb_cpr.huggingface import FBcprModel
-    from crossenbodiment.geometry import project_z   # single_z_search re-exported it (refactor step 4)
+    from crossembodiment.geometry import project_z   # single_z_search re-exported it (refactor step 4)
     out = OUT / body; out.mkdir(parents=True, exist_ok=True)
     model = FBcprModel.from_pretrained("facebook/metamotivo-M-1").to("cuda")
     ma = mujoco.MjModel.from_xml_path(str(REPO / ADULT_XML))
@@ -121,7 +121,7 @@ def fix_records(body):
     are rolled out as the search rolled them, 16 copies in one batch. The old numbers stay as returns_rerolled."""
     from humenv import make_humenv
     from metamotivo.fb_cpr.huggingface import FBcprModel
-    from crossenbodiment.geometry import project_z   # single_z_search re-exported it (refactor step 4)
+    from crossembodiment.geometry import project_z   # single_z_search re-exported it (refactor step 4)
     d = OUT / body; cu = json.loads((d / "return_curve.json").read_text()); ex = json.loads((d / "return_explore.json").read_text())
     model = FBcprModel.from_pretrained("facebook/metamotivo-M-1").to("cuda")
     ma = mujoco.MjModel.from_xml_path(str(REPO / ADULT_XML))

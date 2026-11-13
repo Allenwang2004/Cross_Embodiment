@@ -1,4 +1,4 @@
-"""Tests of crossenbodiment/metrics.py (OOP refactor step 3, docs/refactor/PLAN.md), exact comparisons (==, np.array_equal):
+"""Tests of crossembodiment/metrics.py (OOP refactor step 3, docs/refactor/PLAN.md), exact comparisons (==, np.array_equal):
 
   * each named metric function against the VERBATIM expression it replaced (frozen below, from commit a997a23), on fixed random
     arrays (values on and next to the thresholds included)
@@ -31,7 +31,7 @@ for p in (str(REPO / "scripts"), str(REPO)):
 import mujoco  # noqa: E402
 import numpy as np  # noqa: E402
 
-from crossenbodiment import metrics as M  # noqa: E402
+from crossembodiment import metrics as M  # noqa: E402
 
 BASE = "a997a23"                                              # the commit before step 3
 INP = REPO / "tests/golden/inputs"

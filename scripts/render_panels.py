@@ -30,7 +30,7 @@ at 480 and below);
 "quality": the mp4's imageio-ffmpeg quality, 0-10 (default 8 at size >= 1080, else 5).
 
 Writes <out> (mp4) and <out>.png (contact sheet: three moments, panels across).
-The rendering is crossenbodiment.video.VideoRenderer.render_spec (OOP refactor step 10: the side-by-side and overlay videos share its
+The rendering is crossembodiment.video.VideoRenderer.render_spec (OOP refactor step 10: the side-by-side and overlay videos share its
 painting and writer settings). Spec paths are repository-relative ("outputs/..." read through $CE_OUTPUTS_ROOT, the video written
 under $CE_RESULTS_ROOT; defaults outputs/) or absolute; --out writes the video elsewhere.
 """
@@ -47,8 +47,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 REPO_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))   # the repository root, appended as rollout_z_trace did
 if REPO_DIR not in sys.path:
     sys.path.append(REPO_DIR)
-from crossenbodiment.draw import frame_label as label   # noqa: E402,F401  rollout_z_trace.label (refactor step 4)
-from crossenbodiment.video import FONT, VideoRenderer, label_px   # noqa: E402,F401  (render_humanoids.py imports FONT from here)
+from crossembodiment.draw import frame_label as label   # noqa: E402,F401  rollout_z_trace.label (refactor step 4)
+from crossembodiment.video import FONT, VideoRenderer, label_px   # noqa: E402,F401  (render_humanoids.py imports FONT from here)
 
 REPO = Path(__file__).resolve().parent.parent
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""verify_bodies.py LABEL -- OOP refactor step 9: rebuild existing bodies with the new pipeline (crossenbodiment/bodybuild) into the
+"""verify_bodies.py LABEL -- OOP refactor step 9: rebuild existing bodies with the new pipeline (crossembodiment/bodybuild) into the
 worktree and compare every artifact with the stored one, byte for byte.
 
 Everything is WRITTEN under outputs/refactor_step9/LABEL (BuildRoots(root=.../root): assets/robots, assets/robots_torque, data,
@@ -34,7 +34,7 @@ from pathlib import Path
 os.environ.setdefault("MUJOCO_GL", "egl")
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
-MAIN = Path(os.environ.get("CROSSENBODIMENT_MAIN", "/home/allen19/crossenbodiment"))
+MAIN = Path(os.environ.get("CROSSENBODIMENT_MAIN", "/home/allen19/crossembodiment"))
 BASE = "2bdb2fe"                                              # the commit before step 9 (the old scripts)
 MATRIX_FILES = ("_k_matrix.csv", "_r2_matrix.csv", "_corr.csv", "_ratios_aggregate.csv", "_corr.png")
 AMASS_CLIPS = 3
@@ -66,7 +66,7 @@ def parameter_keys(new, old):
 
 
 def scaled(rep, work, names, workers):
-    from crossenbodiment.bodybuild import BodyPipeline, BuildRoots, ScaledBody
+    from crossembodiment.bodybuild import BodyPipeline, BuildRoots, ScaledBody
     roots = BuildRoots(work / "root")
     for name in names:
         b = (ScaledBody.from_preset("child", robots_dir=roots.robots) if name == "child" else
@@ -100,8 +100,8 @@ def scaled(rep, work, names, workers):
 
 
 def amass(rep, work):
-    from crossenbodiment import paths
-    from crossenbodiment.bodybuild import SameTopologyRetargeter
+    from crossembodiment import paths
+    from crossembodiment.bodybuild import SameTopologyRetargeter
     clips = paths.read_clips(paths.AMASS_LOCOMOTION_5S)[:AMASS_CLIPS]
     adult_sk = REPO / "assets/robots/adult/skeleton.json"
     for body, stored in (("len1.4_wid0.8", REPO / "data/len1.4_wid0.8/amass_retargeting_motion/ACCAD"),
@@ -116,7 +116,7 @@ def amass(rep, work):
 
 
 def variant(rep, work):
-    from crossenbodiment.bodybuild import BuildRoots, HeavyLimb
+    from crossembodiment.bodybuild import BuildRoots, HeavyLimb
     roots = BuildRoots(work / "root")
     b = HeavyLimb(80, "R", ["Wrist", "Hand"], robots_dir=roots.robots)
     assert b.name == "adult_heavyRWristHand_x80", b.name
@@ -128,8 +128,8 @@ def variant(rep, work):
 
 
 def gains(rep, work):
-    from crossenbodiment.bodies import BODIES
-    from crossenbodiment.bodybuild import GainScaler
+    from crossembodiment.bodies import BODIES
+    from crossembodiment.bodybuild import GainScaler
     out = work / "gains"
     for spec in BODIES:
         if spec.kind != "gain_variant":
@@ -198,8 +198,8 @@ def old_build(root, name, flags, log):
 
 def old_vs_new(rep, work, names):
     """the same bodies built by BASE's scripts in a scratch root vs the new pipeline's (part scaled must have run): every artifact"""
-    from crossenbodiment.bodybuild import BuildRoots
-    from crossenbodiment.bodybuild.beta import BETA_AXES, PRESETS, isometric_beta
+    from crossembodiment.bodybuild import BuildRoots
+    from crossembodiment.bodybuild.beta import BETA_AXES, PRESETS, isometric_beta
     roots, root = BuildRoots(work / "root"), old_repo(work)
     for name in names:
         beta = dict(PRESETS["child"]) if name == "child" else isometric_beta(float(name[3:].split("_")[0]), float(name.split("wid")[1]))

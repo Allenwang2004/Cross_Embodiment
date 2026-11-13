@@ -17,11 +17,11 @@ from pathlib import Path
 import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO))
-from crossenbodiment import paths                                         # noqa: E402
-from crossenbodiment.blender import BlenderScene, body_height as height, load_model   # noqa: E402
-from crossenbodiment.camera import BLENDER_AZIMUTH                        # noqa: E402
-from crossenbodiment.sheet import font                                    # noqa: E402
-from crossenbodiment.strobe import fade_tints                             # noqa: E402
+from crossembodiment import paths                                         # noqa: E402
+from crossembodiment.blender import BlenderScene, body_height as height, load_model   # noqa: E402
+from crossembodiment.camera import BLENDER_AZIMUTH                        # noqa: E402
+from crossembodiment.sheet import font                                    # noqa: E402
+from crossembodiment.strobe import fade_tints                             # noqa: E402
 
 ARG = lambda k, d: type(d)(sys.argv[sys.argv.index(k) + 1]) if k in sys.argv else d
 SAMPLES = ARG("--samples", 128); THREADS = ARG("--threads", 32); STEP = ARG("--step", 30)

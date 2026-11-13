@@ -1468,7 +1468,7 @@ def main():
                         "humenv's standing reset (ESConfig.init_from_reference)")
     p.add_argument("--dataset-dir", default=None,
                    help="manifest to train on (ESConfig.dataset_dir). The default "
-                        "crossenbodiment-10bodies EXCLUDES child and adult -- "
+                        "crossembodiment-10bodies EXCLUDES child and adult -- "
                         "scripts/build_dataset.py --bodies child builds one that has it")
     p.add_argument("--clip-list", default=None,
                    help="file of '<task> <trial>' lines to train on (scripts/write_clip_list.py)")

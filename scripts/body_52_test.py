@@ -32,23 +32,23 @@ import mujoco
 import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
-from crossenbodiment import paths   # noqa: E402
-from crossenbodiment.experiment import ClipSet, Experiment, parse_flag, workers   # noqa: E402
-from crossenbodiment.methods import experiment_keys   # noqa: E402
-from crossenbodiment.metrics import MetricSuite, metric_body, world_positions   # noqa: E402
-from crossenbodiment.paths import CHILD_52_TASK, read_clips   # noqa: E402  configs/clips/child_52_task.txt = outputs/child_52/clips.txt (refactor step 4)
-from crossenbodiment.reroll import EvalRollouts, Reroller, read_best_so_far   # noqa: E402
-from crossenbodiment.results import Checks, ResultsTable, write_json   # noqa: E402
+from crossembodiment import paths   # noqa: E402
+from crossembodiment.experiment import ClipSet, Experiment, parse_flag, workers   # noqa: E402
+from crossembodiment.methods import experiment_keys   # noqa: E402
+from crossembodiment.metrics import MetricSuite, metric_body, world_positions   # noqa: E402
+from crossembodiment.paths import CHILD_52_TASK, read_clips   # noqa: E402  configs/clips/child_52_task.txt = outputs/child_52/clips.txt (refactor step 4)
+from crossembodiment.reroll import EvalRollouts, Reroller, read_best_so_far   # noqa: E402
+from crossembodiment.results import Checks, ResultsTable, write_json   # noqa: E402
 # refactor step 8: runs are read under paths.outputs_root() ($CE_OUTPUTS_ROOT), results written under paths.results_root()
 # ($CE_RESULTS_ROOT); both REPO/outputs by default. --algos / --body are read in main (not at import); prepare writes the
-# schema-2 index (crossenbodiment/reroll.py), analyse reads any.
+# schema-2 index (crossembodiment/reroll.py), analyse reads any.
 OUT = paths.output("body_52"); RES = paths.result("body_52"); CLIPS = tuple(read_clips(CHILD_52_TASK))
 SEEDS = (0,); G = (4, 8, 16, 32, 64, 128); GENS = G[-1]; EVALS = 16 * GENS; KEYS = ("fall_s", "success", "mpjpe", "mmpjpe", "mpjae", "drift")
 BODIES = dict(payload=dict(label="adult_heavyRWristHand_x80", xml="assets/robots/adult_heavyRWristHand_x80/robot.xml", ref="data/origin_motion/{c}.npz",
                            kpkd="heavy_arm_kp1_kd1"),
               limit_leg=dict(label="adult_lockRleg_bent_lim", xml="assets/robots/adult_lockRleg_bent_lim/robot.xml",
                              ref="data/adult_lockRleg_bent_lim/retargeting_motion/{c}.npz", kpkd="limit_leg_kp1_kd1"))
-# the run-directory key of each method here (crossenbodiment/methods.py RUNS "outputs/body_52/<body>"; also results.json's method keys,
+# the run-directory key of each method here (crossembodiment/methods.py RUNS "outputs/body_52/<body>"; also results.json's method keys,
 # "<key>_best" / "<key>_centre"): LOES with the anchor "es", BFM-Zero's CEM "cem", LSOR (0.05 heading, 0.005 position) "lsor"
 K = experiment_keys("outputs/body_52/<body>")
 LOES, RANDOM, CEM, CMAES, LSO, LSOR, TA = (K[m] for m in ("loes_anchor", "random", "cem_phc", "cmaes", "lso", "lsor_w005", "ta"))
@@ -140,7 +140,7 @@ def evalcmds(algos=None):
 
 
 def world(Q):
-    """world positions of every body of the module's `body` (crossenbodiment.metrics.world_positions)"""
+    """world positions of every body of the module's `body` (crossembodiment.metrics.world_positions)"""
     return world_positions(body.m, body.d, Q)
 
 

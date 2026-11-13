@@ -5,22 +5,22 @@ user to choose new payload examples from (user, 11/10). Not added to the user su
 Candidates: the 52-motion payload run (outputs/body_52/payload, seed 0, LOES's best after 2,048 rollouts); "falls" = the pelvis
 below half the reference's pelvis height at the same frame for >= 0.5 s; kept: z0 falls, LOES < 0.5 s. Ordered by the drop in that time.
 Steps: (1) trajectories in the survey format (outputs/user_survey's frame alignment: references from their second frame, all files
-the reference's length minus one; crossenbodiment.clips.ClipBundle) -> outputs/payload_fall_candidates/trajectories/<clip>; (2) strobe
+the reference's length minus one; crossembodiment.clips.ClipBundle) -> outputs/payload_fall_candidates/trajectories/<clip>; (2) strobe
 figures with strobe_figures/replay_strobe.py, 6 poses 15 frames apart from 40 frames before z0's fall, camera fixed at the survey view
-(azimuth 140) -> strobe/, configs/; (3) the same frames in Blender (crossenbodiment.strobe.recipe_panels, render_blender.py) -> blender/;
-(4) overview_mujoco.jpg, overview_blender.jpg (crossenbodiment.sheet.ContactSheet).
+(azimuth 140) -> strobe/, configs/; (3) the same frames in Blender (crossembodiment.strobe.recipe_panels, render_blender.py) -> blender/;
+(4) overview_mujoco.jpg, overview_blender.jpg (crossembodiment.sheet.ContactSheet).
 usage: uv run python scripts/payload_fall_candidates.py"""
 import glob, json, os, subprocess, sys
 from pathlib import Path
 import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO))
-from crossenbodiment import paths                                         # noqa: E402
-from crossenbodiment.blender import BlenderScene                          # noqa: E402
-from crossenbodiment.clips import ClipBundle, origin_clip                 # noqa: E402
-from crossenbodiment.palette import Palette                               # noqa: E402
-from crossenbodiment.sheet import ContactSheet                            # noqa: E402
-from crossenbodiment.strobe import RECIPE_DX, recipe_panels               # noqa: E402
+from crossembodiment import paths                                         # noqa: E402
+from crossembodiment.blender import BlenderScene                          # noqa: E402
+from crossembodiment.clips import ClipBundle, origin_clip                 # noqa: E402
+from crossembodiment.palette import Palette                               # noqa: E402
+from crossembodiment.sheet import ContactSheet                            # noqa: E402
+from crossembodiment.strobe import RECIPE_DX, recipe_panels               # noqa: E402
 
 OUT = paths.write_path("outputs/payload_fall_candidates"); RUN_REL = "outputs/body_52/payload"; RUN = paths.read_path(RUN_REL); PKG = REPO / "strobe_figures"
 CLIPS = ["move-ego-0-2-raisearms-h-m_1", "move-ego-0-2-raisearms-m-h_1", "raisearms-h-l_1", "split-1_7", "rotate-z-5-0.8_9"]

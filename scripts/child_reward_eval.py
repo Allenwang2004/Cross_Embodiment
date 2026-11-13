@@ -32,11 +32,11 @@ import torch
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
 from model.exact_obs import ExactObs, ExactObsWrapper, ADULT_XML       # noqa: E402
-from crossenbodiment.survey import CLIPS, run_of   # noqa: E402  survey_body_videos' (refactor step 4)
-from crossenbodiment.obs import ExactObs as ExactObsMapper, RawObs   # noqa: E402  the simulation layer (refactor step 5)
-from crossenbodiment.policy import MotivoPolicy                      # noqa: E402
-from crossenbodiment.rollout import BatchRollout                     # noqa: E402
-from crossenbodiment.sim import HumenvSim                            # noqa: E402
+from crossembodiment.survey import CLIPS, run_of   # noqa: E402  survey_body_videos' (refactor step 4)
+from crossembodiment.obs import ExactObs as ExactObsMapper, RawObs   # noqa: E402  the simulation layer (refactor step 5)
+from crossembodiment.policy import MotivoPolicy                      # noqa: E402
+from crossembodiment.rollout import BatchRollout                     # noqa: E402
+from crossembodiment.sim import HumenvSim                            # noqa: E402
 
 OUT = REPO / "outputs/reward/child"
 CHILD_XML = REPO / "assets/robots_torque/child/robot_torque_full.xml"
@@ -58,7 +58,7 @@ def rollout(model, env, zs, init, steps, nv, exact=None, qvel0=None):
     """single_z_search.rollout (deterministic actor mean, start at rest from init), also returning qvel and actions.
     qvel0: start with this velocity instead of at rest. exact: the main-process ExactObs of an env whose workers compute it
     (ExactObsWrapper); the start observation is then exact(init, v0), and get_obs is fetched only without it. Since OOP
-    refactor step 5 through crossenbodiment.rollout.BatchRollout (device "cuda", as before)."""
+    refactor step 5 through crossembodiment.rollout.BatchRollout (device "cuda", as before)."""
     v0 = np.zeros(nv) if qvel0 is None else np.asarray(qvel0, dtype=np.float64)
     mapper = ExactObsMapper.wrap(exact) if exact is not None else RawObs()
     batch = BatchRollout(MotivoPolicy(model, "cuda"), HumenvSim(env), mapper, len(zs), steps, fetch_start_obs=exact is None,
@@ -202,7 +202,7 @@ def explore(threshold=50.0):
     candidates (to ~1e-5: z_trace is float32). Each step's 16 are rolled out as one batch, as in the search. Writes outputs/reward/child/return_explore.json."""
     from humenv import make_humenv
     from metamotivo.fb_cpr.huggingface import FBcprModel
-    from crossenbodiment.geometry import project_z   # single_z_search re-exported it (refactor step 4)
+    from crossembodiment.geometry import project_z   # single_z_search re-exported it (refactor step 4)
     curve_res = json.loads((OUT / "return_curve.json").read_text())
     keep = [s for s in CLIPS if curve_res[s]["adult_z0"] > threshold]
     model = FBcprModel.from_pretrained("facebook/metamotivo-M-1").to("cuda")

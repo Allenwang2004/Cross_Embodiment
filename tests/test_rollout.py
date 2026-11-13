@@ -1,4 +1,4 @@
-"""Tests of OOP refactor step 5 (docs/refactor/PLAN.md): the simulation layer (crossenbodiment/policy.py, obs.py, sim.py,
+"""Tests of OOP refactor step 5 (docs/refactor/PLAN.md): the simulation layer (crossembodiment/policy.py, obs.py, sim.py,
 rollout.py) against the rollout loops it replaced, run from their own source at BASE (37ed139, the commit before step 5).
 
 Every copy is executed from `git show BASE:<file>`: a top-level function by its definition (ast, as tests/test_moves.py), a
@@ -93,13 +93,13 @@ def run_block(rel, start, end, ns, src=None):
 # ------------------------------------------------------------------ fixtures
 
 def setup():
-    from crossenbodiment.sim import RobotSim
+    from crossembodiment.sim import RobotSim
     F["g1"] = RobotSim("g1", N, fill="ridge", gains=G1_GAINS)            # spawn the robot workers before CUDA is touched
     import functools
     import mujoco
     from humenv import make_humenv
-    from crossenbodiment.geometry import project_z, unit_sphere
-    from crossenbodiment.policy import MotivoPolicy
+    from crossembodiment.geometry import project_z, unit_sphere
+    from crossembodiment.policy import MotivoPolicy
     from model.exact_obs import ExactObs, ExactObsWrapper
     from model.obs_scale import build_obs_multiplier
     F["policy"] = MotivoPolicy.load(device="cuda")
@@ -138,9 +138,9 @@ def zt():
 def _single_z(env_key, **kw):
     import torch
     import single_z_search as sz_new
-    from crossenbodiment.obs import ExactObs, multiplier_or_raw
-    from crossenbodiment.rollout import BatchRollout
-    from crossenbodiment.sim import HumenvSim
+    from crossembodiment.obs import ExactObs, multiplier_or_raw
+    from crossembodiment.rollout import BatchRollout
+    from crossembodiment.sim import HumenvSim
     old = old_defs("scripts/single_z_search.py", ["rollout"], {"np": np, "torch": torch})["rollout"]
     model, env, dev = F["policy"].model, F[env_key], F["dev"]
     outs = []
@@ -186,9 +186,9 @@ def test_single_z_raw_default_init():
 
 def test_lso_loop():
     import torch
-    from crossenbodiment.obs import ExactObs
-    from crossenbodiment.rollout import BatchRollout
-    from crossenbodiment.sim import HumenvSim
+    from crossembodiment.obs import ExactObs
+    from crossembodiment.rollout import BatchRollout
+    from crossembodiment.sim import HumenvSim
     model, ref, v0 = F["policy"].model, F["ref"], F["v0"]
     ns = dict(np=np, torch=torch, a=types.SimpleNamespace(device=F["dev"], bfm_zero_vel=False), Z=F["Zseq"], env=F["env_exact"],
               ref=ref, v0=v0, ex0=F["exact"](ref[0], v0), n_envs=N, SR=STEPS, model=model, VEL=slice(214, 358))
@@ -233,9 +233,9 @@ def test_rank_initial_cost_rollout_multi():
 
 def test_test_exact_obs_loop():
     import torch
-    from crossenbodiment.obs import ExactObs as ExactObsMapper, MultiplierObs, RawObs
-    from crossenbodiment.rollout import BatchRollout
-    from crossenbodiment.sim import HumenvSim
+    from crossembodiment.obs import ExactObs as ExactObsMapper, MultiplierObs, RawObs
+    from crossembodiment.rollout import BatchRollout
+    from crossembodiment.sim import HumenvSim
     set_init_qpos = old_defs("model/simple/train_es.py", ["set_init_qpos"], {"np": np})["set_init_qpos"]
     pad = [(k, "l") for k in range(N)]
     common = dict(np=np, torch=torch, labels={"l": {k: F["Z"][k] for k in range(N)}}, pad=pad, dev=F["dev"],
@@ -256,8 +256,8 @@ def test_test_exact_obs_loop():
 
 def test_robot_z_loop_g1():
     import torch
-    from crossenbodiment.obs import RawObs
-    from crossenbodiment.rollout import BatchRollout
+    from crossembodiment.obs import RawObs
+    from crossembodiment.rollout import BatchRollout
     ref, sim = F["ref_adult"], F["g1"]
     ns = run_block("scripts/robot_z_search.py", "zt = torch.as_tensor(zs, dtype=torch.float32, device=a.device)",
                    "O, QS, QG, FZ = (np.stack(x, axis=1) for x in (O, QS, QG, FZ))",
@@ -271,8 +271,8 @@ def test_robot_z_loop_g1():
 
 def test_robot_lso_loop_g1():
     import torch
-    from crossenbodiment.obs import RawObs
-    from crossenbodiment.rollout import BatchRollout
+    from crossembodiment.obs import RawObs
+    from crossembodiment.rollout import BatchRollout
     ref, sim = F["ref_adult"].astype(np.float64), F["g1"]
     ns = run_block("scripts/robot_lso_search.py", "zt = torch.as_tensor(16.0 * Z", "O, QS, QG, FZ = (np.stack(x, axis=1)",
                    dict(np=np, torch=torch, Z=F["Zseq"], vec=sim.vec, a=types.SimpleNamespace(device=F["dev"], init_vel="rest"),
@@ -286,7 +286,7 @@ def test_robot_lso_loop_g1():
 # ------------------------------------------------------------------ 7. batch compositions, observation factories (no simulation)
 
 def test_batch_compositions():
-    from crossenbodiment.rollout import BatchRollout as B
+    from crossembodiment.rollout import BatchRollout as B
     rng = np.random.default_rng(3)
     z, Z, mu, S = rng.standard_normal(256), rng.standard_normal((3, 256)), rng.standard_normal((7, 256)), rng.standard_normal((5, 7, 256))
     check("copies", B.copies(z, 16), np.repeat(z[None], 16, axis=0))
@@ -296,8 +296,8 @@ def test_batch_compositions():
 
 
 def test_obs_factories():
-    from crossenbodiment.bodies import BODIES
-    from crossenbodiment.obs import ExactObs, MultiplierObs, RawObs, lso_scale_kw, registry_scale, single_z_obs
+    from crossembodiment.bodies import BODIES
+    from crossembodiment.obs import ExactObs, MultiplierObs, RawObs, lso_scale_kw, registry_scale, single_z_obs
     from model.obs_scale import build_obs_multiplier
     task, stem = CLIP.split("/")
     m = single_z_obs("exact", "child", CHILD_XML, REPO / f"data/child/retargeting_motion/{CLIP}.npz", REPO / f"data/origin_motion/{CLIP}.npz", ADULT_XML)

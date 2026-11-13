@@ -9,7 +9,7 @@
   retarget  data/<label>/retargeting_motion/<clip>.npz: the adult's own motion (data/origin_motion) with the locked
             joint's angle replaced by --deg in every frame, then lifted frame by frame so no geometry is below the
             floor (scripts/qpos_retarget.py's ground correction) -- a straight-legged version of the same motion.
-OOP refactor step 9: crossenbodiment/bodybuild LockJoints + LockedJointReference (scripts/build_body.py lock-joints); this file
+OOP refactor step 9: crossembodiment/bodybuild LockJoints + LockedJointReference (scripts/build_body.py lock-joints); this file
 keeps its flags, LOCK_DEG and --show-angles; robot.xml and the reference are byte-identical.
 usage: uv run python scripts/lock_joint_body.py --clip move-ego-0-2/move-ego-0-2_4 [--joint R_Knee_x --deg 10]
        uv run python scripts/lock_joint_body.py --clip ... --user-lock [--no-lift] --solref 0.005   (LOCK_DEG below)
@@ -23,9 +23,9 @@ import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
-from crossenbodiment.bodybuild.builders import LockJoints   # noqa: E402
-from crossenbodiment.bodybuild.retarget import save_clip   # noqa: E402
-from crossenbodiment.bodybuild.skeleton import dump_skeleton   # noqa: E402
+from crossembodiment.bodybuild.builders import LockJoints   # noqa: E402
+from crossembodiment.bodybuild.retarget import save_clip   # noqa: E402
+from crossembodiment.bodybuild.skeleton import dump_skeleton   # noqa: E402
 
 # ============================== YOUR CODE HERE (used with --user-lock) ==============================
 # The angle (degrees) each joint is locked at. Bend the leg (hip / knee / ankle flexion axes: R_Hip_x, R_Knee_x,
@@ -74,7 +74,7 @@ def main():
         locks = ([(kv.split("=")[0].strip(), float(kv.split("=")[1])) for kv in a.lock.split(",")] if a.lock
                  else [(a.joint, a.deg)])
     label = a.label or (f"adult_lock{a.joint.replace('_', '')}{int(round(a.deg))}" if not a.user_lock else "adult_lockRleg_bent")
-    print(f"scripts/lock_joint_body.py -> crossenbodiment.bodybuild.LockJoints({label!r}, {len(locks)} locks, solref={a.solref})")
+    print(f"scripts/lock_joint_body.py -> crossembodiment.bodybuild.LockJoints({label!r}, {len(locks)} locks, solref={a.solref})")
     body = LockJoints(label, locks, solref=a.solref)
     body.build()
     dump_skeleton(body.xml, body.dir / "skeleton.json")

@@ -7,9 +7,9 @@ their own colours (red, blue, green, orange), all at their own world positions, 
 ghost. The camera follows the ghost's pelvis at robot_overlay.py's angle. Extra bodies are added with mjv_addGeoms
 (moving geoms only, so the floor is drawn once); every body geom is drawn flat in its colour (texture off).
 --clean: no title / legend band, just the scene (e.g. survey videos). 1920 x 1080, 30 fps, plus <out>.png (three moments).
-The scene, painting, legend and writer are crossenbodiment.video's (VideoRenderer.overlay; OOP refactor step 10), the colours
-crossenbodiment.palette.OVERLAY, the camera crossenbodiment.camera.ViewSpec. Trajectory paths are read through
-crossenbodiment.paths.read_path ("outputs/..." under $CE_OUTPUTS_ROOT).
+The scene, painting, legend and writer are crossembodiment.video's (VideoRenderer.overlay; OOP refactor step 10), the colours
+crossembodiment.palette.OVERLAY, the camera crossembodiment.camera.ViewSpec. Trajectory paths are read through
+crossembodiment.paths.read_path ("outputs/..." under $CE_OUTPUTS_ROOT).
 usage: MUJOCO_EGL_DEVICE_ID=2 uv run python scripts/body_overlay.py --xml assets/robots_torque/child/robot_torque_full.xml \
            --traj "reference=data/child/retargeting_motion/<task>/<stem>.npz" --traj "z0=<run>/origin_z.npz" \
            --traj "searched z=<run>/best.npz" --out <out>.mp4 [--clean] [--distance 3.1 --lookat-z 0.5]
@@ -24,10 +24,10 @@ from PIL import Image
 REPO = Path(__file__).resolve().parent.parent
 import sys
 sys.path.insert(0, str(REPO))
-from crossenbodiment import paths                                      # noqa: E402
-from crossenbodiment.camera import ViewSpec                            # noqa: E402
-from crossenbodiment.palette import OVERLAY as COLORS                  # noqa: E402
-from crossenbodiment.video import OVERLAY_SIZE, VideoRenderer, legend, moments, write   # noqa: E402
+from crossembodiment import paths                                      # noqa: E402
+from crossembodiment.camera import ViewSpec                            # noqa: E402
+from crossembodiment.palette import OVERLAY as COLORS                  # noqa: E402
+from crossembodiment.video import OVERLAY_SIZE, VideoRenderer, legend, moments, write   # noqa: E402
 
 W, H = OVERLAY_SIZE
 

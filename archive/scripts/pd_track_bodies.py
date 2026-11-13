@@ -43,7 +43,7 @@ those same tasks scores the fit, not the design.
 Usage (from project root):
     uv run scripts/pd_track_bodies.py \
         --trees assets/robots assets/robots_cal_alltrain assets/robots_cal_movetrain \
-        --tasks-file datasets/crossenbodiment-1-datasets/splits/test_tasks.txt
+        --tasks-file datasets/crossembodiment-1-datasets/splits/test_tasks.txt
 
 Writes under --out (default outputs/pd_track_bodies/):
     per_clip.csv   one row per (tree, body, clip)

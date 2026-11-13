@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""verify_vis.py LABEL -- OOP refactor step 10: the visualisation layer (crossenbodiment palette / figstyle / camera / clips / blender /
+"""verify_vis.py LABEL -- OOP refactor step 10: the visualisation layer (crossembodiment palette / figstyle / camera / clips / blender /
 strobe / video / sheet and the scripts on them) re-makes the stored scenes, trajectories, pages, figures, videos and renders.
 
 Everything is WRITTEN under outputs/refactor_step10/LABEL: the new code's outputs in new/ ($CE_RESULTS_ROOT = new/outputs,
 $CE_FIGURES_ROOT = new/figures, $CE_OUTPUTS_ROOT = the main tree's outputs, READ ONLY), the old code's in oldrepo/ (a scratch
-repository with BASE's scripts, crossenbodiment, model and configs; its inputs are read-only symlinks into the main tree / the worktree,
+repository with BASE's scripts, crossembodiment, model and configs; its inputs are read-only symlinks into the main tree / the worktree,
 and every folder those scripts write is a real folder of the scratch root).
 
   exports   new vs the main tree's stored files: scene.json (JSON equal, the new "version" field ignored) + meshes.npz (every array) of
@@ -42,7 +42,7 @@ from pathlib import Path
 import numpy as np
 
 REPO = Path(__file__).resolve().parents[2]
-MAIN = Path(os.environ.get("CROSSENBODIMENT_MAIN", "/home/allen19/crossenbodiment"))
+MAIN = Path(os.environ.get("CROSSENBODIMENT_MAIN", "/home/allen19/crossembodiment"))
 BASE = "8e9dc99"                                              # the commit before step 10 (the old scripts)
 PY = sys.executable
 ENV0 = dict(os.environ, MUJOCO_GL="egl", MUJOCO_EGL_DEVICE_ID="2", CUDA_VISIBLE_DEVICES="2", OMP_NUM_THREADS="1", PYTHONDONTWRITEBYTECODE="1")
@@ -143,7 +143,7 @@ def old_repo(work):
     root = work / "oldrepo"
     if not (root / "scripts").exists():
         root.mkdir(parents=True, exist_ok=True)
-        tar = subprocess.run(["git", "archive", BASE, "scripts", "crossenbodiment", "model", "configs"], cwd=REPO, capture_output=True, check=True).stdout
+        tar = subprocess.run(["git", "archive", BASE, "scripts", "crossembodiment", "model", "configs"], cwd=REPO, capture_output=True, check=True).stdout
         subprocess.run(["tar", "-x", "-C", str(root)], input=tar, check=True)
     links = {"assets": REPO / "assets", "data": MAIN / "data", "amass_data": MAIN / "amass_data"}
     links.update({f"outputs/{o}": MAIN / "outputs" / o for o in OLD_INPUTS})
@@ -261,7 +261,7 @@ def videos(rep, work, log):
     rasterisation replaced by a picture of the scene digest), old vs new: decoded frames, mp4 bytes and the contact sheet exactly equal"""
     import imageio.v2 as imageio
     root = old_repo(work); env = new_env(work); d = work / "videos"; d.mkdir(parents=True, exist_ok=True)
-    sys.path.insert(0, str(REPO)); from crossenbodiment import paths
+    sys.path.insert(0, str(REPO)); from crossembodiment import paths
     os.environ["CE_OUTPUTS_ROOT"] = str(MAIN / "outputs"); fake = REPO / "tests/golden/fake_render.py"
     frames = lambda f: imageio.mimread(f, memtest=False)
     for i, rel in enumerate(SPECS):

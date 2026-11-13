@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """run_queue.py -- run a commands file ("dir|cmd" per line, as the drivers' `commands` / `evalcmds` print it; "dir cmd" also read)
-under the resource gate of crossenbodiment/queue.py (OOP refactor step 8): the replacement for the shell queues
+under the resource gate of crossembodiment/queue.py (OOP refactor step 8): the replacement for the shell queues
 (outputs/**/run_queue.sh, outputs/train_logs/queue/run_*.sh), which stay as they are for the experiments already running on them.
 
   uv run python scripts/run_queue.py outputs/tall_body_52/commands.txt --log outputs/tall_body_52/queue.log \\
@@ -24,7 +24,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
-from crossenbodiment.queue import MEM_DEFAULT, MEM_RULES, CommandQueue, ResourceGate, mem_estimate, read_commands  # noqa: E402
+from crossembodiment.queue import MEM_DEFAULT, MEM_RULES, CommandQueue, ResourceGate, mem_estimate, read_commands  # noqa: E402
 
 
 def parser():

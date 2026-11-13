@@ -4,7 +4,7 @@ the strobe panels remove the root's x, y and space the poses evenly, so the path
 
 Bodies: the child's reference (its target, black), z0 (grey), BFM-Zero's CEM (green) and ours, LOES (blue), seed 0, the strobe
 figure's trajectories (outputs/strobe_task52_blender/trajectories/<example>: rollout frame t against reference frame t + 1).
-Colours and labels: crossenbodiment.palette (ref / z0 / cem / loes; render_blender.py's ref / z0 / bfmzero / ours).
+Colours and labels: crossembodiment.palette (ref / z0 / cem / loes; render_blender.py's ref / z0 / bfmzero / ours).
 Every EVERY-th frame and the last, fading from light (early) to full colour (late); a thin line on the floor = the pelvis path, every frame.
 The scene is turned so the reference's start-to-end direction runs left to right; one scale and centre for every panel.
 Panels: overlay (all four on one floor) and one per body (its own poses and path, plus the reference's path as a thin black line).
@@ -18,7 +18,7 @@ then the bodies must be ~3x larger and crowd), bodies (and path lines, margins) 
 --ours <run> --layout row --panel-px 1500 --poses 6 --tag 2048 (user, 11/11): ours from a longer search, the four panels in one row as
 the side-view strobes -> combined/<example>_topdown_2048.png.
 --rotate 90 --tag wide (user, 11/11): turned so the walk runs upwards and the two groups sit side by side; files *_wide.png.
-Inputs through crossenbodiment.paths.read_path ($CE_OUTPUTS_ROOT), outputs under $CE_RESULTS_ROOT (both default outputs/).
+Inputs through crossembodiment.paths.read_path ($CE_OUTPUTS_ROOT), outputs under $CE_RESULTS_ROOT (both default outputs/).
 usage: uv run python scripts/topdown_blender.py [export] [render] [combine] [--example child_move-ego-0-4_9] [--poses N] [--samples 256] [--threads 32]"""
 import math, sys
 from pathlib import Path
@@ -26,12 +26,12 @@ import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO))
 import mujoco                                                             # noqa: E402
-from crossenbodiment import paths                                         # noqa: E402
-from crossenbodiment.blender import BlenderScene, load_model              # noqa: E402
-from crossenbodiment.camera import BLENDER_AZIMUTH                        # noqa: E402
-from crossenbodiment.palette import Palette                               # noqa: E402
-from crossenbodiment.sheet import font, hcat, legend_strip                # noqa: E402
-from crossenbodiment.strobe import TOPDOWN_TINT, fade_tints               # noqa: E402
+from crossembodiment import paths                                         # noqa: E402
+from crossembodiment.blender import BlenderScene, load_model              # noqa: E402
+from crossembodiment.camera import BLENDER_AZIMUTH                        # noqa: E402
+from crossembodiment.palette import Palette                               # noqa: E402
+from crossembodiment.sheet import font, hcat, legend_strip                # noqa: E402
+from crossembodiment.strobe import TOPDOWN_TINT, fade_tints               # noqa: E402
 
 ARG = lambda k, d: type(d)(sys.argv[sys.argv.index(k) + 1]) if k in sys.argv else d
 TAG = ARG("--tag", "")                                                   # a separate version: its own working folder and file names (_<tag>)

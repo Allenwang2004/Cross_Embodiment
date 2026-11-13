@@ -1,7 +1,7 @@
 """obs.py -- what the frozen actor (and B) sees of a simulated body: the ObsMapper strategies (OOP refactor step 5, docs/refactor/PLAN.md).
 
 A mapper turns the simulator's output into the actor's (n, 358) observation, at the start of a rollout and after every step;
-crossenbodiment/rollout.py BatchRollout records that mapped observation as the rollout's `obs` (what B scores).
+crossembodiment/rollout.py BatchRollout records that mapped observation as the rollout's `obs` (what B scores).
 
   RawObs         the simulator's own proprio (humenv obs["proprio"]; a robot's SMPL-equivalent observation from RobotVecEnv)
   MultiplierObs  proprio x a fixed (358,) multiplier (model/obs_scale.build_obs_multiplier: per-body length ratios, or one
@@ -23,7 +23,7 @@ Factories (the scripts' own selection rules, kept as they are):
                       other than "child": s = bodies.clip_ratio(reference, the adult's clip) (the registry's rule, the same
                       expression the script had); the child keeps ExactObs's default 0.611036
   lso_scale_kw(scale) lso_search.py --scale AS IT IS: None -> ExactObs's default 0.611036, the CHILD's s, for ANY body
-  registry_scale(body, clip)  the body's s from the registry (crossenbodiment/bodies.py), for drivers that want it explicit
+  registry_scale(body, clip)  the body's s from the registry (crossembodiment/bodies.py), for drivers that want it explicit
 
 Every computation is the one the old loops did, in the same dtype: proprio * mul in the dtypes of the two arrays (float64), the
 exact observation as model/exact_obs.py returns it (float32), np.repeat of the start observation over the slots (or one per
@@ -182,7 +182,7 @@ def lso_scale_kw(scale):
 
 
 def registry_scale(body, clip=None):
-    """the body's root scale s from the registry (crossenbodiment/bodies.py BODIES.scale): the child's 0.611036, a fixed
+    """the body's root scale s from the registry (crossembodiment/bodies.py BODIES.scale): the child's 0.611036, a fixed
     body's literal, or single_z_search's rule on `clip`. Use it for lso_search.py --scale instead of relying on its default."""
     from .bodies import BODIES
     return BODIES.scale(body, clip)

@@ -3,7 +3,7 @@
 StrobeLayout(frames, dx, view, azimuth, offset, align, tint_max, nudge) -> the poses of one strobe panel:
   frames      StrobeLayout.frame_range(a, b, step) (the last frame must be b), an explicit list, around_fall(...) (from 40 frames before
               z0's first mid-motion fall, the overview pages' rule) or whole_clip(...); contact-snapped frames are
-              crossenbodiment.blender.contact_frames (the bands)
+              crossembodiment.blender.contact_frames (the bands)
   tints       tint_max * (1 - i / (n - 1)): light (early) to full colour (late); 0.62 for the strobes, 0.6 for the top views
   shifts      (i - (n - 1) / 2) * dx + nudge metres sideways in the image (render_blender.py's "shift"), every pose at one depth
   view        "fixed": one world view, camera at world azimuth `azimuth` (default 140, the survey videos'): heading =

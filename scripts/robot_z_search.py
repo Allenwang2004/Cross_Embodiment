@@ -71,10 +71,10 @@ import torch  # noqa: F401
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
 from model.robots import ROBOTS                                     # noqa: E402
-# OOP refactor step 6: the search lives in the package (crossenbodiment/problems.py RobotLatentProblem: robot, reference,
-# simulator, policy, cost; crossenbodiment/costs.py the terms; optim.py the optimisers; search.py SearchLoop; records.py
-# RunRecorder). dtw_align moved to crossenbodiment/costs.py; re-exported here.
-from crossenbodiment.costs import dtw_align                         # noqa: E402,F401
+# OOP refactor step 6: the search lives in the package (crossembodiment/problems.py RobotLatentProblem: robot, reference,
+# simulator, policy, cost; crossembodiment/costs.py the terms; optim.py the optimisers; search.py SearchLoop; records.py
+# RunRecorder). dtw_align moved to crossembodiment/costs.py; re-exported here.
+from crossembodiment.costs import dtw_align                         # noqa: E402,F401
 
 
 def build_parser():
@@ -136,12 +136,12 @@ def build_parser():
 
 
 def main():
-    """parse -> RobotLatentProblem (crossenbodiment/problems.py) -> the optimiser (optim.py; --resume restores it) ->
+    """parse -> RobotLatentProblem (crossembodiment/problems.py) -> the optimiser (optim.py; --resume restores it) ->
     SearchLoop (search.py) -> RunRecorder (records.py)"""
     a = build_parser().parse_args()
-    from crossenbodiment.problems import RobotLatentProblem
-    from crossenbodiment.records import RunRecorder
-    from crossenbodiment.search import SearchLoop
+    from crossembodiment.problems import RobotLatentProblem
+    from crossembodiment.records import RunRecorder
+    from crossembodiment.search import SearchLoop
 
     P = RobotLatentProblem(a)                          # spawns the robot workers before CUDA is touched, as before
     P.baseline()                                       # z0's rollout (origin_z)

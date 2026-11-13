@@ -1,8 +1,8 @@
 """Tests of the port of the main tree's ExactObs clearance_vel option (main tree 11/12: model/exact_obs.py ExactObs(clearance_vel=True),
-single_z_search.py --exact-clearance-vel) into the refactor (model/exact_obs.py, crossenbodiment/obs.py ExactObs / single_z_obs,
-crossenbodiment/problems.py HumanLatentProblem).
+single_z_search.py --exact-clearance-vel) into the refactor (model/exact_obs.py, crossembodiment/obs.py ExactObs / single_z_obs,
+crossembodiment/problems.py HumanLatentProblem).
 
-MAIN: the main tree's model/exact_obs.py and the rollout() of its scripts/single_z_search.py (/home/allen19/crossenbodiment, read only:
+MAIN: the main tree's model/exact_obs.py and the rollout() of its scripts/single_z_search.py (/home/allen19/crossembodiment, read only:
 their text is executed into temporary modules, nothing is imported from or written into that tree; the MAIN tests are skipped when
 those files are not there). BEFORE: model/exact_obs.py at 8cc7d89 (the main tree's HEAD, = refactor/base's: the code every run used
 before the option existed), from `git show`. Every comparison is bit for bit (dtype, shape, np.array_equal).
@@ -43,7 +43,7 @@ for p in (str(REPO / "scripts"), str(REPO)):
 
 import numpy as np  # noqa: E402
 
-MAIN_TREE = Path("/home/allen19/crossenbodiment")             # read only
+MAIN_TREE = Path("/home/allen19/crossembodiment")             # read only
 BEFORE = "8cc7d89"                                            # model/exact_obs.py before the option (main tree HEAD = refactor/base)
 CLIP = "crawl-0.4-0-d/crawl-0.4-0-d_1"                        # ground contact changes a lot: the clearance correction moves
 STEPS, N = 40, 4
@@ -188,11 +188,11 @@ def test_clearance_vel_wrapper():
 
 def test_policy_rollout():
     import torch
-    from crossenbodiment.geometry import project_z
-    from crossenbodiment.obs import ExactObs as ExactMapper, single_z_obs
-    from crossenbodiment.policy import MotivoPolicy
-    from crossenbodiment.rollout import BatchRollout
-    from crossenbodiment.sim import HumenvSim
+    from crossembodiment.geometry import project_z
+    from crossembodiment.obs import ExactObs as ExactMapper, single_z_obs
+    from crossembodiment.policy import MotivoPolicy
+    from crossembodiment.rollout import BatchRollout
+    from crossembodiment.sim import HumenvSim
     M = main_mod()
     src, label = main_file("scripts/single_z_search.py")
     node = next(n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name == "rollout")
@@ -231,7 +231,7 @@ def test_policy_rollout():
 
 
 def test_mapper_option_off():
-    from crossenbodiment.obs import single_z_obs
+    from crossembodiment.obs import single_z_obs
     m = single_z_obs("exact", "child", CHILD_XML, REPO / f"data/child/retargeting_motion/{CLIP}.npz", REPO / f"data/origin_motion/{CLIP}.npz",
                      ADULT_XML)
     assert m.clearance_vel is False and m._option_kw() == {} and m.kw == {}

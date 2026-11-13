@@ -1,7 +1,7 @@
 """search.py -- the search loops: SearchLoop (one latent) and SequenceSearchLoop (a latent per step) (OOP refactor step 6,
 docs/refactor/PLAN.md).
 
-A loop owns what every search did around its optimiser (crossenbodiment/optim.py) and its scorer (crossenbodiment/problems.py):
+A loop owns what every search did around its optimiser (crossembodiment/optim.py) and its scorer (crossembodiment/problems.py):
 
 SearchLoop (scripts/single_z_search.py, robot_z_search.py), per generation gen = gen0 .. n_gens - 1:
     cand = opt.ask(best z)                       2 * pairs candidates
@@ -37,7 +37,7 @@ def copies(z, n):
 class SearchLoop:
     """the generation loop of a single-latent search (module docstring).
 
-    opt         an optimiser of crossenbodiment/optim.py (ask(best_z), tell(cand, cost, best_z), .z)
+    opt         an optimiser of crossembodiment/optim.py (ask(best_z), tell(cand, cost, best_z), .z)
     score       cand (n, 256) -> an object with .cost (n,)
     record      (sc, i, z, gen, source) -> the best-so-far record (a dict with at least cost and z; it copies z)
     best        the starting best record (z0's rollout, gen -1)

@@ -30,8 +30,8 @@ from model.robot_env import RobotVecEnv        # noqa: E402
 from model.robot_map import RobotMap           # noqa: E402
 from model.robots import ROBOTS, target_path   # noqa: E402
 from model import bfm_align                    # noqa: E402
-from crossenbodiment.robot_rollout import motion   # noqa: E402  g1_z0_rollout's (refactor step 4)
-from crossenbodiment.geometry import project_z   # noqa: E402  single_z_search re-exported it (refactor step 4)
+from crossembodiment.robot_rollout import motion   # noqa: E402  g1_z0_rollout's (refactor step 4)
+from crossembodiment.geometry import project_z   # noqa: E402  single_z_search re-exported it (refactor step 4)
 
 
 

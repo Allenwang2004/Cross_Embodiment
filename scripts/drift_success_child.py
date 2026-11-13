@@ -19,13 +19,13 @@ from pathlib import Path
 import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
-from crossenbodiment.bodies import BODIES
-from crossenbodiment.geometry import facing as _facing
-from crossenbodiment.metrics import MetricSuite, metric_body
-from crossenbodiment import paths
-from crossenbodiment.experiment import output_arg, parse_flag, workers
-from crossenbodiment.reroll import Reroller
-from crossenbodiment.results import write_json
+from crossembodiment.bodies import BODIES
+from crossembodiment.geometry import facing as _facing
+from crossembodiment.metrics import MetricSuite, metric_body
+from crossembodiment import paths
+from crossembodiment.experiment import output_arg, parse_flag, workers
+from crossembodiment.reroll import Reroller
+from crossembodiment.results import write_json
 # refactor step 8: runs are read under paths.outputs_root() ($CE_OUTPUTS_ROOT), the result written under paths.results_root()
 # ($CE_RESULTS_ROOT); both REPO/outputs by default. --loes-dir is read in main (not at import).
 RR, LS = paths.output("child_52_rerun"), paths.output("child_52_lso"); S = BODIES.scale("child"); SEEDS = range(5)
@@ -36,7 +36,7 @@ _b = {}
 
 
 def facing(q):
-    """root yaw - 90 deg (crossenbodiment.geometry.facing)"""
+    """root yaw - 90 deg (crossembodiment.geometry.facing)"""
     return _facing(q)
 
 
@@ -46,7 +46,7 @@ def one(c):
         _b["body"] = metric_body(E.XML["child"], True)
     body = _b["body"]; st = c.split("/")[1]
     ref = np.load(REPO / f"data/child/retargeting_motion/{c}.npz")["qpos"].astype(np.float64)[1:]
-    # {mpjpe, drift (adult-equivalent m), heading (deg), success (PHC, 0.5 m x S)} per rollout (crossenbodiment.metrics); the world
+    # {mpjpe, drift (adult-equivalent m), heading (deg), success (PHC, 0.5 m x S)} per rollout (crossembodiment.metrics); the world
     # positions are the Body's own model's (formerly a second MjModel of the same XML: the same numbers)
     stats = MetricSuite(body, ("mpjpe", "drift", "heading", "success"), S, drift_unit="adult").reference(ref)
     out = {k: [] for k in ("z0", "native", "es", *SEQ)}
@@ -64,7 +64,7 @@ def main(argv=()):
     global RL, SUFFIX
     if "--loes-dir" in argv:
         RL, SUFFIX = output_arg(parse_flag(argv, "--loes-dir")), "_noanchor"
-    from crossenbodiment.paths import CHILD_52_TASK, read_clips   # configs/clips/child_52_task.txt = outputs/child_52/clips.txt (refactor step 4)
+    from crossembodiment.paths import CHILD_52_TASK, read_clips   # configs/clips/child_52_task.txt = outputs/child_52/clips.txt (refactor step 4)
     clips = read_clips(CHILD_52_TASK)
     with Pool(workers(12)) as p:
         res = p.map(one, clips, chunksize=1)

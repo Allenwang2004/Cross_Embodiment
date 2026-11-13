@@ -41,7 +41,7 @@ from pathlib import Path
 import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
-from crossenbodiment import paths                                         # noqa: E402
+from crossembodiment import paths                                         # noqa: E402
 # OOP refactor (ported from the main tree, 11/12): inputs are read through paths.read_path ($CE_OUTPUTS_ROOT, default outputs/), this
 # script's own earlier files (check_dz.json, cosine_dz.json) through paths.own_path, and its results written under $CE_RESULTS_ROOT
 # (paths.write_path, default outputs/); "commands" still prints (and creates) the repository-relative run folders. ExactObs's default
@@ -183,7 +183,7 @@ _C = {}
 def job(arg):
     """all metrics of one (mapping, motion) rollout"""
     import mujoco
-    from crossenbodiment import eval_metrics as E             # scripts/eval_metrics.py re-exports this module (refactor step 8)
+    from crossembodiment import eval_metrics as E             # scripts/eval_metrics.py re-exports this module (refactor step 8)
     from loes_noanchor import stats
     from model.phc_reward import PHCCost
     k, c = arg; st = c.split("/")[1]

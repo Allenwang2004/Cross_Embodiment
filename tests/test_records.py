@@ -1,4 +1,4 @@
-"""Tests of OOP refactor step 6 (docs/refactor/PLAN.md): RunRecorder (crossenbodiment/records.py) writes the search files as
+"""Tests of OOP refactor step 6 (docs/refactor/PLAN.md): RunRecorder (crossembodiment/records.py) writes the search files as
 the scripts did.
 
   round trips   every writer, then its reader (or np.load / json / csv): the same arrays (dtype, shape, bits), the same rows,
@@ -37,7 +37,7 @@ def old_source(rel):
 
 
 def rec(name):
-    from crossenbodiment.records import RunRecorder
+    from crossembodiment.records import RunRecorder
     return RunRecorder(WORK / name)
 
 

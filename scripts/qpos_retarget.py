@@ -54,7 +54,7 @@ tolerance (e.g. genuine mid-air frames in a jump or rotate flip) are left
 alone -- this only ever pulls the body UP out of the floor, never pushes a
 legitimately airborne pose down.
 
-OOP refactor step 9: the code is crossenbodiment/bodybuild/retarget.py (SameTopologyRetargeter; retarget_qpos,
+OOP refactor step 9: the code is crossembodiment/bodybuild/retarget.py (SameTopologyRetargeter; retarget_qpos,
 min_geom_z = _min_geom_z, ground_correct_qpos are re-exported here for the scripts that import them); scripts/build_body.py
 runs it on every motion folder of a new body (nested output, data/<body>/retargeting_motion/<task>/<stem>.npz). This file is the
 old CLI, same flags, byte-identical files.
@@ -78,9 +78,9 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from crossenbodiment.bodybuild.retarget import (SameTopologyRetargeter, _min_geom_z, ground_correct_qpos,  # noqa: E402,F401
+from crossembodiment.bodybuild.retarget import (SameTopologyRetargeter, _min_geom_z, ground_correct_qpos,  # noqa: E402,F401
                                                 retarget_qpos, save_clip)
-from crossenbodiment.bodybuild.skeleton import load_root_rest_height  # noqa: E402,F401
+from crossembodiment.bodybuild.skeleton import load_root_rest_height  # noqa: E402,F401
 
 import numpy as np  # noqa: E402
 

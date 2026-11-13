@@ -4,7 +4,7 @@ the motion-category structure of z0?
 
 One PCA fit on z0 and z_align together (all latents at radius 16), two panels on the same
 axes: z0 left, z_align right, colour + marker = motion category
-(datasets/crossenbodiment-child-balanced/splits/balanced500_categories.txt).
+(datasets/crossembodiment-child-balanced/splits/balanced500_categories.txt).
 Numbers in the full 256-d space, z0 vs z_align:
   - 5-NN category agreement: share of each latent's 5 nearest neighbours in its own category
   - silhouette by category (Euclidean)
@@ -18,7 +18,7 @@ import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent
 ROOT = REPO / "outputs/b500_targets"
-SPL = REPO / "datasets/crossenbodiment-child-balanced/splits"
+SPL = REPO / "datasets/crossembodiment-child-balanced/splits"
 SURF, INK, INK2, INK3 = "#fcfcfb", "#0b0b0b", "#52514e", "#8a8983"
 CATS = ["crawl", "headstand", "jump", "move", "raisearms", "rotate"]
 COL = dict(zip(CATS, ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300"]))

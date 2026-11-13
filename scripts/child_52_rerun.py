@@ -11,15 +11,15 @@ from pathlib import Path
 import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
-from crossenbodiment import paths   # noqa: E402
-from crossenbodiment.experiment import workers   # noqa: E402
-from crossenbodiment.methods import experiment_keys   # noqa: E402
-from crossenbodiment.metrics import metric_body   # noqa: E402  one Body per (xml, smpl) and process (refactor step 3)
-from crossenbodiment.reroll import EvalRollouts, Reroller, read_best_so_far   # noqa: E402
-from crossenbodiment.results import ResultsTable, save_npz, write_json   # noqa: E402
+from crossembodiment import paths   # noqa: E402
+from crossembodiment.experiment import workers   # noqa: E402
+from crossembodiment.methods import experiment_keys   # noqa: E402
+from crossembodiment.metrics import metric_body   # noqa: E402  one Body per (xml, smpl) and process (refactor step 3)
+from crossembodiment.reroll import EvalRollouts, Reroller, read_best_so_far   # noqa: E402
+from crossembodiment.results import ResultsTable, save_npz, write_json   # noqa: E402
 # refactor step 8: runs are read under paths.outputs_root() ($CE_OUTPUTS_ROOT), results written under paths.results_root()
-# ($CE_RESULTS_ROOT); both REPO/outputs by default. prepare writes the schema-2 index (crossenbodiment/reroll.py), analyse reads any.
-# the run-directory keys here (crossenbodiment/methods.py RUNS; also the per_run.npz / means.json keys): LOES with the anchor "es", CEM
+# ($CE_RESULTS_ROOT); both REPO/outputs by default. prepare writes the schema-2 index (crossembodiment/reroll.py), analyse reads any.
+# the run-directory keys here (crossembodiment/methods.py RUNS; also the per_run.npz / means.json keys): LOES with the anchor "es", CEM
 # with OUR cost "cem" (cem_ours: Comparison A's, not BFM-Zero's), random search, CMA-ES
 K = experiment_keys("outputs/child_52_rerun"); LOES, CEM, RANDOM, CMAES = (K[m] for m in ("loes_anchor", "cem_ours", "random", "cmaes"))
 SRC = paths.output("child_52"); OLD_CMA = paths.output("child_52_cmaes"); OUT = paths.output("child_52_rerun"); ROLL = OUT / "rollouts"; ALGOS = (LOES, CEM, RANDOM, CMAES); SEEDS = range(5); G = (4, 8, 16, 32, 64)
@@ -29,7 +29,7 @@ body = None
 
 
 def clips():
-    from crossenbodiment.paths import CHILD_52_TASK, read_clips   # configs/clips/child_52_task.txt = outputs/child_52/clips.txt (refactor step 4)
+    from crossembodiment.paths import CHILD_52_TASK, read_clips   # configs/clips/child_52_task.txt = outputs/child_52/clips.txt (refactor step 4)
     return read_clips(CHILD_52_TASK)
 
 
@@ -43,7 +43,7 @@ def prepare():
 def clip(c):
     global body
     import eval_metrics as E
-    from crossenbodiment.metrics import LEGACY_KEYS as KEYS, legacy_metrics as full   # child_52_means' (refactor step 4)
+    from crossembodiment.metrics import LEGACY_KEYS as KEYS, legacy_metrics as full   # child_52_means' (refactor step 4)
     body = body or metric_body(E.XML["child"], True); stem = c.split("/")[1]; ref = np.load(REPO / f"data/child/retargeting_motion/{c}.npz")["qpos"].astype(np.float64)[1:]; d = ROLL / stem
     ev = EvalRollouts(d, G, 64); ix = ev.index; Q = ev.qpos.astype(np.float64); cost = ev.cost; base = ev.base; V = {}
     def m(i):
@@ -66,7 +66,7 @@ def clip(c):
 
 
 def analyse():
-    from crossenbodiment.metrics import LEGACY_KEYS as KEYS   # child_52_means.KEYS (refactor step 4)
+    from crossembodiment.metrics import LEGACY_KEYS as KEYS   # child_52_means.KEYS (refactor step 4)
     cl = clips()
     with Pool(workers(24)) as p:
         res = p.map(clip, cl)

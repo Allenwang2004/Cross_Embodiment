@@ -14,7 +14,7 @@ SRC = REPO / "outputs/child_52"; OUT = REPO / "outputs/child_52_cmaes"; ROLL = O
 
 
 def clips():
-    from crossenbodiment.paths import CHILD_52_TASK, read_clips   # configs/clips/child_52_task.txt = outputs/child_52/clips.txt (refactor step 4)
+    from crossembodiment.paths import CHILD_52_TASK, read_clips   # configs/clips/child_52_task.txt = outputs/child_52/clips.txt (refactor step 4)
     return read_clips(CHILD_52_TASK)
 
 
@@ -35,7 +35,7 @@ def prepare():
 
 def analyse():
     import eval_metrics as E
-    from crossenbodiment.metrics import LEGACY_KEYS as KEYS, legacy_metrics as full   # child_52_means' (refactor step 4)
+    from crossembodiment.metrics import LEGACY_KEYS as KEYS, legacy_metrics as full   # child_52_means' (refactor step 4)
     body = E.Body(E.XML["child"], True); cl = clips(); B = np.zeros((len(cl), 5, 64, len(KEYS))); C = np.zeros((len(cl), 5, len(G), len(KEYS))); worst = []
     for ci, c in enumerate(cl):
         stem = c.split("/")[1]; ref = np.load(REPO / f"data/child/retargeting_motion/{c}.npz")["qpos"].astype(np.float64); z0 = float(next(csv.DictReader(open(SRC / f"{stem}_z0/eval.csv")))["cost"]); d = ROLL / stem

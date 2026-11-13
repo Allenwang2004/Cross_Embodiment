@@ -1,5 +1,5 @@
 # bodies.yaml -- every body the live code drives Meta Motivo on (OOP refactor step 2, docs/refactor/PLAN.md), loaded by
-# crossenbodiment/bodies.py (BodyRegistry). Data only: nothing here changes what a script does; tests/test_registry.py checks every
+# crossembodiment/bodies.py (BodyRegistry). Data only: nothing here changes what a script does; tests/test_registry.py checks every
 # path and every root scale against the code and the existing runs.
 #
 # Fields (paths repository-relative; {name} = the body's name, {clip} = "<task>/<stem>" for a task clip or the ACCAD name for an AMASS
@@ -7,7 +7,7 @@
 #   kind         smpl_scaled  the adult's skeleton at another size, with its own retargeted references (adult = the identity)
 #                smpl_variant the adult's size with a changed body (mass, joint ranges)
 #                gain_variant a body above with its joint gains scaled (generated from gain_variants: below)
-#                robot        a non-SMPL humanoid (model/robots.py ROBOTS; RobotSpec in crossenbodiment/bodies.py)
+#                robot        a non-SMPL humanoid (model/robots.py ROBOTS; RobotSpec in crossembodiment/bodies.py)
 #   label        the name the scripts pass as --body (single_z_search.py / lso_search.py) or --robot; default: the name
 #   shape_xml    the body's geometry (assets/robots/<body>/robot.xml; robots: ROBOTS[r]["xml"])
 #   physics_xml  what is simulated (the --xml of the searches; robots: ROBOTS[r]["scene"])
@@ -141,7 +141,7 @@ bodies:
     s: 1.103120466562799         # RobotMap("apollo").s
 
 # gain variants, generated as <parent>_<condition> (scripts/kpkd_test.py COND: kp and kd scaled apart, 11/06-08; the k-scale test,
-# scripts/scale_body_gains.py --m: kp x k, kd x sqrt(k), torque limit x k, 11/03; both = crossenbodiment/bodybuild GainScaler). Each takes its parent's shape_xml, reference, s and
+# scripts/scale_body_gains.py --m: kp x k, kd x sqrt(k), torque limit x k, 11/03; both = crossembodiment/bodybuild GainScaler). Each takes its parent's shape_xml, reference, s and
 # label; only physics_xml (human bodies) or gains (robots) changes. kp1_kd1 is the parent itself (its alias <parent>_kp1_kd1).
 gain_variants:
   conditions:

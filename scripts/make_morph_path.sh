@@ -17,7 +17,7 @@
 # every other point on the path; otherwise the first step would mix a beta change
 # with a pipeline change.
 #
-# OOP refactor step 9: a thin wrapper over scripts/build_body.py morph (crossenbodiment/bodybuild BodyPipeline; beta(t) rounded
+# OOP refactor step 9: a thin wrapper over scripts/build_body.py morph (crossembodiment/bodybuild BodyPipeline; beta(t) rounded
 # to 4 decimals as before: bodybuild/beta.py lerp_beta; labels <prefix>_t<i*1000/N>). KEEP_TASKS=<file>: after the torque
 # calibration (on every motion) keep only those tasks' retargets. SKIP0=1: do not rebuild t = 0.
 # usage: scripts/make_morph_path.sh <prefix> <N> <leg> <arm> <torso> <head> <legG> <armG> <torsoG> <headG>

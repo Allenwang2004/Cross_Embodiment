@@ -36,7 +36,7 @@ import mujoco
 import numpy as np
 from PIL import Image, ImageDraw
 
-from crossenbodiment.draw import frame_label as label   # noqa: E402  rollout_z_trace.label (refactor step 4)
+from crossembodiment.draw import frame_label as label   # noqa: E402  rollout_z_trace.label (refactor step 4)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 

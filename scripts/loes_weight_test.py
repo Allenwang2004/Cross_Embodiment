@@ -19,15 +19,15 @@ import mujoco
 import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
-from crossenbodiment.bodies import BODIES
-from crossenbodiment.paths import CHILD_XML_REL
-from crossenbodiment.metrics import MetricSuite, metric_body, world_positions
-from crossenbodiment import paths
-from crossenbodiment.experiment import ClipSet, Experiment, workers
-from crossenbodiment.reroll import Reroller
-from crossenbodiment.results import write_json
+from crossembodiment.bodies import BODIES
+from crossembodiment.paths import CHILD_XML_REL
+from crossembodiment.metrics import MetricSuite, metric_body, world_positions
+from crossembodiment import paths
+from crossembodiment.experiment import ClipSet, Experiment, workers
+from crossembodiment.reroll import Reroller
+from crossembodiment.results import write_json
 # refactor step 8: runs (and clips.txt) are read under paths.outputs_root() ($CE_OUTPUTS_ROOT), results written under
-# paths.results_root() ($CE_RESULTS_ROOT); both REPO/outputs by default. prepare writes the schema-2 index (crossenbodiment/reroll.py)
+# paths.results_root() ($CE_RESULTS_ROOT); both REPO/outputs by default. prepare writes the schema-2 index (crossembodiment/reroll.py)
 OUT = paths.output("loes_weight_test"); ROLL = OUT / "rollouts"; RERUN = paths.output("child_52_rerun"); S = BODIES.scale("child")
 RES = paths.result("loes_weight_test")
 XML = CHILD_XML_REL; SEEDS = range(3)
@@ -67,12 +67,12 @@ def evalcmds():
 
 
 def world(Q):
-    """world positions of every body of the module's `body` (crossenbodiment.metrics.world_positions)"""
+    """world positions of every body of the module's `body` (crossembodiment.metrics.world_positions)"""
     return world_positions(body.m, body.d, Q)
 
 
 def stats(q, ref, Pw):
-    """{mpjpe, mmpjpe, mpjae, success (PHC, 0.5 m x S), drift (m)} of the module's `body` (crossenbodiment.metrics.MetricSuite)"""
+    """{mpjpe, mmpjpe, mpjae, success (PHC, 0.5 m x S), drift (m)} of the module's `body` (crossembodiment.metrics.MetricSuite)"""
     return MetricSuite(body, ("mpjpe", "mmpjpe", "mpjae", "success", "drift"), S).reference(ref, Pw)(q)
 
 

@@ -21,8 +21,8 @@ sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
 from model import bfm_align                                    # noqa: E402
 from model.robot_env import RobotEnv                           # noqa: E402
 from model.robots import ROBOTS, out_dir, target_path          # noqa: E402
-from crossenbodiment.geometry import project_z   # noqa: E402  single_z_search re-exported it (refactor step 4)
-from crossenbodiment.robot_rollout import act, motion   # noqa: E402  g1_z0_rollout's (refactor step 4)
+from crossembodiment.geometry import project_z   # noqa: E402  single_z_search re-exported it (refactor step 4)
+from crossembodiment.robot_rollout import act, motion   # noqa: E402  g1_z0_rollout's (refactor step 4)
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--robot", required=True, choices=sorted(ROBOTS))

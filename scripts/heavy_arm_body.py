@@ -7,7 +7,7 @@
             skeleton.json: exported from the new XML (its own masses; until step 9 the adult's file was copied)
   retarget  data/<label>/retargeting_motion/<clip>.npz: the adult's own motion (data/origin_motion), unchanged --
             the heavy-armed body is asked to do exactly what the adult did
-OOP refactor step 9: crossenbodiment/bodybuild HeavyLimb + CopyReference (scripts/build_body.py heavy-limb does the same); this
+OOP refactor step 9: crossembodiment/bodybuild HeavyLimb + CopyReference (scripts/build_body.py heavy-limb does the same); this
 file keeps its flags and its robot.xml is byte-identical.
 usage: uv run python scripts/heavy_arm_body.py --scale 5 [--side R] [--clip move-ego-0-2/move-ego-0-2_4]
 """
@@ -17,9 +17,9 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
-from crossenbodiment.bodybuild.builders import HeavyLimb  # noqa: E402
-from crossenbodiment.bodybuild.retarget import CopyReference  # noqa: E402
-from crossenbodiment.bodybuild.skeleton import dump_skeleton  # noqa: E402
+from crossembodiment.bodybuild.builders import HeavyLimb  # noqa: E402
+from crossembodiment.bodybuild.retarget import CopyReference  # noqa: E402
+from crossembodiment.bodybuild.skeleton import dump_skeleton  # noqa: E402
 
 PARTS = HeavyLimb.PARTS
 
@@ -34,7 +34,7 @@ def main():
     ap.add_argument("--label", default=None)
     a = ap.parse_args()
     b = HeavyLimb(a.scale, a.side, a.parts.split(","), name=a.label)
-    print(f"scripts/heavy_arm_body.py -> crossenbodiment.bodybuild.HeavyLimb({a.scale:g}, {a.side!r}, {a.parts.split(',')}) "
+    print(f"scripts/heavy_arm_body.py -> crossembodiment.bodybuild.HeavyLimb({a.scale:g}, {a.side!r}, {a.parts.split(',')}) "
           f"(= scripts/build_body.py heavy-limb --scale {a.scale:g} --side {a.side} --parts {a.parts} --clip {a.clip})")
     b.build()
     dump_skeleton(b.xml, b.dir / "skeleton.json")

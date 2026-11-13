@@ -15,7 +15,7 @@
 # (ax0m/ax0p for legs, ax1m/ax1p for arms), so the grid lines through the adult
 # are already built and solved; this builds the 64 off-axis points.
 #
-# OOP refactor step 9: a thin wrapper over scripts/build_body.py grid (crossenbodiment/bodybuild BodyPipeline; the grid values
+# OOP refactor step 9: a thin wrapper over scripts/build_body.py grid (crossembodiment/bodybuild BodyPipeline; the grid values
 # and labels are build_body.py GRID_LEGS / GRID_ARMS; finished steps are skipped, a body counts as done when its steps are).
 # usage: scripts/make_grid_bodies.sh            (labels gl<leg*1000>a<arm*1000>)
 set -euo pipefail

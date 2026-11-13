@@ -2,8 +2,8 @@
 
 The search loops of the four scripts at BASE (fa6c5f9, the commit before step 6) are executed from `git show` -- their
 verbatim lines, from the RNG's creation to the end of the loop body (as tests/test_rollout.py runs old loops) -- on a toy
-cost instead of rollouts, and the new code (crossenbodiment/optim.py ES / CEM / CMAES / RandomSearch / LSO /
-TrajectoryAdaptation driven by crossenbodiment/search.py SearchLoop / SequenceSearchLoop) runs on the same toy cost. Every
+cost instead of rollouts, and the new code (crossembodiment/optim.py ES / CEM / CMAES / RandomSearch / LSO /
+TrajectoryAdaptation driven by crossembodiment/search.py SearchLoop / SequenceSearchLoop) runs on the same toy cost. Every
 batch either one scores (the candidates, the mean-z copies) is recorded and must be np.array_equal (dtype and shape included),
 and so must the iterates (z_trace's z_mean / z_best, mu_trace), the best record, the sigma / path-length columns and, for the
 sequences, the kept budget rollouts and best_cost_at.
@@ -85,9 +85,9 @@ def toy_reward(Z, tgt):
 
 
 def ns_common():
-    from crossenbodiment.geometry import ang_pair, project_z, rank_normalize, rank_normalize_steps, unit_sphere
-    from crossenbodiment.optim import colored_noise
-    from crossenbodiment.rollout import BatchRollout
+    from crossembodiment.geometry import ang_pair, project_z, rank_normalize, rank_normalize_steps, unit_sphere
+    from crossembodiment.optim import colored_noise
+    from crossembodiment.rollout import BatchRollout
     return dict(np=np, json=json, csv=csv, time=time, Path=Path, REPO=REPO, print=lambda *a, **k: None, project_z=project_z,
                 rank_normalize=rank_normalize, ang_pair=ang_pair, rank_normalize_steps=rank_normalize_steps, unit=unit_sphere,
                 colored_noise=colored_noise, batch=types.SimpleNamespace(copies=BatchRollout.copies, with_mean=BatchRollout.with_mean,
@@ -123,8 +123,8 @@ def run_old_single(**kw):
 
 
 def run_new_single(robot=False, n_gens=5, opt=None, best=None, **kw):
-    from crossenbodiment.optim import single_latent_optimizer
-    from crossenbodiment.search import SearchLoop
+    from crossembodiment.optim import single_latent_optimizer
+    from crossembodiment.search import SearchLoop
     a = types.SimpleNamespace(**{**SZ_DEFAULTS, **kw})
     U = None
     if a.subspace:
@@ -255,9 +255,9 @@ def test_robot_random():
 
 def test_robot_resume_exact():
     """3 steps, state.npz through RunRecorder, a fresh ES restored from it, 2 more steps == the old code's 5 straight"""
-    from crossenbodiment.optim import ES
-    from crossenbodiment.records import RunRecorder
-    from crossenbodiment.search import SearchLoop
+    from crossembodiment.optim import ES
+    from crossembodiment.records import RunRecorder
+    from crossembodiment.search import SearchLoop
     old = run_old_robot(n_gens=5, eval_every=0)
     # the old code's own state after 5 steps, as robot_z_search.py saved it
     ons = old["ns"]
@@ -291,7 +291,7 @@ LSO_DEFAULTS = dict(method="lso", n=N_, iters=5, sigma=0.0125, lr=0.00625, betas
 
 
 def seq_fixture():
-    from crossenbodiment.geometry import unit_sphere
+    from crossembodiment.geometry import unit_sphere
     rng = np.random.default_rng(9)
     tgt = unit_sphere(rng.standard_normal((S_, D)))
     mu0 = unit_sphere(tgt + 0.3 * rng.standard_normal((S_, D)))
@@ -341,8 +341,8 @@ def run_old_robot_lso(**kw):
 
 
 def run_new_lso(robot=False, **kw):
-    from crossenbodiment.optim import LSO, TrajectoryAdaptation
-    from crossenbodiment.search import SequenceSearchLoop
+    from crossembodiment.optim import LSO, TrajectoryAdaptation
+    from crossembodiment.search import SequenceSearchLoop
     a = types.SimpleNamespace(**{**LSO_DEFAULTS, **kw})
     tgt, mu0, er8 = seq_fixture()
     batches = []
@@ -410,7 +410,7 @@ def test_robot_ta():
 # ------------------------------------------------------------------ the pure helpers
 
 def test_adam_and_return_to_go():
-    from crossenbodiment.optim import Adam, return_to_go
+    from crossembodiment.optim import Adam, return_to_go
     rng = np.random.default_rng(13)
     G = rng.standard_normal((6, 256))
     m = np.zeros(256); v = np.zeros_like(m); b1, b2, eps_adam = 0.9, 0.999, 1e-8

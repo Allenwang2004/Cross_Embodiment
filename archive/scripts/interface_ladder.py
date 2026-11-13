@@ -21,7 +21,7 @@ import torch
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.append(str(REPO))
-DS = REPO / "datasets/crossenbodiment-child-balanced"
+DS = REPO / "datasets/crossembodiment-child-balanced"
 OUT = REPO / "outputs/interface_ladder"
 XML = {"adult": "robots/adult/robot.xml", "raw": "robots/child/robot.xml"}
 TORQUE = "robots_torque/child/robot_torque_full.xml"

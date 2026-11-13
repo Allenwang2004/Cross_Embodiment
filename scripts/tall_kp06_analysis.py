@@ -28,7 +28,7 @@ from pathlib import Path
 import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
-from crossenbodiment import paths                                         # noqa: E402
+from crossembodiment import paths                                         # noqa: E402
 # OOP refactor (ported from the main tree, 11/12): the runs, commands.txt and the re-rolls are read under paths.outputs_root()
 # ($CE_OUTPUTS_ROOT, default outputs/); prepare's re-roll index and analyse's results.json / README.md are written under
 # $CE_RESULTS_ROOT (paths.write_path, default outputs/). The settings check expects summary "ref" under the tree the runs were made in
@@ -120,7 +120,7 @@ _B = {}
 
 def job(c):
     import mujoco
-    from crossenbodiment import eval_metrics as E             # scripts/eval_metrics.py re-exports this module (refactor step 8)
+    from crossembodiment import eval_metrics as E             # scripts/eval_metrics.py re-exports this module (refactor step 8)
     import loes_noanchor as LN
     from model.phc_reward import PHCCost
     if "body" not in _B:

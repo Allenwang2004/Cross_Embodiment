@@ -35,10 +35,10 @@ import torch  # noqa: F401
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
-# OOP refactor step 6: the search lives in the package (crossenbodiment/problems.py HumanSequenceProblem: body, reference,
+# OOP refactor step 6: the search lives in the package (crossembodiment/problems.py HumanSequenceProblem: body, reference,
 # ExactObs, simulator, policy, per-step reward; costs.py the terms; optim.py LSO / TrajectoryAdaptation and colored_noise;
 # search.py SequenceSearchLoop; records.py RunRecorder). colored_noise is re-exported here (robot_lso_search imported it).
-from crossenbodiment.optim import colored_noise                 # noqa: E402,F401  (moved; re-exported)
+from crossembodiment.optim import colored_noise                 # noqa: E402,F401  (moved; re-exported)
 
 
 def build_parser():
@@ -47,8 +47,8 @@ def build_parser():
     ap.add_argument("--ref", required=True, help="reference qpos .npz on the body (frame 0 is the start pose)")
     ap.add_argument("--body", default="child")
     ap.add_argument("--xml", default=None)
-    # !!! --scale defaults to ExactObs's CHILD value 0.611036 for ANY body (crossenbodiment/obs.py lso_scale_kw); kept for
-    # !!! bit-identity of old commands. Other bodies must pass it (crossenbodiment.obs.registry_scale(body, clip) gives it)
+    # !!! --scale defaults to ExactObs's CHILD value 0.611036 for ANY body (crossembodiment/obs.py lso_scale_kw); kept for
+    # !!! bit-identity of old commands. Other bodies must pass it (crossembodiment.obs.registry_scale(body, clip) gives it)
     ap.add_argument("--scale", type=float, default=None, help="ExactObs root scale (default: ExactObs's child value, for any body)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--n", type=int, default=128)
@@ -102,12 +102,12 @@ def build_parser():
 
 
 def main():
-    """parse -> HumanSequenceProblem (crossenbodiment/problems.py) -> LSO / TrajectoryAdaptation (optim.py) ->
+    """parse -> HumanSequenceProblem (crossembodiment/problems.py) -> LSO / TrajectoryAdaptation (optim.py) ->
     SequenceSearchLoop (search.py) -> RunRecorder (records.py)"""
     a = build_parser().parse_args()
-    from crossenbodiment.problems import HumanSequenceProblem
-    from crossenbodiment.records import RunRecorder
-    from crossenbodiment.search import SequenceSearchLoop
+    from crossembodiment.problems import HumanSequenceProblem
+    from crossembodiment.records import RunRecorder
+    from crossembodiment.search import SequenceSearchLoop
 
     P = HumanSequenceProblem(a)                        # asserts the flag combinations, builds everything, as before
     P.baseline()                                       # the zero-shot references B(g_t) and ER L=8 / 5, one batch

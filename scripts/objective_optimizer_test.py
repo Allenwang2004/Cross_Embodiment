@@ -28,12 +28,12 @@ from pathlib import Path
 import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
-from crossenbodiment import paths                                         # noqa: E402
-from crossenbodiment.results import write_json                            # noqa: E402
+from crossembodiment import paths                                         # noqa: E402
+from crossembodiment.results import write_json                            # noqa: E402
 # OOP refactor (ported from the main tree, 11/13): the runs (new and reused) and the re-rolls are read under paths.outputs_root()
 # ($CE_OUTPUTS_ROOT, default outputs/); prepare's z.npy and analyse's results.json / README.md are written under $CE_RESULTS_ROOT
 # (paths.write_path, default outputs/); the command lines keep their repository-relative outputs/... folders. The clip list is
-# configs/clips' copy; child_52_means.full is crossenbodiment.metrics.legacy_metrics (refactor step 4). Docstring unchanged (README.md).
+# configs/clips' copy; child_52_means.full is crossembodiment.metrics.legacy_metrics (refactor step 4). Docstring unchanged (README.md).
 OUT_REL = "outputs/objective_optimizer_test"; ROLL_REL = f"{OUT_REL}/rollouts_g"; ROLL = paths.read_path(ROLL_REL); SEEDS = (0, 1, 2); S_CHILD = 0.611036; G = (4, 8, 16, 32, 64)
 XML = "assets/robots_torque/child/robot_torque_full.xml"; REF = "data/child/retargeting_motion/{c}.npz"
 COMMON = f"--body child --xml {XML} --evals 1024 --pairs 8 --lr 0.03 --obs-scale exact --eval-every 0 --init-vel-scale 1"
@@ -99,8 +99,8 @@ _B = {}
 
 
 def clip_job(c):
-    from crossenbodiment import eval_metrics as E             # scripts/eval_metrics.py re-exports this module (refactor step 8)
-    from crossenbodiment.metrics import legacy_metrics as full   # child_52_means.full (refactor step 4)
+    from crossembodiment import eval_metrics as E             # scripts/eval_metrics.py re-exports this module (refactor step 8)
+    from crossembodiment.metrics import legacy_metrics as full   # child_52_means.full (refactor step 4)
     from success_thresholds import world, score
     from phc_reward_tables import reward_fn
     if "b" not in _B:

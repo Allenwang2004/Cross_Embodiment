@@ -30,7 +30,7 @@ sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
 from model.robot_map import (RobotMap, SMPL_SIDES, SMPL_XML, _quat, _rotvec, FILL_REL, FILL_REL_HAND,  # noqa: E402
                              FILL_TARGETS, fill_feats, fill_targets)
 from model.robots import target_path                                          # noqa: E402
-from crossenbodiment.survey import CLIPS   # noqa: E402  survey_body_videos' (refactor step 4)
+from crossembodiment.survey import CLIPS   # noqa: E402  survey_body_videos' (refactor step 4)
 from map_error_figs import ang_err, body_rots                                 # noqa: E402
 
 OUT = REPO / "outputs/map_error"

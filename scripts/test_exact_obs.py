@@ -20,7 +20,7 @@ import torch
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.append(str(REPO))
-DS = REPO / "datasets/crossenbodiment-child-balanced"
+DS = REPO / "datasets/crossembodiment-child-balanced"
 OUT = REPO / "outputs/exact_obs"
 
 
@@ -31,10 +31,10 @@ def main():
     from model.dataset import CrossEmbodimentDataset
     from model.exact_obs import ExactObs
     from model.simple.train import make_body_ctx, compute_batch_cost
-    from crossenbodiment.obs import ExactObs as ExactObsMapper, MultiplierObs, RawObs   # the simulation layer (refactor step 5)
-    from crossenbodiment.policy import MotivoPolicy
-    from crossenbodiment.rollout import BatchRollout
-    from crossenbodiment.sim import HumenvSim
+    from crossembodiment.obs import ExactObs as ExactObsMapper, MultiplierObs, RawObs   # the simulation layer (refactor step 5)
+    from crossembodiment.policy import MotivoPolicy
+    from crossembodiment.rollout import BatchRollout
+    from crossembodiment.sim import HumenvSim
     dev = "cuda" if torch.cuda.is_available() else "cpu"
     OUT.mkdir(parents=True, exist_ok=True)
     ck = sorted((REPO / "outputs/simple_es/child_balanced/b500_global_anchor").glob("update_*.pt"))[-1]
@@ -71,7 +71,7 @@ def main():
             Z = torch.tensor(np.stack([labels[l][i] for i, l in pad]), dtype=torch.float32, device=dev)
             # every slot from its own reference's frame 0 at rest (train_es.set_init_qpos's per-slot protocol, then get_obs);
             # the actor sees the mode's observation (exact: computed here in the main process); the multiplier and the exact
-            # observation of every new state are recorded whatever the actor saw (crossenbodiment.rollout, refactor step 5)
+            # observation of every new state are recorded whatever the actor saw (crossembodiment.rollout, refactor step 5)
             ro = BatchRollout(policy, HumenvSim(ctx["env"]), mappers[mode], bs, cfg.steps_per_episode, record=("qpos",),
                               extra_obs={"mult": mappers["mult"], "exact": mappers["exact"]}, nv=nv
                               ).run(Z, init_qpos=[smp[i]["qpos_ref"][0] for i, _ in pad], per_slot=True)

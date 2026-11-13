@@ -2,7 +2,7 @@
 """mse_vs_align_test.py -- does searching on the new MSE cost give motions that look more like the reference
 than searching on L_align?
 
-Clips from the 540 (crossenbodiment-child-torque), --per-group per motion group (seed 0; "ground" =
+Clips from the 540 (crossembodiment-child-torque), --per-group per motion group (seed 0; "ground" =
 lieonground / sitonground / split / crouch, never searched before). Each searched twice from its own z0, same
 settings except the objective: exact observations, + 0.3 (|z - z0| / 16)^2, 8 pairs (16 rollouts) per
 generation, --gens generations.
@@ -24,7 +24,7 @@ import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.append(str(REPO))
-from crossenbodiment.geometry import sphere16   # noqa: E402  16 z / |z| (refactor step 3; 16 (z / |z|) is the same bits: 16 = 2^4)
+from crossembodiment.geometry import sphere16   # noqa: E402  16 z / |z| (refactor step 3; 16 (z / |z|) is the same bits: 16 = 2^4)
 OUT = REPO / "outputs/mse_vs_align"
 LOG = REPO / "outputs/train_logs/mse_vs_align"
 ARMS = ("align", "mse")
@@ -39,7 +39,7 @@ def group(task):
 
 
 def pick(per_group):
-    man = [json.loads(l) for l in open(REPO / "datasets/crossenbodiment-child-torque/manifest.jsonl")]
+    man = [json.loads(l) for l in open(REPO / "datasets/crossembodiment-child-torque/manifest.jsonl")]
     by = defaultdict(list)
     for m in man:
         by[group(m["reward_name"])].append((m["reward_name"], str(m["trial"])))
@@ -75,8 +75,8 @@ def run(args):
           f"{sum(p.returncode != 0 for p in procs)} failed) ===", flush=True)
 
 
-# metrics lives in crossenbodiment/metrics.py as pose_similarity since refactor step 4 (unchanged); imported back for report()
-from crossenbodiment.metrics import pose_similarity as metrics   # noqa: E402,F401
+# metrics lives in crossembodiment/metrics.py as pose_similarity since refactor step 4 (unchanged); imported back for report()
+from crossembodiment.metrics import pose_similarity as metrics   # noqa: E402,F401
 
 
 def report(args):

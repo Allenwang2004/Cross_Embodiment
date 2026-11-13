@@ -5,7 +5,7 @@ scaled isometrically by L and then made wider or narrower by W: every segment le
 limbs; user chose L*W on 11/11), L in {1.4, 1.2, 0.8, 0.6}, W in {1.2, 0.8} -> assets/robots/len<L>_wid<W>.
 
 OOP refactor step 9: a thin wrapper. The steps of docs/new_body.md (shape, skeleton, retarget every motion folder, torque ratio,
-aggregate k, robot_torque_full.xml, the measured / predicted check) are crossenbodiment/bodybuild BodyPipeline, run here as
+aggregate k, robot_torque_full.xml, the measured / predicted check) are crossembodiment/bodybuild BodyPipeline, run here as
     uv run python scripts/build_body.py scaled-set <bodies> --parallel <n> [--workers 1]
 (one process per body as before; finished steps are skipped). Logs: outputs/body_build/<body>.log (the old runs' logs stay in
 outputs/scaled_bodies).

@@ -4,7 +4,7 @@ OOP refactor step 2 (docs/refactor/PLAN.md). Nothing here runs a simulation or c
 reproduces the paths and root scales the current code uses (tests/test_registry.py checks each against the code and the
 existing runs), so a literal can be replaced by a registry lookup without changing a bit.
 
-    from crossenbodiment.bodies import BODIES
+    from crossembodiment.bodies import BODIES
     BODIES["tall"].physics_xml            -> "assets/robots_torque/len1.4_wid0.8/robot_torque_full.xml"
     BODIES.reference("child", clip)       -> "data/child/retargeting_motion/<clip>.npz"
     BODIES.scale("child")                 -> 0.611036 (ExactObs's default, the literal)
@@ -21,10 +21,10 @@ the factor between a body's metres and adult-equivalent metres; every one of the
   BODIES.scale(body[, clip])            the registry (BodySpec.scale / scale_rule / scale_default; configs/bodies.yaml keys
                                         s / s_rule / s_default, kept on disk; BodySpec.s / s_rule / s_default read-only aliases)
   model/exact_obs.ExactObs(scale=)      .scale (alias .s): positions and velocities / scale before Motivo sees them; its default
-                                        0.611036 is the child's (crossenbodiment/obs.py CHILD_SCALE)
-  crossenbodiment/obs.ExactObs.scale    the same, through the mapper (alias .s)
+                                        0.611036 is the child's (crossembodiment/obs.py CHILD_SCALE)
+  crossembodiment/obs.ExactObs.scale    the same, through the mapper (alias .s)
   model/robot_map.RobotMap.scale        a robot's: robot / SMPL hip-to-ankle length in the nominal pose (alias .s)
-  PHCCost(scale=), Position(scale=)     PHC's lengths and the position term in adult-equivalent metres (crossenbodiment/costs.py)
+  PHCCost(scale=), Position(scale=)     PHC's lengths and the position term in adult-equivalent metres (crossembodiment/costs.py)
   problems' pos_scale                   what the searches divide positions by: the scale with --pos-unit adult, else 1.0
   summary.json "pos_div"                that value as single_z_search.py / lso_search.py write it (on-disk key, unchanged)
   lso_search.py --scale                 the flag (default: none = ExactObs's 0.611036, the child's, for ANY body; obs.lso_scale_kw)

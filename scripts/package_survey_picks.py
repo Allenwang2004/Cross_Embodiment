@@ -11,7 +11,7 @@ best = its best latent's rollout after 2,048 rollouts (outputs/g1_52/<clip>_es_s
 reference_body: the G1 target (the clip mapped onto the G1), the adult's motion (payload), the motion with the right leg
 bent (limited leg) -- each body's search target. Frames are aligned as the evaluation aligns them (rollout frame t against
 the reference's frame t + 1): the references start at their second frame and every file has the reference's frame count
-minus one (crossenbodiment.clips.ClipBundle.from_run, OOP refactor step 10). Models, colours and cameras: those of the body's earlier
+minus one (crossembodiment.clips.ClipBundle.from_run, OOP refactor step 10). Models, colours and cameras: those of the body's earlier
 survey folder (g1/, heavy_arm/, limit_leg/).
 usage: uv run python scripts/package_survey_picks.py [--no-render]
 """
@@ -21,8 +21,8 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 from model.robots import target_path                                  # noqa: E402
-from crossenbodiment.clips import ClipBundle                          # noqa: E402
-from crossenbodiment import paths                                     # noqa: E402
+from crossembodiment.clips import ClipBundle                          # noqa: E402
+from crossembodiment import paths                                     # noqa: E402
 
 TOP = paths.write_path("outputs/user_survey")
 BODIES = dict(  # folder: (earlier survey folder, results dir, run dir, reference_body, the run's model, the survey's copy)

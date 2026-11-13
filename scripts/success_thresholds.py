@@ -20,9 +20,9 @@ from pathlib import Path
 import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
-from crossenbodiment import paths                                         # noqa: E402
-from crossenbodiment.metrics import mean_body_error, world_positions      # noqa: E402
-from crossenbodiment.results import write_json                            # noqa: E402
+from crossembodiment import paths                                         # noqa: E402
+from crossembodiment.metrics import mean_body_error, world_positions      # noqa: E402
+from crossembodiment.results import write_json                            # noqa: E402
 # OOP refactor (ported from the main tree, 11/13): the runs and the stored results are read under paths.outputs_root() ($CE_OUTPUTS_ROOT,
 # default outputs/), the tables written under $CE_RESULTS_ROOT (paths.write_path, default outputs/); the clip list is configs/clips' copy.
 # The docstring is unchanged (task_motions.md copies it).
@@ -39,7 +39,7 @@ _B = {}
 
 
 def world(body, Q):
-    """(T, nbody - 1, 3) world positions of an eval_metrics.Body's bodies (crossenbodiment.metrics.world_positions)"""
+    """(T, nbody - 1, 3) world positions of an eval_metrics.Body's bodies (crossembodiment.metrics.world_positions)"""
     return world_positions(body.m, body.d, Q)
 
 
@@ -51,7 +51,7 @@ def score(body, q, Pw, S, n_ref):
 
 
 def child_job(c):
-    from crossenbodiment import eval_metrics as E             # scripts/eval_metrics.py re-exports this module (refactor step 8)
+    from crossembodiment import eval_metrics as E             # scripts/eval_metrics.py re-exports this module (refactor step 8)
     from model.exact_obs import ExactObs
     if "child" not in _B:
         _B["child"] = (E.Body(C_XML, True), ExactObs(REPO / C_XML, REPO / "assets/robots/adult/robot.xml").scale)
@@ -66,7 +66,7 @@ def child_job(c):
 
 
 def tall_job(c):
-    from crossenbodiment import eval_metrics as E
+    from crossembodiment import eval_metrics as E
     if "tall" not in _B:
         _B["tall"] = E.Body(T_XML, True)
     body = _B["tall"]; st = c.split("/")[1]

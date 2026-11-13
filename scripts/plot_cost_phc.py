@@ -13,7 +13,7 @@ single-latent searches visited (25,782 in all, a median of 470 per motion), re-r
     line is the median. Significant (p < 0.05) and negative in 51 of the 52 motions.
 Paper style as the other figures: STIX, 5.5 in wide, 10 pt.
 Out: docs/figures/cost_phc_correlation.{pdf,png}. usage: uv run python scripts/plot_cost_phc.py
-Inputs are read through crossenbodiment.paths.read_path ($CE_OUTPUTS_ROOT), the figure goes to $CE_FIGURES_ROOT (default docs/figures)."""
+Inputs are read through crossembodiment.paths.read_path ($CE_OUTPUTS_ROOT), the figure goes to $CE_FIGURES_ROOT (default docs/figures)."""
 import json, sys
 from pathlib import Path
 import matplotlib
@@ -22,7 +22,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO))
-from crossenbodiment import paths                                         # noqa: E402
+from crossembodiment import paths                                         # noqa: E402
 SRC = paths.read_path("outputs/cost_corr")
 INK, MUTED, GRID, BLUE, GREY = "#22252a", "#52514e", "#e6e6e3", "#2a78d6", "#b9b8b4"
 NB = 10

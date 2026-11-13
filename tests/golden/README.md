@@ -105,11 +105,11 @@ summary.json files and `sec` in all 7 curve.csv files that have it.
 `drift_success_child.one` and `tall_body_52.one` (their module folders `RR`, `LS`, `SEEDS`, `OUT` pointed at folders rebuilt from
 the inputs). Every function gets q[t] against ref[t + 1]. When step 3 moves these functions, point the calls in `main()` at the new
 code and keep the output keys; `compare.py baseline <label>` then proves the numbers are the same.
-Step 3 (done) kept the calls as they are: the functions called here now delegate to crossenbodiment/metrics.py and
-crossenbodiment/geometry.py (MetricSuite.task_page and the named definitions); tests/test_metrics.py covers the drivers this file
+Step 3 (done) kept the calls as they are: the functions called here now delegate to crossembodiment/metrics.py and
+crossembodiment/geometry.py (MetricSuite.task_page and the named definitions); tests/test_metrics.py covers the drivers this file
 does not run (loes_weight_test, lsor_mpjae_test, amass_baselines.one, kpkd_test.phc_one / contact_one) against their a997a23 code.
 Not covered: `amass_baselines.one` (its `stats` closure is `tall_body_52.one`'s without the PHC reward).
-Step 4 archived scripts/child_52_means.py: its `full` / `hand_fall` are crossenbodiment.metrics `legacy_metrics` /
+Step 4 archived scripts/child_52_means.py: its `full` / `hand_fall` are crossembodiment.metrics `legacy_metrics` /
 `body_hand_fall` now, which metrics_golden.py calls under the old output keys (`child_52_means.full`, `child_52_means.hand_fall`);
 tests/test_moves.py runs every helper step 4 moved against its 68c95f4 source.
 
@@ -126,11 +126,11 @@ tests/test_moves.py runs every helper step 4 moved against its 68c95f4 source.
 * `/tests` is in `.gitignore`: new files under tests/golden need `git add -f`.
 * Runs may append to the tracked `MUJOCO_LOG.TXT` at the repository root; never stage it.
 * The baseline was made while about 8 other searches ran on the machine (CPU idle 15-28 %); timings above are from that run.
-* Step 5 (simulation layer: crossenbodiment/policy.py, obs.py, sim.py, rollout.py) replaced the rollout loops the cases run;
+* Step 5 (simulation layer: crossembodiment/policy.py, obs.py, sim.py, rollout.py) replaced the rollout loops the cases run;
   tests/test_rollout.py also runs every replaced loop from its 37ed139 source (single_z_search.rollout in its four modes,
   lso_search's / robot_z_search's / robot_lso_search's loops, child_reward_eval.rollout, rank_initial_cost.rollout_multi,
   test_exact_obs's loop) against BatchRollout on 20-step, 4-slot rollouts of the child and the G1 (np.array_equal; ~20 s on GPU 2).
-* Step 6 (costs, optimisers, search loops, run records: crossenbodiment/costs.py, optim.py, problems.py, search.py, records.py)
+* Step 6 (costs, optimisers, search loops, run records: crossembodiment/costs.py, optim.py, problems.py, search.py, records.py)
   turned the four search scripts into thin CLIs; every case above now runs through them. tests/test_optim.py runs each script's
   old loop (from its fa6c5f9 source) against the new optimiser + loop on a toy cost (every scored batch, iterate and best
   np.array_equal; ES --resume through state.npz); tests/test_records.py checks RunRecorder (round trips; the baseline's
@@ -147,7 +147,7 @@ tests/test_moves.py runs every helper step 4 moved against its 68c95f4 source.
   against RobotMap("g1") / RobotEnv("g1") (calibration, both map directions incl. joint limits, lowest point, 60 env steps, the
   stored targets of g1_roundtrip / robot_roundtrip) and re-makes assets/robots/g1/gains_perjoint.json with robot_gain_scaling.py
   (np.array_equal / ==; CPU, ~15 s).
-* Step 8 (experiment layer: crossenbodiment/experiment.py, reroll.py, results.py, queue.py; eval_metrics.py moved into the
+* Step 8 (experiment layer: crossembodiment/experiment.py, reroll.py, results.py, queue.py; eval_metrics.py moved into the
   package, scripts/eval_metrics.py re-exports it) changed no search code; the golden cases and metrics.json must stay identical.
   The drivers it ported are checked three ways:
   - tests/test_experiments.py: every command list of the ported drivers (28 builder / flag combinations) byte-identical to its
@@ -157,7 +157,7 @@ tests/test_moves.py runs every helper step 4 moved against its 68c95f4 source.
     (CE_OUTPUTS_ROOT=<main>/outputs), written into outputs/refactor_step8/LABEL (CE_RESULTS_ROOT), compared file by file with the
     main tree's existing results (JSON and markdown byte-identical, npz array- and order-identical, z.npy byte-identical).
   - tests/test_queue.py: scripts/run_queue.py's CommandQueue / ResourceGate with fake commands.
-* Step 9 (body-building pipeline: crossenbodiment/bodybuild, scripts/build_body.py; the four pipeline copies and the building
+* Step 9 (body-building pipeline: crossembodiment/bodybuild, scripts/build_body.py; the four pipeline copies and the building
   scripts are thin wrappers, scripts/torque_scale_actuators.py archived) changed no search code; the golden cases and
   metrics.json must stay identical. The bodies are checked two ways:
   - verify_bodies.py LABEL: the new pipeline rebuilds len0.8_wid1.2 and the child into outputs/refactor_step9/LABEL/root
@@ -170,7 +170,7 @@ tests/test_moves.py runs every helper step 4 moved against its 68c95f4 source.
   - tests/test_bodybuild.py: the variant scripts (heavy_arm_body, lock_joint_body, limit_joint_body, elderly_body,
     strength_rollout's build) run from 2bdb2fe in a scratch root against the builders; the limited leg and adult_s08_* against
     the stored files; the wrappers' CLIs against 2bdb2fe's parsers; one BETA_AXES; the pipeline's skips, prune and registry.
-* Step 10 (visualisation layer: crossenbodiment/palette.py, figstyle.py, camera.py, clips.py, blender.py, strobe.py, video.py, sheet.py;
+* Step 10 (visualisation layer: crossembodiment/palette.py, figstyle.py, camera.py, clips.py, blender.py, strobe.py, video.py, sheet.py;
   configs/figures/{strobe_examples,teaser,method}.yaml; scripts/export_strobe_blender.py archived) changed no search code; the golden
   cases and metrics.json must stay identical. The visualisation outputs are checked two ways:
   - verify_vis.py LABEL: the new scripts re-make, into outputs/refactor_step10/LABEL/new (CE_OUTPUTS_ROOT = the main tree's outputs,
@@ -186,7 +186,7 @@ tests/test_moves.py runs every helper step 4 moved against its 68c95f4 source.
   - tests/test_vis.py: the palette against render_blender.py's COLORS and every script's 8e9dc99 colour table, the figure helpers
     (SVG bytes), project / presets, StrobeLayout, pose_spec, BlenderScene, ClipBundle, ContactSheet, the frame bands, VideoRenderer vs
     the survey's replay.py.
-* Step 11 (naming: crossenbodiment/methods.py run keys, palette keys, the root scale `scale`, RobotMap / RobotEnv attribute names,
+* Step 11 (naming: crossembodiment/methods.py run keys, palette keys, the root scale `scale`, RobotMap / RobotEnv attribute names,
   z0's on-disk names behind paths constants; docs/architecture.md "Names") renamed identifiers only; nothing on disk, no flag. The
   golden cases and metrics.json must stay identical, and so must verify_analyses.py (the ported drivers now take their run keys from
   the registry; their docstrings, copied into README.md, are unchanged) and verify_vis.py (the figure scripts ask the palette by the

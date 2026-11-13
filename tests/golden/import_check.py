@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """import_check.py -- static import check for the OOP refactor (docs/refactor/PLAN.md, step 1 on).
 
-Every .py file under the scanned folders (default: scripts, model, tests, utils and, once it exists, the crossenbodiment
+Every .py file under the scanned folders (default: scripts, model, tests, utils and, once it exists, the crossembodiment
 package) must parse, and every import of a REPO-LOCAL module in it must resolve to a file that exists, anywhere in the
 file (imports inside functions count). Nothing is imported or run: the files are read with ast.
 
@@ -37,7 +37,7 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-DEFAULT_DIRS = ("scripts", "model", "tests", "utils", "crossenbodiment")
+DEFAULT_DIRS = ("scripts", "model", "tests", "utils", "crossembodiment")
 SKIP_PARTS = {"__pycache__", ".venv", ".git"}
 
 

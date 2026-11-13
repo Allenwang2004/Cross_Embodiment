@@ -16,19 +16,19 @@ import mujoco
 import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
-from crossenbodiment.metrics import mean_body_error, metric_body, phc_success, root_success, world_positions   # noqa: E402
-from crossenbodiment import paths   # noqa: E402
-from crossenbodiment.experiment import output_arg, parse_flag, workers   # noqa: E402
-from crossenbodiment.methods import RESULT_KEYS, experiment_keys, key_in   # noqa: E402
-from crossenbodiment.reroll import Reroller   # noqa: E402
-from crossenbodiment.results import write_json   # noqa: E402
+from crossembodiment.metrics import mean_body_error, metric_body, phc_success, root_success, world_positions   # noqa: E402
+from crossembodiment import paths   # noqa: E402
+from crossembodiment.experiment import output_arg, parse_flag, workers   # noqa: E402
+from crossembodiment.methods import RESULT_KEYS, experiment_keys, key_in   # noqa: E402
+from crossembodiment.reroll import Reroller   # noqa: E402
+from crossembodiment.results import write_json   # noqa: E402
 # refactor step 8: runs are read under paths.outputs_root() ($CE_OUTPUTS_ROOT), the result written under paths.results_root()
 # ($CE_RESULTS_ROOT); both REPO/outputs by default. --loes-dir is read in main (not at import).
 OUT = paths.result("success_definitions"); RERUN = paths.output("child_52_rerun"); CEMP = paths.output("child_52_cem_phc"); LSO = paths.output("child_52_lso")
 # --loes-dir outputs/noanchor/child (user 11/11): LOES ("es") from LOES without the anchor term, everything else unchanged;
 # the result goes to task_motions_noanchor.json next to the anchored one
 LOESD = None       # None: RERUN, read at call time
-# run-directory keys (crossenbodiment/methods.py RUNS) and this file's method keys (RESULT_KEYS "outputs/success_definitions"): in child_52_rerun
+# run-directory keys (crossembodiment/methods.py RUNS) and this file's method keys (RESULT_KEYS "outputs/success_definitions"): in child_52_rerun
 # "es" = LOES with the anchor, "cem" = CEM with our cost (cem_ours); in child_52_cem_phc "cem" = BFM-Zero's CEM, written as "cem_phc";
 # in child_52_lso "lsor" = LSOR with BFMTrack's cost (lsor_bfm)
 RR, LK = experiment_keys("outputs/child_52_rerun"), experiment_keys("outputs/child_52_lso")
@@ -42,12 +42,12 @@ body = None; S = None
 
 
 def clips():
-    from crossenbodiment.paths import CHILD_52_TASK, read_clips   # configs/clips/child_52_task.txt = outputs/child_52/clips.txt (refactor step 4)
+    from crossembodiment.paths import CHILD_52_TASK, read_clips   # configs/clips/child_52_task.txt = outputs/child_52/clips.txt (refactor step 4)
     return read_clips(CHILD_52_TASK)
 
 
 def world(Q):
-    """world positions of every body of the module's `body` (crossenbodiment.metrics.world_positions)"""
+    """world positions of every body of the module's `body` (crossembodiment.metrics.world_positions)"""
     return world_positions(body.m, body.d, Q)
 
 
@@ -55,7 +55,7 @@ def tests(q, ref, R):
     """q (T, nq) rollout, ref the reference frames 1.., R = (world positions, local positions) of the reference"""
     Pw_r, Pl_r = R; T = min(len(q), len(ref)); q = q[:T].astype(np.float64); r = ref[:T]
     gw = mean_body_error(world(q), Pw_r[:T]); (pl, _) = body.local(q); gl = mean_body_error(pl, Pl_r[:T])
-    # crossenbodiment.metrics: the legacy root_success; phc_success on world positions (s, or 1 = raw metres) and on local ones
+    # crossembodiment.metrics: the legacy root_success; phc_success on world positions (s, or 1 = raw metres) and on local ones
     return dict(root=float(root_success(q, r)), global_=phc_success(gw, S, THR), global_raw=phc_success(gw, 1.0, THR),
                 local=phc_success(gl, S, THR))
 

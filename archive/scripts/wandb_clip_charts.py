@@ -23,7 +23,7 @@ def main():
     ap.add_argument("--name", required=True, help="the training run's wandb name")
     ap.add_argument("--of", default=None, help="the training run's wandb id, stored in the config")
     ap.add_argument("--pid", type=int, default=None, help="follow until this process exits")
-    ap.add_argument("--project", default="crossenbodiment-simple")
+    ap.add_argument("--project", default="crossembodiment-simple")
     ap.add_argument("--poll", type=int, default=60)
     a = ap.parse_args()
     import wandb

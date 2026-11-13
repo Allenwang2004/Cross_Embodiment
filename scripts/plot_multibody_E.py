@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
-from crossenbodiment.multibody_study import E_ARMS, E_TEST, OUT, cell_dir, clips   # noqa: E402  multibody_corr's (refactor step 4)
+from crossembodiment.multibody_study import E_ARMS, E_TEST, OUT, cell_dir, clips   # noqa: E402  multibody_corr's (refactor step 4)
 
 INK, MUTED, GRID, SURF = "#0b0b0b", "#52514e", "#e4e3df", "#fcfcfb"
 STYLE = {"full": dict(c=INK, ls="-", lw=2, label="full 256-d"),

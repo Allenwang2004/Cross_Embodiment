@@ -74,7 +74,7 @@ class ExactObs:
         self.env, _ = make_humenv(num_envs=1, task=None, xml=str(adult_xml), state_init="Default")
         self.low_c, self.low_a = _LowestPoint(self.mc), _LowestPoint(self.ma)
         # child / adult root scale of the dataset's retargeting, measured on it (x, y ratio, identical to 1e-16
-        # across clips); a different body needs its own (crossenbodiment/bodies.py: the root scale's names)
+        # across clips); a different body needs its own (crossembodiment/bodies.py: the root scale's names)
         self.scale = float(scale)
         self.clearance_vel, self.dt = bool(clearance_vel), float(dt)          # option: + d/dt of the height correction
         self.reset()

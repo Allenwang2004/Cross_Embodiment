@@ -62,7 +62,7 @@ import torch
 from PIL import Image, ImageDraw
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-from crossenbodiment.geometry import sphere16   # noqa: E402  16 z / |z| (refactor step 3)
+from crossembodiment.geometry import sphere16   # noqa: E402  16 z / |z| (refactor step 3)
 
 
 def logspaced(count, n):
@@ -87,9 +87,9 @@ def logspaced(count, n):
     return sorted(out)
 
 
-# label (the title band burnt into each panel) lives in crossenbodiment/draw.py as frame_label since refactor step 4 (unchanged);
+# label (the title band burnt into each panel) lives in crossembodiment/draw.py as frame_label since refactor step 4 (unchanged);
 # imported back for main() and `from rollout_z_trace import label`
-from crossenbodiment.draw import frame_label as label   # noqa: E402,F401
+from crossembodiment.draw import frame_label as label   # noqa: E402,F401
 
 
 def main():
@@ -132,7 +132,7 @@ def main():
     from metamotivo.fb_cpr.huggingface import FBcprModel
 
     from model.obs_scale import build_obs_multiplier
-    from crossenbodiment.align_cost import AlignCostConfig, compute_batch_cost   # out of model/simple (refactor step 4)
+    from crossembodiment.align_cost import AlignCostConfig, compute_batch_cost   # out of model/simple (refactor step 4)
     from single_z_search import rollout
 
     trace_path = Path(args.trace)
@@ -221,7 +221,7 @@ def main():
 
     # the new cost and the similarity measures neither cost optimises directly (mse_vs_align_test.py)
     from model import losses, kinematics as kin
-    from crossenbodiment.metrics import pose_similarity as sim_metrics   # mse_vs_align_test.metrics (refactor step 4)
+    from crossembodiment.metrics import pose_similarity as sim_metrics   # mse_vs_align_test.metrics (refactor step 4)
     mses = [losses.tracking_mse(fk, qpos[i].astype(np.float64), ref)[0] for i in range(n)]
     sims = [sim_metrics(fk, qpos[i].astype(np.float64), ref.astype(np.float64), losses, kin) for i in range(n)]
     aw = summary.get("anchor_weight") or 0.0

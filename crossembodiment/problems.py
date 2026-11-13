@@ -10,12 +10,12 @@ before CUDA is touched, the env workers before the reference environments, ...):
   RobotSequenceProblem   scripts/robot_lso_search.py  a latent per step (LSO / TA), a robot
 
 Each holds the body (paths, references, start state), the observation mapper / simulator / policy / BatchRollout
-(crossenbodiment/obs.py, sim.py, policy.py, rollout.py), the cost (crossenbodiment/costs.py CompositeCost) and offers
+(crossembodiment/obs.py, sim.py, policy.py, rollout.py), the cost (crossembodiment/costs.py CompositeCost) and offers
   score(Z) -> Scored        one batch rollout and its cost (cost, parts: every logged term, and the rollouts kept)
   record(...)               the best-so-far record of one slot (the dict the summary reads)
-  baseline() / start()      z0's rollout (and the kinematic floor); the optimiser (crossenbodiment/optim.py) and the start best
-  curve_row / report        the curve.csv row and the progress line of a step (crossenbodiment/search.py calls them)
-  save(rec, loop)           every output file through a RunRecorder (crossenbodiment/records.py)
+  baseline() / start()      z0's rollout (and the kinematic floor); the optimiser (crossembodiment/optim.py) and the start best
+  curve_row / report        the curve.csv row and the progress line of a step (crossembodiment/search.py calls them)
+  save(rec, loop)           every output file through a RunRecorder (crossembodiment/records.py)
 The prints are the scripts' own lines (stdout logs are not compared, but they are what people read).
 """
 from __future__ import annotations
@@ -194,7 +194,7 @@ class HumanLatentProblem:
                 raise SystemExit("--anchor-weight needs --anchor")
             self.anchor = project_z(np.load(a.anchor).reshape(-1).astype(np.float64))
 
-        # ---- the cost (crossenbodiment/costs.py): the terms, and what is added when, as score() did
+        # ---- the cost (crossembodiment/costs.py): the terms, and what is added when, as score() did
         from .geometry import smpl_heading
         ref_h, ref_xy = smpl_heading(fk, goal), goal[..., :2]   # humenv's heading, frame by frame
         self.align_phys = AlignPhys(fk, cfg, goal)
@@ -326,7 +326,7 @@ class HumanLatentProblem:
 
     # ------------------------------------------------------------------ the search
     def start(self):
-        """the start latent (z0, or --z-start), --subspace, the optimiser (crossenbodiment/optim.py) and the best-so-far
+        """the start latent (z0, or --z-start), --subspace, the optimiser (crossembodiment/optim.py) and the best-so-far
         record the search starts from. Returns (optimiser, best, z_start)."""
         from .optim import single_latent_optimizer
         a, z0, base = self.args, self.z0, self.base
@@ -608,7 +608,7 @@ class RobotLatentProblem:
 
     # ------------------------------------------------------------------ the search (and --resume)
     def start(self):
-        """the optimiser (crossenbodiment/optim.py; ES owns the RNG --resume restores) and the loop's starting state:
+        """the optimiser (crossembodiment/optim.py; ES owns the RNG --resume restores) and the loop's starting state:
         (opt, dict(best, curve, trace_mean, trace_best, path_len, gen0)). --resume continues the search saved in a.resume
         up to --evals in total: exact (bit-identical to one longer run) when it has state.npz, else from its last search
         point with the noise stream advanced past its steps (only Adam's moments restart)."""
@@ -804,7 +804,7 @@ class HumanSequenceProblem(_SequenceRows):
             import model.kinematics as kin
             ref_pose = kin.batch_forward_pose(fk, ref[1:], kin.EE_BODIES + [kin.ROOT_BODY])
 
-        # ---- the per-step reward (crossenbodiment/costs.py, form per_step)
+        # ---- the per-step reward (crossembodiment/costs.py, form per_step)
         if a.dtw:
             main = SlowDTW(bfm, Bc, heading=heading, fall=Fall(fk, a.fall_head, d=dk), heading_weight=a.heading_weight,
                            fall_weight=a.fall_weight)

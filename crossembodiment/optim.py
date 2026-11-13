@@ -23,7 +23,7 @@ the per-step rewards (n + 1, S) and the costs of every slot. state_dict() / load
 (robot_z_search's --resume and state.npz).
 
 Pure helpers (stay functions, PLAN.md): colored_noise (from lso_search.py), return_to_go; project_z / rank_normalize /
-rank_normalize_steps / unit_sphere are crossenbodiment.geometry's.
+rank_normalize_steps / unit_sphere are crossembodiment.geometry's.
 """
 from __future__ import annotations
 

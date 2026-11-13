@@ -1,7 +1,7 @@
 # The method figure's motion panels (OOP refactor step 10; before it, constants in the scripts).
 #   scripts/export_blender_package.py   the Blender panels method_* -> outputs/blender_package (render_blender.py -> docs/figures/blender_renders)
 #   scripts/plot_method_figure.py       the MuJoCo cut-outs (render: cutouts) and the figure (draw / simple / first)
-# Paths are repository-relative ("outputs/..." read through crossenbodiment.paths.read_path); {run} is the clip below.
+# Paths are repository-relative ("outputs/..." read through crossembodiment.paths.read_path); {run} is the clip below.
 run: move-ego-0-4_8
 units_per_m: 42.0                # figure units (0.01 in) per metre of body
 result: [60, 102, 144, 186, 228, 270]   # the result strips' frames (6 poses, fading 0.62 * (1 - i / 5))

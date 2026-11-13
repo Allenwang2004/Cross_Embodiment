@@ -2,7 +2,7 @@
 
 BETA_AXES is the 8-axis body vector: the length and girth factor of four body groups. It used to be written twice, as
 scripts/scale_robot.py AXES and model/dataset.py BETA_AXES (the order had to match); both import it from here now. A scaled body's
-parameter.json carries these 8 keys (crossenbodiment/bodybuild/builders.py ScaledBody), which model/dataset.py load_beta reads.
+parameter.json carries these 8 keys (crossembodiment/bodybuild/builders.py ScaledBody), which model/dataset.py load_beta reads.
 
 Importing this module imports nothing (no numpy, no mujoco), so model/dataset.py stays light.
 """

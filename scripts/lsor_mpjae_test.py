@@ -21,11 +21,11 @@ import numpy as np
 from scipy.stats import spearmanr
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
-from crossenbodiment.bodies import BODIES
-from crossenbodiment.metrics import MetricSuite, drift, metric_body, world_positions
-from crossenbodiment import paths
-from crossenbodiment.experiment import ClipSet, workers
-from crossenbodiment.results import write_json
+from crossembodiment.bodies import BODIES
+from crossembodiment.metrics import MetricSuite, drift, metric_body, world_positions
+from crossembodiment import paths
+from crossembodiment.experiment import ClipSet, workers
+from crossembodiment.results import write_json
 # refactor step 8: runs (and clips.txt) are read under paths.outputs_root() ($CE_OUTPUTS_ROOT), results written under
 # paths.results_root() ($CE_RESULTS_ROOT); both REPO/outputs by default
 OUT = paths.output("lsor_mpjae_test"); OLD = paths.output("child_52_lso"); S = BODIES.scale("child"); RES = paths.result("lsor_mpjae_test")
@@ -35,7 +35,7 @@ body = None
 
 
 def world(Q):
-    """world positions of every body of the module's `body` (crossenbodiment.metrics.world_positions)"""
+    """world positions of every body of the module's `body` (crossembodiment.metrics.world_positions)"""
     return world_positions(body.m, body.d, Q)
 
 
@@ -46,7 +46,7 @@ def body_acc(x):
 
 
 def stats(q, ref, Pw):
-    """{mpjpe, mmpjpe, mpjae, success (PHC, 0.5 m x S), drift (m), acc} of the module's `body` (crossenbodiment.metrics.MetricSuite)"""
+    """{mpjpe, mmpjpe, mpjae, success (PHC, 0.5 m x S), drift (m), acc} of the module's `body` (crossembodiment.metrics.MetricSuite)"""
     return MetricSuite(body, ("mpjpe", "mmpjpe", "mpjae", "success", "drift", ("acc", body_acc)), S).reference(ref, Pw)(q)
 
 
@@ -97,7 +97,7 @@ def main():
     for a, b in (("lsor", "w0.01"), ("w0.01", "w0.02"), ("w0.02", "w0.05"), ("w0.05", "w0.1"), ("w0.1", "w0.2"), ("w0.2", "w0.3"), ("w0.3", "w0.5"), ("w0.5", "lsor_ours"), ("lsor_ours", "w2"), ("lsor", "head"), ("lsor", "pos")):
         x, y = motion(a, "mpjae"), motion(b, "mpjae"); tests[f"{a} -> {b}"] = dict(higher=int((y > x).sum()), of=len(x), diff=float((y - x).mean()))
     print("MPJAE, per motion (mean of seeds):", json.dumps(tests))
-    from crossenbodiment.paths import CHILD_52_TASK, read_clips   # configs/clips/child_52_task.txt = outputs/child_52/clips.txt (refactor step 4)
+    from crossembodiment.paths import CHILD_52_TASK, read_clips   # configs/clips/child_52_task.txt = outputs/child_52/clips.txt (refactor step 4)
     all52 = read_clips(CHILD_52_TASK)
     with Pool(workers(24)) as p:
         dv = p.map(drift_vs_mpjae, all52)

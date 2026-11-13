@@ -331,7 +331,7 @@ wheels = [
 ]
 
 [[package]]
-name = "crossenbodiment"
+name = "crossembodiment"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

@@ -15,7 +15,7 @@ import numpy as np
 REPO = Path(__file__).resolve().parent.parent
 import sys  # noqa: E402
 sys.path.insert(0, str(REPO))
-from crossenbodiment.palette import INK as _INK, Palette   # noqa: E402  (refactor step 10: this figure's own colours, VARIANTS "k_scale")
+from crossembodiment.palette import INK as _INK, Palette   # noqa: E402  (refactor step 10: this figure's own colours, VARIANTS "k_scale")
 INK, MUTED, GRID, SURF = (_INK["dataviz"][k] for k in ("ink", "muted", "grid", "surface"))
 C_Z0, C_BEST = Palette.hex("frozen", "k_scale"), Palette.hex("loes", "k_scale")   # dataviz categorical 2 / 1 (red-ish z0, blue searched, as in the videos)
 

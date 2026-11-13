@@ -11,8 +11,8 @@ drawn with mjv_addGeoms from assets/robots/g1/g1.xml, whose meshes match scene.x
 Default runs for --search <dir>: target / z0 (<dir>/origin_z.npz) / the searched z (<dir>/best.npz), labelled with
 bfm, fallen frames and end-point error from <dir>/compare/compare.json when it exists.
 Writes <dir>/compare/overlay.mp4 (1920 x 1080) and overlay.mp4.png (three moments).
-OOP refactor step 10: the legend, painting, projection and writer are crossenbodiment.video / camera's (shared with body_overlay.py
-and render_panels.py), the colours crossenbodiment.palette.OVERLAY.
+OOP refactor step 10: the legend, painting, projection and writer are crossembodiment.video / camera's (shared with body_overlay.py
+and render_panels.py), the colours crossembodiment.palette.OVERLAY.
 usage: MUJOCO_EGL_DEVICE_ID=2 uv run python scripts/robot_overlay.py --robot h1 --clip jump-2/jump-2_8 --search outputs/g1/search/jump-2_8_s0
        [--traj "label=path.npz" ...]   (replaces the default runs; the first is the ghost)
 """
@@ -27,9 +27,9 @@ REPO = Path(__file__).resolve().parent.parent
 import sys
 sys.path.insert(0, str(REPO))
 from model.robots import ROBOTS, target_path   # noqa: E402
-from crossenbodiment.camera import project_point                                  # noqa: E402
-from crossenbodiment.palette import OVERLAY as COLORS                             # noqa: E402
-from crossenbodiment.video import FONT, OVERLAY_SIZE, enlarge_offscreen, legend, paint, write   # noqa: E402,F401
+from crossembodiment.camera import project_point                                  # noqa: E402
+from crossembodiment.palette import OVERLAY as COLORS                             # noqa: E402
+from crossembodiment.video import FONT, OVERLAY_SIZE, enlarge_offscreen, legend, paint, write   # noqa: E402,F401
 W, H = OVERLAY_SIZE
 
 

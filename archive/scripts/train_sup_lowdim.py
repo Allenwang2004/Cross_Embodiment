@@ -20,7 +20,7 @@ import torch.nn.functional as F
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.append(str(REPO))
-DS = REPO / "datasets/crossenbodiment-child-balanced"
+DS = REPO / "datasets/crossembodiment-child-balanced"
 B100 = REPO / "outputs/lowdim_b100"
 BASIS = REPO / "outputs/lowdim_search/basis_corrPCA_train.npy"
 

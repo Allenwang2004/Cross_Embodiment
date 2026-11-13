@@ -1,4 +1,4 @@
-"""Tests of OOP refactor step 9 (docs/refactor/PLAN.md): the body-building pipeline (crossenbodiment/bodybuild) against the scripts it
+"""Tests of OOP refactor step 9 (docs/refactor/PLAN.md): the body-building pipeline (crossembodiment/bodybuild) against the scripts it
 replaced, exact comparisons (file bytes, np.array_equal).
 
 The old scripts are BASE's (2bdb2fe, the commit before step 9), from `git show`, run as subprocesses in a scratch repository root
@@ -90,7 +90,7 @@ def new_dirs():
 # ------------------------------------------------------------------ 1. one BETA_AXES
 
 def test_beta_axes_one_source():
-    from crossenbodiment.bodybuild.beta import BETA_AXES, BODY_GROUPS, PRESETS
+    from crossembodiment.bodybuild.beta import BETA_AXES, BODY_GROUPS, PRESETS
     import model.dataset as D
     import scale_robot as S
     assert D.BETA_AXES is BETA_AXES and S.AXES is BETA_AXES
@@ -171,7 +171,7 @@ def _params_keep_old(new, old):
 
 
 def test_heavy_limb():
-    from crossenbodiment.bodybuild import CopyReference, HeavyLimb
+    from crossembodiment.bodybuild import CopyReference, HeavyLimb
     rob, data, _ = new_dirs()
     for flags, kw in (((), dict(scale=5)), (("--parts", "Wrist,Hand"), dict(scale=80, parts=["Wrist", "Hand"]))):
         root = run_old("heavy_arm_body", "--scale", kw["scale"], *flags, "--clip", CLIP)
@@ -186,7 +186,7 @@ def test_heavy_limb():
 
 
 def _lock(name, locks, solref, lift=True):
-    from crossenbodiment.bodybuild import LockJoints
+    from crossembodiment.bodybuild import LockJoints
     rob, data, _ = new_dirs()
     b = LockJoints(name, locks, solref=solref, robots_dir=rob)
     b.build(log=lambda *_: None)
@@ -211,7 +211,7 @@ def test_lock_joints():
 
 
 def test_limit_joints():
-    from crossenbodiment.bodybuild import CopyReference, LimitJoints
+    from crossembodiment.bodybuild import CopyReference, LimitJoints
     import lock_joint_body as L
     rob, data, _ = new_dirs()
     root = run_old("lock_joint_body", "--clip", CLIP, "--user-lock", "--solref", 0.005)
@@ -228,7 +228,7 @@ def test_limit_joints():
 
 
 def test_elderly():
-    from crossenbodiment.bodybuild import Elderly
+    from crossembodiment.bodybuild import Elderly
     rob, data, outs = new_dirs()
     for flags, kw in (((), {}), (("--restrict", "both", "--limit-hip-extension", "--label", "adult_elderly_both"),
                                  dict(restrict="both", limit_hip_extension=True, name="adult_elderly_both"))):
@@ -247,7 +247,7 @@ def test_elderly():
 
 def test_actuator_strength():
     import ast
-    from crossenbodiment.bodybuild import ActuatorStrength
+    from crossembodiment.bodybuild import ActuatorStrength
     import mujoco
     rob, _, _ = new_dirs()
     tree = ast.parse(old_source("scripts/strength_rollout.py"))
@@ -268,7 +268,7 @@ def test_actuator_strength():
 def test_stored_limited_leg():
     """the Task page's limited leg (assets/robots/adult_lockRleg_bent_lim) and its references (data/, read only) rebuilt exactly"""
     rob, data, _ = new_dirs()
-    from crossenbodiment.bodybuild import LimitJoints, LockJoints
+    from crossembodiment.bodybuild import LimitJoints, LockJoints
     import lock_joint_body as L
     lock = LockJoints("adult_lockRleg_bent", [(k, float(v)) for k, v in L.LOCK_DEG.items()], solref=0.005, robots_dir=rob)
     lock.build(log=lambda *_: None)
@@ -289,7 +289,7 @@ def test_stored_limited_leg():
 
 def test_retarget_functions():
     import mujoco
-    from crossenbodiment.bodybuild import retarget as R
+    from crossembodiment.bodybuild import retarget as R
     old = module_from(old_source("scripts/qpos_retarget.py"), "old_qpos_retarget", REPO / "scripts/qpos_retarget.py")
     m = mujoco.MjModel.from_xml_path(str(REPO / "assets/robots/child/robot.xml"))
     s = old.load_root_rest_height(REPO / "assets/robots/child/skeleton.json") / old.load_root_rest_height(REPO / "assets/robots/adult/skeleton.json")
@@ -306,8 +306,8 @@ def test_retarget_functions():
 # ------------------------------------------------------------------ 5. the pipeline: steps, skips, prune, registry
 
 def test_pipeline_steps_and_skips():
-    from crossenbodiment.bodybuild import BodyPipeline, BuildRoots, ScaledBody, registry_entry, register
-    from crossenbodiment.bodies import BodyRegistry, CONFIG
+    from crossembodiment.bodybuild import BodyPipeline, BuildRoots, ScaledBody, registry_entry, register
+    from crossembodiment.bodies import BodyRegistry, CONFIG
     roots = BuildRoots(WORK / "pipe")
     if roots.root.exists():
         shutil.rmtree(roots.root)

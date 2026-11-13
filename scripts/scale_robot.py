@@ -33,7 +33,7 @@ actuator strength as the adult) perform the motion" from actuator retuning.
 Joint armature/damping/stiffness are NOT touched here; they are inherited
 from robot.xml verbatim, so a generated body carries the adult's joint
 coefficients until something downstream rewrites them. That job belongs to
-the torque calibration (crossenbodiment/bodybuild/torque.py TorqueCalibrator, joint dynamics on), which sets all three from
+the torque calibration (crossembodiment/bodybuild/torque.py TorqueCalibrator, joint dynamics on), which sets all three from
 the measured isometric law (armature x Ir, damping x sqrt(k*Ir), stiffness x
 k) against the reference body.
 
@@ -50,7 +50,7 @@ inertia, recovered as M[dof,dof] - armature -- so whatever armature was
 written here cancels out, leaving the result invariant to about 1e-14
 relative (float rounding on the cancellation, verified).
 
-OOP refactor step 9: the code is crossenbodiment/bodybuild (shape.py: apply_scale / measure_min_z / ground_pelvis,
+OOP refactor step 9: the code is crossembodiment/bodybuild (shape.py: apply_scale / measure_min_z / ground_pelvis,
 beta.py: BETA_AXES / BODY_GROUPS / PRESETS, builders.py: ScaledBody, which writes parameter.json with the old keys plus
 name / kind / parent / builder / edit, and keeps an existing "split"); this file is its old CLI, same flags, same robot.xml.
 The whole pipeline for a new body (shape, skeleton, retargets, torque calibration) is scripts/build_body.py.
@@ -72,9 +72,9 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
-from crossenbodiment.bodybuild.beta import BETA_AXES, BODY_GROUPS, GROUP_OF_BODY, PRESETS  # noqa: E402,F401
-from crossenbodiment.bodybuild.builders import ScaledBody  # noqa: E402
-from crossenbodiment.bodybuild.shape import (_scale_floats, apply_scale, compute_joint_loads,  # noqa: E402,F401
+from crossembodiment.bodybuild.beta import BETA_AXES, BODY_GROUPS, GROUP_OF_BODY, PRESETS  # noqa: E402,F401
+from crossembodiment.bodybuild.builders import ScaledBody  # noqa: E402
+from crossembodiment.bodybuild.shape import (_scale_floats, apply_scale, compute_joint_loads,  # noqa: E402,F401
                                              measure_min_z)
 
 ROBOTS_DIR = REPO_ROOT / "assets" / "robots"
@@ -126,7 +126,7 @@ def main():
         return
 
     edit = dict(preset=args.preset, **({"overrides": over} if over else {})) if args.preset else dict(beta="axes")
-    print(f"scripts/scale_robot.py -> crossenbodiment.bodybuild.ScaledBody({label!r}, scale_actuators={not args.no_actuator_scale})")
+    print(f"scripts/scale_robot.py -> crossembodiment.bodybuild.ScaledBody({label!r}, scale_actuators={not args.no_actuator_scale})")
     generate(label, params, scale_actuators=not args.no_actuator_scale, edit=edit)
 
 

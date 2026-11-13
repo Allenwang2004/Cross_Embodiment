@@ -12,13 +12,13 @@ from scipy.stats import wilcoxon
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
 import eval_metrics as E                                                  # noqa: E402
-from crossenbodiment import metrics as M                                  # noqa: E402  (the legacy definitions, refactor step 3)
+from crossembodiment import metrics as M                                  # noqa: E402  (the legacy definitions, refactor step 3)
 SRC = REPO / "outputs/child_52"; CUR = REPO / "outputs/child_52_curves"; MZ = REPO / "outputs/child_52_mean_z"; ALGOS = [("es", "LOES (ours)", "#2a78d6"), ("cem", "CEM", "#eb6834"), ("random", "Random search", "#1baf7a")]
 KEYS = ("ratio", "fall_s", "success", "mpjpe", "mmpjpe", "mpjae"); G = (4, 8, 16, 32, 64); INK, MUTED, GRID, SURF = "#1f1e1c", "#6b6a64", "#e4e3de", "#fcfcfb"
 
 
 def full(body, q, qr, ratio):
-    """the legacy metrics: tracking_metrics + height_fall (fall_s) + root_success (1.5 m / 45 deg), crossenbodiment.metrics"""
+    """the legacy metrics: tracking_metrics + height_fall (fall_s) + root_success (1.5 m / 45 deg), crossembodiment.metrics"""
     T = min(len(q), len(qr))
     return dict(E.tracking_metrics(body, q, qr), ratio=ratio, fall_s=M.height_fall(q[:T], qr[:T]), success=float(M.root_success(q[:T], qr[:T])))
 

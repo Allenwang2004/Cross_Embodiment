@@ -1,7 +1,7 @@
 # Workflow
 
 The pipeline as it runs since the OOP refactor (2026-11-11): **search -> re-roll -> analyse -> tables and figures**. Every
-step is a script in `scripts/` over the package `crossenbodiment/` (module map and class list: [architecture.md](architecture.md)).
+step is a script in `scripts/` over the package `crossembodiment/` (module map and class list: [architecture.md](architecture.md)).
 Commands run from the repository root with `uv run python ...` on GPU 2 only:
 
 ```bash
@@ -15,7 +15,7 @@ The box is shared (503 GB, 64 cores): run `free -g` before launching, keep >= 50
 
 * **Latents** live on Motivo's sphere, |z| = 16; distances are Euclidean (two random latents are ~22.6 apart). `z0` is the task
   latent of a clip (`data/origin_z/<task>/<stem>.npy`, "origin_z" on disk); the method that keeps it is called *frozen*.
-* **Methods** have one name each in code and tables (`crossenbodiment/methods.py`): `loes` (ours, no anchor since 11/11),
+* **Methods** have one name each in code and tables (`crossembodiment/methods.py`): `loes` (ours, no anchor since 11/11),
   `loes_anchor`, `cem_phc` (BFM-Zero's CEM), `cem_ours`, `random`, `cmaes` (single latent); `lso`, `lsor_w005`, `lsor_bfm`,
   `lsor_ours`, `ta`, `native` (latent sequence). Run folders keep their old keys (`<stem>_es_s0`, `_cem_s0`, `_lsor_s0`, ...):
   the same key means different methods in different experiments, so look it up with `methods.method_of(experiment, key)`.
@@ -25,7 +25,7 @@ The box is shared (503 GB, 64 cores): run `free -g` before launching, keep >= 50
   body: pass it explicitly (`obs.registry_scale(body, clip)`).
 * **Progress**: a single-latent search runs *generations* of 2 x pairs = 16 rollouts; a latent-sequence search runs
   *iterations* of n = 16 sequences (+ the mean). Budgets are quoted in rollouts (64 generations = 1,024 rollouts).
-* **Metrics** (Task page; `crossenbodiment/metrics.py`, `eval_metrics.py`): every rollout q[t] against the reference
+* **Metrics** (Task page; `crossembodiment/metrics.py`, `eval_metrics.py`): every rollout q[t] against the reference
   ref[t + 1], on the body itself. Fall Time (s, non-foot contact while the reference has none), PHC success (world-frame mean
   body error never above 0.5 m adult-equivalent), MPJPE / MMPJPE (cm), MPJAE = per-joint acceleration error (m/s^2), drift
   (mean pelvis x, y distance). Older results (per_run.npz of child_52_*) also carry the legacy root success / height fall.
@@ -50,7 +50,7 @@ The box is shared (503 GB, 64 cores): run `free -g` before launching, keep >= 50
 Each run writes one folder (`--out`): `summary.json` last (the done marker), `curve.csv` (one row per generation / iteration),
 `best_z.npy`, `best.npz` / `origin_z.npz` (the best and z0's rollouts), `z_trace.npz` (single latent) or `mu_trace.npz` +
 `rollouts.npz` (sequences: `q_ER8` = native, `q_best_it<k>` / `q_mean_it<k>` at the `--budgets`). The settings each method uses on
-the Task page are `METHODS[...].flags` + `COMMON` in `crossenbodiment/methods.py`; the drivers below print the exact lines.
+the Task page are `METHODS[...].flags` + `COMMON` in `crossembodiment/methods.py`; the drivers below print the exact lines.
 
 Experiments are grids of runs, one driver each:
 
@@ -81,7 +81,7 @@ is also in your own waiting command).
 
 The analyses score the latents a search found, rolled out again with the search's own cost:
 
-* `<driver> prepare` -> `rollouts/<stem>[_<key>]/z.npy` + `index.json` (schema 2, `crossenbodiment/reroll.py`): each run's best
+* `<driver> prepare` -> `rollouts/<stem>[_<key>]/z.npy` + `index.json` (schema 2, `crossembodiment/reroll.py`): each run's best
   latent so far per generation (or at the budgets) and its centre (the mean z) at the budgets, each distinct latent once.
 * `<driver> evalcmds` -> one `--eval-z <dir>/z.npy --eval-save-qpos` line per folder, run with
   `run_queue.py ... --done-file eval_qpos.npz` (latents padded with z0 to full batches; writes eval.csv, eval_base.json, eval_qpos.npz).
@@ -92,7 +92,7 @@ The analyses score the latents a search found, rolled out again with the search'
 `<driver> analyse` reads the runs and re-rolls (under `$CE_OUTPUTS_ROOT`, default outputs/), checks them (settings as intended,
 re-rolls reproduce each search's best cost so far and its saved best rollout, z0 / native rollouts identical across runs) and
 writes `per_run.npz` / `results.json` / `means.json` / `README.md` (under `$CE_RESULTS_ROOT`, default the same folder) through
-`crossenbodiment/results.py` (`ResultsTable`: means over motions and seeds per budget, paired Wilcoxon tests per motion).
+`crossembodiment/results.py` (`ResultsTable`: means over motions and seeds per budget, paired Wilcoxon tests per motion).
 
 ## 5. Tables and figures
 
@@ -106,7 +106,7 @@ writes `per_run.npz` / `results.json` / `means.json` / `README.md` (under `$CE_R
 | side-by-side and overlay videos | `render_panels.py <spec.json>`, `body_overlay.py`, `robot_overlay.py`, `lso_videos.py` |
 | the user survey | `survey_body_videos.py`, `survey_robot_videos.py`, `package_survey.py`, `package_survey_picks.py`, `package_amass_lso_survey.py` |
 
-Colours and labels come from `crossenbodiment/palette.py` (where scripts still disagree, each keeps its own: `DISAGREEMENTS`),
+Colours and labels come from `crossembodiment/palette.py` (where scripts still disagree, each keeps its own: `DISAGREEMENTS`),
 styles from `figstyle.py`; figures go to docs/figures (`$CE_FIGURES_ROOT` to write elsewhere).
 
 ## 6. Checks

@@ -24,20 +24,20 @@ from pathlib import Path
 import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
-from crossenbodiment.bodies import BODIES
-from crossenbodiment.paths import AMASS_LOCOMOTION_5S, CHILD_XML_REL, read_clips
-from crossenbodiment.metrics import MetricSuite, metric_body, world_positions
-from crossenbodiment import paths
-from crossenbodiment.experiment import ClipSet, Experiment, workers
-from crossenbodiment.methods import experiment_keys
-from crossenbodiment.results import ReportWriter, ResultsTable, write_json
+from crossembodiment.bodies import BODIES
+from crossembodiment.paths import AMASS_LOCOMOTION_5S, CHILD_XML_REL, read_clips
+from crossembodiment.metrics import MetricSuite, metric_body, world_positions
+from crossembodiment import paths
+from crossembodiment.experiment import ClipSet, Experiment, workers
+from crossembodiment.methods import experiment_keys
+from crossembodiment.results import ReportWriter, ResultsTable, write_json
 # refactor step 8: runs are read under paths.outputs_root() ($CE_OUTPUTS_ROOT), results written under paths.results_root()
 # ($CE_RESULTS_ROOT); both REPO/outputs by default
 OUT = paths.output("amass_baselines"); RES = paths.result("amass_baselines"); CLIPS = read_clips(AMASS_LOCOMOTION_5S)   # = outputs/amass_baselines/clips.txt (refactor step 4)
 BODY = dict(child=dict(ref="amass_data/amass_retargeting_motion/ACCAD/{c}.npz", iters=64, G=(4, 8, 16, 32, 64), xml=CHILD_XML_REL),
             tall=dict(label="len1.4_wid0.8", ref="data/len1.4_wid0.8/amass_retargeting_motion/ACCAD/{c}.npz", iters=64, G=(4, 8, 16, 32, 64),
                       xml="assets/robots_torque/len1.4_wid0.8/robot_torque_full.xml"))
-# the run-directory keys (crossenbodiment/methods.py RUNS "outputs/amass_baselines/<body>"; also results.json's keys): LSOR here is the
+# the run-directory keys (crossembodiment/methods.py RUNS "outputs/amass_baselines/<body>"; also results.json's keys): LSOR here is the
 # 0.05 heading / 0.005 position variant (lsor_w005) under the key "lsor"
 K = experiment_keys("outputs/amass_baselines/<body>"); LSO, LSOR, TA = K["lso"], K["lsor_w005"], K["ta"]
 METHODS = {LSO: "", LSOR: "--rank --heading-weight 0.05 --pos-weight 0.005", TA: "--method ta --objective phc"}
@@ -58,7 +58,7 @@ q_ER8 identical in a clip's three runs; the TA runs (PHC objective): PHC reward 
 q_ER8 against the earlier run's (outputs/amass_baselines).
   analyse --set bfm [--bodies child] [--suffix _child]  -> outputs/amass_baselines_bfm/{results.json, README.md}"""
 # run sets other than the default (outputs/amass_baselines, 16 x 64); use() switches OUT (RES, EXP), N and every body's iters and G.
-# The bfm runs use the same run-directory keys as outputs/amass_baselines/<body> (K above); they are not in crossenbodiment/methods.py
+# The bfm runs use the same run-directory keys as outputs/amass_baselines/<body> (K above); they are not in crossembodiment/methods.py
 # RUNS, whose sequence settings are the 16-rollout ones (COMMON n = 16)
 SETS = dict(bfm=dict(out="outputs/amass_baselines_bfm", n=128, iters=24, G=(1, 2, 4, 8, 16, 24)))
 SET, N = None, 16
@@ -77,7 +77,7 @@ def use(name):
 
 def scale(b, c):
     """the body's root scale s for clip c: ExactObs's child default, or single_z_search.py's rule (median ref / adult root x, y)
-    against amass_data/amass_origin_motion/ACCAD/<c>.npz -- crossenbodiment/bodies.py BodyRegistry.scale (the same expression)"""
+    against amass_data/amass_origin_motion/ACCAD/<c>.npz -- crossembodiment/bodies.py BodyRegistry.scale (the same expression)"""
     assert BODIES.reference(BODY[b].get("label", b), c, amass=True) == BODY[b]["ref"].format(c=c)
     return BODIES.scale(BODY[b].get("label", b), c, amass=True)
 
@@ -104,7 +104,7 @@ def one(job):
     body, s = _ctx["body"], scale(b, c); m, d = body.m, body.d
     ref = np.load(REPO / B["ref"].format(c=c))["qpos"].astype(np.float64)[1:]
     Pr = world_positions(m, d, ref); _, Dr = body.part_floor(ref)
-    # [mpjpe, mmpjpe, mpjae, fall_s, success (PHC, 0.5 m x s), drift (adult-equivalent m)] per rollout (crossenbodiment.metrics)
+    # [mpjpe, mmpjpe, mpjae, fall_s, success (PHC, 0.5 m x s), drift (adult-equivalent m)] per rollout (crossembodiment.metrics)
     suite = MetricSuite(body, ("mpjpe", "mmpjpe", "mpjae", "fall_s", "success", "drift"), s, drift_unit="adult").reference(ref, Pr, Dr)
     if SET is not None:                                      # PHC reward exactly as phc_reward_tables.py: its reward_fn on the full reference
         from phc_reward_tables import reward_fn

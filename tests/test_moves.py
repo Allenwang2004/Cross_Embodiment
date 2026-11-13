@@ -3,14 +3,14 @@
 Every moved helper is run against its own source at BASE (68c95f4, the commit before step 4: `git show`, the function's
 definition extracted with ast and executed in a namespace of its own) on fixed inputs, and must give the same result (==,
 np.array_equal, dtypes included):
-  compute_batch_cost / _phys_weight_table / ESConfig  -> crossenbodiment.align_cost (AlignCostConfig); model/simple re-exports
-  child_52_means.full / hand_fall / KEYS              -> crossenbodiment.metrics legacy_metrics / body_hand_fall / LEGACY_KEYS
-  mse_vs_align_test.metrics                           -> crossenbodiment.metrics.pose_similarity
-  bfm_velocity_check.resample                         -> crossenbodiment.retiming.resample
-  g1_z0_rollout.act / motion / g1_up_z                -> crossenbodiment.robot_rollout
-  rollout_z_trace.label, g1_axes_demo px / font / cam / project / label / hcat -> crossenbodiment.draw
-  survey_body_videos CLIPS / BODY / ADULT(_H) / SUFFIXES / run_of / colours   -> crossenbodiment.survey, palette, configs
-  multibody_corr's layout                             -> crossenbodiment.multibody_study
+  compute_batch_cost / _phys_weight_table / ESConfig  -> crossembodiment.align_cost (AlignCostConfig); model/simple re-exports
+  child_52_means.full / hand_fall / KEYS              -> crossembodiment.metrics legacy_metrics / body_hand_fall / LEGACY_KEYS
+  mse_vs_align_test.metrics                           -> crossembodiment.metrics.pose_similarity
+  bfm_velocity_check.resample                         -> crossembodiment.retiming.resample
+  g1_z0_rollout.act / motion / g1_up_z                -> crossembodiment.robot_rollout
+  rollout_z_trace.label, g1_axes_demo px / font / cam / project / label / hcat -> crossembodiment.draw
+  survey_body_videos CLIPS / BODY / ADULT(_H) / SUFFIXES / run_of / colours   -> crossembodiment.survey, palette, configs
+  multibody_corr's layout                             -> crossembodiment.multibody_study
   the clip lists                                      -> configs/clips/*.txt, byte-identical to the main tree's files
 Inputs: tests/golden/inputs/metrics_rollouts.npz (frozen saved rollouts), fixed random arrays. Existing runs and the main tree are
 READ ONLY (MAIN, as in tests/test_registry.py).
@@ -38,7 +38,7 @@ import mujoco  # noqa: E402
 import numpy as np  # noqa: E402
 
 BASE = "68c95f4"                                              # the commit before step 4
-MAIN = Path(os.environ.get("CROSSENBODIMENT_MAIN", "/home/allen19/crossenbodiment"))   # the main tree (read only)
+MAIN = Path(os.environ.get("CROSSENBODIMENT_MAIN", "/home/allen19/crossembodiment"))   # the main tree (read only)
 INP = REPO / "tests/golden/inputs"
 WORK = REPO / "outputs/refactor_tests/test_moves"
 RNG = lambda k=0: np.random.default_rng(20261113 + k)        # noqa: E731
@@ -105,7 +105,7 @@ def child_cases():
 # ------------------------------------------------------------------ 1. compute_batch_cost, AlignCostConfig
 
 def test_align_cost_config_defaults():
-    from crossenbodiment.align_cost import AlignCostConfig
+    from crossembodiment.align_cost import AlignCostConfig
     import dataclasses
     es = old_module("model/simple/config.py", "old_config").ESConfig(device="cpu"); new = AlignCostConfig()
     for f in dataclasses.fields(new):
@@ -120,7 +120,7 @@ def test_align_cost_config_defaults():
 
 
 def test_compute_batch_cost():
-    from crossenbodiment import align_cost as A
+    from crossembodiment import align_cost as A
     from model import losses
     old = old_defs("model/simple/train.py", ["_phys_weight_table", "compute_batch_cost"], {"np": np, "losses": losses})
     fk = mujoco.MjModel.from_xml_path(str(REPO / "assets/robots_torque/child/robot_torque_full.xml"))
@@ -148,7 +148,7 @@ def test_compute_batch_cost():
 
 
 def test_model_simple_reexports():
-    from crossenbodiment import align_cost as A
+    from crossembodiment import align_cost as A
     import model.simple.train as T
     assert T.compute_batch_cost is A.compute_batch_cost and T._phys_weight_table is A._phys_weight_table
 
@@ -157,7 +157,7 @@ def test_model_simple_reexports():
 
 def test_legacy_metrics():
     import eval_metrics as E
-    from crossenbodiment import metrics as M
+    from crossembodiment import metrics as M
     old = old_module("scripts/child_52_means.py", "old_child_52_means")
     assert M.LEGACY_KEYS == old.KEYS
     body = E.Body(E.XML["child"], True)
@@ -171,7 +171,7 @@ def test_legacy_metrics():
 # ------------------------------------------------------------------ 5. pose_similarity, resample, robot_rollout, draw
 
 def test_pose_similarity():
-    from crossenbodiment.metrics import pose_similarity
+    from crossembodiment.metrics import pose_similarity
     from model import losses, kinematics as kin
     old = old_defs("scripts/mse_vs_align_test.py", ["metrics"], {"np": np})
     fk = mujoco.MjModel.from_xml_path(str(REPO / "assets/robots_torque/child/robot_torque_full.xml"))
@@ -180,7 +180,7 @@ def test_pose_similarity():
 
 
 def test_resample():
-    from crossenbodiment.retiming import resample
+    from crossembodiment.retiming import resample
     from scipy.spatial.transform import Rotation, Slerp
     old = old_defs("scripts/bfm_velocity_check.py", ["resample"], {"np": np, "Rotation": Rotation, "Slerp": Slerp})
     for k, q, ref in child_cases():
@@ -190,7 +190,7 @@ def test_resample():
 
 def test_robot_rollout():
     import torch
-    from crossenbodiment import robot_rollout as RR
+    from crossembodiment import robot_rollout as RR
     old = old_defs("scripts/g1_z0_rollout.py", ["act", "g1_up_z", "motion"], {"np": np, "torch": torch})
     R = rollouts()
     ref = R["ref__g1__move-ego-0-2_1"].astype(np.float64)
@@ -212,7 +212,7 @@ def test_robot_rollout():
 
 def test_draw_frame_label():
     from PIL import Image, ImageDraw
-    from crossenbodiment.draw import frame_label
+    from crossembodiment.draw import frame_label
     old = old_defs("scripts/rollout_z_trace.py", ["label"], {"np": np, "Image": Image, "ImageDraw": ImageDraw})
     frame = (RNG(4).random((120, 160, 3)) * 255).astype(np.uint8)
     for text, sub in (("gen 4", None), ("gen -1 (z0)", "cost 0.31"), ("", "")):
@@ -221,7 +221,7 @@ def test_draw_frame_label():
 
 def test_draw_panels():
     from PIL import Image, ImageDraw, ImageFont
-    from crossenbodiment import draw as D
+    from crossembodiment import draw as D
     old = old_defs("scripts/g1_axes_demo.py", ["FONT", "S", "K", "px", "cam", "font", "project", "label", "hcat"],
                    {"np": np, "mujoco": mujoco, "Path": Path, "Image": Image, "ImageDraw": ImageDraw, "ImageFont": ImageFont})
     assert (D.FONT, D.S, D.K) == (old["FONT"], old["S"], old["K"])
@@ -251,7 +251,7 @@ def test_draw_panels():
 # ------------------------------------------------------------------ 3. survey data, palette
 
 def test_survey_data():
-    from crossenbodiment import palette, survey
+    from crossembodiment import palette, survey
     old = old_module("scripts/survey_body_videos.py", "old_survey_body_videos")
     assert same(survey.CLIPS, old.CLIPS) and same(survey.ADULT, old.ADULT) and same(survey.ADULT_H, old.ADULT_H)
     assert same(survey.SUFFIXES, old.SUFFIXES)
@@ -264,7 +264,7 @@ def test_survey_data():
 
 
 def test_survey_run_of():
-    from crossenbodiment import survey
+    from crossembodiment import survey
     old = old_module("scripts/survey_body_videos.py", "old_survey_body_videos")
     root = WORK / "survey_root"
     if root.exists():
@@ -291,7 +291,7 @@ def test_survey_run_of():
 # ------------------------------------------------------------------ 5. multibody_corr's layout
 
 def test_multibody_study():
-    from crossenbodiment import multibody_study as MB
+    from crossembodiment import multibody_study as MB
     old = old_module("scripts/multibody_corr.py", "old_multibody_corr")
     for k in ("OUT", "LOG", "ADULT", "GRID", "AXIS", "NAMED", "GROUPS", "BODIES", "BETA_KEYS", "SEEDS", "GENS", "PAIRS", "N_RANDOM",
               "E_TEST", "E_ARMS", "E_K"):
@@ -308,7 +308,7 @@ def test_multibody_study():
 # ------------------------------------------------------------------ 6. clip lists
 
 def test_clip_lists():
-    from crossenbodiment import paths
+    from crossembodiment import paths
     for name, rel in ((paths.CHILD_52_TASK, "outputs/child_52/clips.txt"), (paths.AMASS_LOCOMOTION_5S, "outputs/amass_baselines/clips.txt")):
         mine, main = REPO / paths.clips_file(name), MAIN / rel
         if not main.exists():

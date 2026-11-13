@@ -32,7 +32,7 @@ them the generalization question is about beta, and holding out tasks as well
 would cost a tenth of the data to answer a question about the frozen actor's
 own coverage rather than about the adapter.
 
-Two things this fixes about the old datasets/crossenbodiment-1-datasets
+Two things this fixes about the old datasets/crossembodiment-1-datasets
 -----------------------------------------------------------------------
 1. ONE body. Every one of its 1530 rows is `child`, so beta was a constant and
    the LatentAdapter had nothing to condition on. This builds the full cross
@@ -64,7 +64,7 @@ by the target body. That is what model/simple/train_zmap.py regresses.
 
 Usage (from project root):
     uv run scripts/build_dataset.py
-    uv run scripts/build_dataset.py --name crossenbodiment-10bodies
+    uv run scripts/build_dataset.py --name crossembodiment-10bodies
     uv run scripts/build_dataset.py --bodies teen petite giant
 """
 
@@ -158,7 +158,7 @@ def check_body(data_dir: Path, body: str, clips, require_infer_z: bool = True) -
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--name", default="crossenbodiment-10bodies",
+    ap.add_argument("--name", default="crossembodiment-10bodies",
                     help="directory name under datasets/")
     ap.add_argument("--bodies", nargs="*", default=None,
                     help="explicit body list (default: every body under "

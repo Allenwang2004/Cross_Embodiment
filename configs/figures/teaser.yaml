@@ -2,7 +2,7 @@
 #   scripts/export_blender_package.py   the Blender panels teaser_* and teaser_band(_grey) -> outputs/blender_package
 #   scripts/plot_teaser.py              the MuJoCo cut-outs (render) and the figure (draw): panels, frames, units_per_m
 #   scripts/teaser_band_tall.py         the band with H1 replaced by the tall body (band_tall)
-# Paths are repository-relative ("outputs/..." read through crossenbodiment.paths.read_path); {walk2} / {walk4} are the clips below.
+# Paths are repository-relative ("outputs/..." read through crossembodiment.paths.read_path); {walk2} / {walk4} are the clips below.
 # Rollouts are the survey's recorded ones (outputs/user_survey), nothing is re-simulated.
 walk2: move-ego-0-2_2
 walk4: move-ego-0-2_4            # the payload walks move-ego-0-2_4 (its 0-2_2 search never got the walk right): same task, other clip
@@ -17,7 +17,7 @@ models:
   heavy_arm: outputs/user_survey/models/heavy_arm.xml
   g1: outputs/user_survey/models/g1/scene.xml
   h1: assets/robots/h1/scene.xml
-# the source frame (the adult's walk) and the four condition frames; colour: crossenbodiment.palette.CONDITIONS[key]
+# the source frame (the adult's walk) and the four condition frames; colour: crossembodiment.palette.CONDITIONS[key]
 origin:
   model: adult
   qpos: outputs/user_survey/child/trajectories/{walk2}/reference_adult.npz

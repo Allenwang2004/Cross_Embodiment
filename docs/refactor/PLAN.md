@@ -1,12 +1,12 @@
-# OOP refactor of crossenbodiment: plan and rules (2026-11-11)
+# OOP refactor of crossembodiment: plan and rules (2026-11-11)
 
-Branch `refactor/oop` in the worktree `/home/allen19/crossenbodiment-refactor`, started from `refactor/base` (a snapshot of the
+Branch `refactor/oop` in the worktree `/home/allen19/crossembodiment-refactor`, started from `refactor/base` (a snapshot of the
 whole working tree of `feat/multibody`). The user approved the plan and asked for it to run in the background, one commit per
 step, reporting after each step and stopping only when a check fails or a decision is theirs.
 
 ## Hard rules (every step)
 
-1. **Never touch `/home/allen19/crossenbodiment`** (the main tree): experiments are running there on the old code. In the worktree,
+1. **Never touch `/home/allen19/crossembodiment`** (the main tree): experiments are running there on the old code. In the worktree,
    `data`, `amass_data`, `.venv`, `assets/robots/menagerie`, `assets/robots/limx_humanoid` and `outputs/{g1,map_error,child_52,user_survey}`
    are symlinks into the main tree: READ ONLY. Write only inside the worktree (`outputs/refactor_golden/`, `outputs/refactor_*`).
 2. **Bit-identical behaviour.** The project relies on exact re-rolls (a 1e-15 change moved a G1 single-rollout cost by 28%). After every
@@ -39,7 +39,7 @@ step, reporting after each step and stopping only when a check fails or a decisi
 |---|---|---|---|
 | 0 | Golden harness `tests/golden/` (commands, baseline outputs from the snapshot code, comparator) | baseline exists; re-running the snapshot code reproduces it (determinism check) | done, e014fb1 |
 | 1 | Archive unused files to `archive/` (see list below) | every remaining script imports (`python -c "import ast"` + import smoke test of modules); golden identical | done, 35f0bcb |
-| 2 | Package skeleton `crossenbodiment/` (paths.py with REPO from `__file__`), `BodySpec`/`BodyRegistry` (+ s computed once), `RobotSpec`, `MethodSpec` registry; replace literal paths/scales in live code | registry reproduces every s/path used by existing results (assert table); golden identical | done, 01e511e |
+| 2 | Package skeleton `crossembodiment/` (paths.py with REPO from `__file__`), `BodySpec`/`BodyRegistry` (+ s computed once), `RobotSpec`, `MethodSpec` registry; replace literal paths/scales in live code | registry reproduces every s/path used by existing results (assert table); golden identical | done, 01e511e |
 | 3 | Pure-function consolidation: geometry (heading x6, robot yaw, lowest point x5, quaternion), `project_z` x13, metrics (`world/xpos` x9, `stats` x8) into `eval/metrics.py` + `MetricSuite` with named definitions (legacy root-success/height-fall vs PHC-success/contact-fall) | golden metrics file (Task-page metrics of fixed saved rollouts) identical; golden runs identical | done, 68c95f4 |
 | 4 | Pull library code out of scripts: `compute_batch_cost` out of `model/simple`, `child_52_means.full/KEYS/hand_fall`, `survey_body_videos` CLIPS/BODY/colours, `g1_z0_rollout.act/motion`, `bfm_velocity_check.resample`, `rollout_z_trace.label`, `mse_vs_align_test.metrics` | imports; golden identical | done, 37ed139 |
 | 5 | Simulation layer: `MotivoPolicy`, `ObsMapper` (Raw/Multiplier/Exact; scale explicit from BodySpec), `Simulator` (Humenv/Robot) + `BatchRollout` | golden identical (highest risk: batch composition) | done, fa6c5f9 |
@@ -106,7 +106,7 @@ CLI `main`s. Lists (strobe picks, clip lists, bodies) are YAML data, not classes
 ## Step 11 (naming): what was renamed, what was not
 
 The canonical names and their old spellings are tabled in docs/architecture.md ("Names"). Renamed in the code only, with read-only
-aliases where anything outside the module used the old name: method keys (crossenbodiment/methods.py `run_key`, `key_in`,
+aliases where anything outside the module used the old name: method keys (crossembodiment/methods.py `run_key`, `key_in`,
 `experiment_keys`, `canonical`; the experiment drivers take their run keys from the registry), palette keys (frozen, cem_phc,
 cem_ours, lsor_w005; OLD_KEYS), the root scale (`scale` on BodySpec, ExactObs, RobotMap, MetricSuite, Position; problems'
 `pos_scale`), RobotMap / RobotEnv's G1-era attributes (OLD_NAMES), z0's on-disk names behind paths constants (Z0_ROLLOUT, Z0_KEY,
@@ -123,7 +123,7 @@ task_z0). Deliberately left as they were:
 
 ## Decisions left to the user
 
-1. **Palette disagreements** (step 10, crossenbodiment/palette.py DISAGREEMENTS; every script keeps its own colours until decided):
+1. **Palette disagreements** (step 10, crossembodiment/palette.py DISAGREEMENTS; every script keeps its own colours until decided):
    CEM green #1baf7a vs orange #eb6834 in plot_algo_compare.py (step 11 found that this one is CEM with OUR cost, cem_ours, a
    different method from BFM-Zero's cem_phc: it may keep a colour of its own); random search orange (plot_child_convergence) vs
    green (plot_algo_compare); z0 grey #8c8b87 (plots, top views) vs orange (plot_k_scale_bars) vs red (every video); two LOES video

@@ -29,7 +29,7 @@ locked: every actuator still acts), plus a reference walk for it.
             and ground-corrected like the other retargets. Bands come from the steady walk (after the clip's opening
             squat); the opening frames are clipped into them.
   also      outputs/elderly/<label>_young_slow.npz: the slowed walk on the unchanged adult (for side-by-side videos).
-OOP refactor step 9: the code is crossenbodiment/bodybuild/elderly.py (Elderly: plan, the body, reference;
+OOP refactor step 9: the code is crossembodiment/bodybuild/elderly.py (Elderly: plan, the body, reference;
 scripts/build_body.py elderly); this file keeps its flags, and its robot.xml, reference and elderly.json are byte-identical.
 usage: uv run python scripts/elderly_body.py --clip move-ego-0-2/move-ego-0-2_4 [--stoop 40 --slow 2]
 """
@@ -39,9 +39,9 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
-from crossenbodiment.bodybuild.elderly import (ARM, HEAD, MARGIN, OPENING, SPINE, SPINE_BAND, SPINE_SPLIT,  # noqa: E402,F401
+from crossembodiment.bodybuild.elderly import (ARM, HEAD, MARGIN, OPENING, SPINE, SPINE_BAND, SPINE_SPLIT,  # noqa: E402,F401
                                                TRUNK, Elderly, Kin, slerp, slow_down)
-from crossenbodiment.bodybuild.skeleton import dump_skeleton  # noqa: E402
+from crossembodiment.bodybuild.skeleton import dump_skeleton  # noqa: E402
 
 
 def main():
@@ -59,7 +59,7 @@ def main():
                     help="what carries the band: the joint range, the actuator's ctrlrange (commandable target angles), "
                          "or both")
     a = ap.parse_args()
-    print(f"scripts/elderly_body.py -> crossenbodiment.bodybuild.Elderly({a.clip!r}, name={a.label!r}, stoop={a.stoop:g}, "
+    print(f"scripts/elderly_body.py -> crossembodiment.bodybuild.Elderly({a.clip!r}, name={a.label!r}, stoop={a.stoop:g}, "
           f"slow={a.slow:g}, restrict={a.restrict!r})")
     body = Elderly(a.clip, name=a.label, stoop=a.stoop, slow=a.slow, solref=a.solref, spine_band=a.spine_band,
                    limit_hip_extension=a.limit_hip_extension, restrict=a.restrict)

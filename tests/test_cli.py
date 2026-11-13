@@ -6,8 +6,8 @@ parser is the script's build_parser(). Every action must agree: option strings, 
 for a lambda the same code), choices, nargs, required, help, const, the action's class; and so must the parser's
 description / prog settings that argparse prints. Also checked: the names other scripts import from these modules
 (single_z_search.rollout / device_arg / project_z / rank_normalize / ang_pair / OBJECTIVES, lso_search.colored_noise,
-robot_z_search.dtw_align) still resolve, and colored_noise / dtw_align are the package's (crossenbodiment.optim /
-crossenbodiment.costs) with the old source's results on fixed inputs.
+robot_z_search.dtw_align) still resolve, and colored_noise / dtw_align are the package's (crossembodiment.optim /
+crossembodiment.costs) with the old source's results on fixed inputs.
 
 Flags added in the main tree after the refactor and ported (ADDED): the expected parser is BASE's source with the main tree's
 add_argument lines inserted verbatim where the main tree has them. So far one: single_z_search.py --exact-clearance-vel (main tree
@@ -34,7 +34,7 @@ import numpy as np  # noqa: E402
 
 BASE = "fa6c5f9"                                              # the commit before step 6
 SCRIPTS = ("single_z_search", "robot_z_search", "lso_search", "robot_lso_search")
-MAIN_TREE = Path("/home/allen19/crossenbodiment")             # the main tree (feat/multibody): read only
+MAIN_TREE = Path("/home/allen19/crossembodiment")             # the main tree (feat/multibody): read only
 # script -> [(the BASE line after which the main tree added flags, the added lines verbatim)]
 ADDED = {"single_z_search": [(
     '    p.add_argument("--obs-scale-ref", default="assets/robots/adult/robot.xml")\n',
@@ -141,7 +141,7 @@ def test_reexports():
     import lso_search as ls
     import robot_z_search as rz
     import robot_lso_search as rl  # noqa: F401
-    from crossenbodiment import costs, geometry, optim, problems
+    from crossembodiment import costs, geometry, optim, problems
     for n in ("rollout", "device_arg", "project_z", "rank_normalize", "ang_pair", "smpl_heading", "OBJECTIVES"):
         assert hasattr(sz, n), f"single_z_search.{n} missing"
     assert sz.OBJECTIVES is problems.OBJECTIVES and sz.project_z is geometry.project_z
@@ -152,7 +152,7 @@ def test_reexports():
 def test_colored_noise_and_dtw_align_old_source():
     """the moved pure functions against their BASE source (lso_search.colored_noise, robot_z_search.dtw_align)"""
     import ast
-    from crossenbodiment import costs, optim
+    from crossembodiment import costs, optim
     for rel, fn, new in (("scripts/lso_search.py", "colored_noise", optim.colored_noise),
                          ("scripts/robot_z_search.py", "dtw_align", costs.dtw_align)):
         tree = ast.parse(old_source(rel))

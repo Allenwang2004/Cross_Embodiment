@@ -18,18 +18,18 @@ outputs/g1/lso/<clip>_it<n>_rank) as user-survey entries, in the format of outpu
 The rollouts hold the states after each of the clip's T-1 control steps; the start state (the reference's frame 0 --
 on the G1, frame 0 mapped onto it -- at rest) is put in front so every trajectory has the reference's T frames. Runs without a summary.json
 (still running) are skipped; packaged clips are skipped unless --force.
-OOP refactor step 10: colours crossenbodiment.palette, cameras crossenbodiment.camera, the clip folder crossenbodiment.clips.ClipBundle;
-runs are read through crossenbodiment.paths.read_path ($CE_OUTPUTS_ROOT), the survey folder written under $CE_RESULTS_ROOT.
+OOP refactor step 10: colours crossembodiment.palette, cameras crossembodiment.camera, the clip folder crossembodiment.clips.ClipBundle;
+runs are read through crossembodiment.paths.read_path ($CE_OUTPUTS_ROOT), the survey folder written under $CE_RESULTS_ROOT.
 usage: uv run python scripts/package_amass_lso_survey.py [clip ...] [--body child|g1] [--force]"""
 import argparse, glob, json, os, shutil, subprocess, sys, tempfile
 from pathlib import Path
 import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO))
-from crossenbodiment import paths                                         # noqa: E402
-from crossenbodiment.camera import BODY_OVERLAY_DEFAULT, robot_overlay, survey_track   # noqa: E402
-from crossenbodiment.clips import ClipBundle                              # noqa: E402
-from crossenbodiment.palette import BLUE, GHOST, GREY, RED                # noqa: E402
+from crossembodiment import paths                                         # noqa: E402
+from crossembodiment.camera import BODY_OVERLAY_DEFAULT, robot_overlay, survey_track   # noqa: E402
+from crossembodiment.clips import ClipBundle                              # noqa: E402
+from crossembodiment.palette import BLUE, GHOST, GREY, RED                # noqa: E402
 TOP = paths.write_path("outputs/user_survey")
 CLIPS = ["Male2MartialArtsStances__D9_-_warm_up_to_ready_to_warm_up", "Male2MartialArtsExtended__Extended_1",
          "Male2MartialArtsExtended__Form_1", "Male2General__A12-_Crawl_Backwards", "Male2MartialArtsStances__D9_-_victory_1",

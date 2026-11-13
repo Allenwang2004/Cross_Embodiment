@@ -3,7 +3,7 @@
 scene.json holds, per panel and pose, every visible geom's world pose, shape and colour; meshes.npz the robot's meshes; render_blender.py (scripts/render_blender.py) builds and renders them. Rollouts are the same recorded ones as scripts/plot_teaser.py and scripts/plot_method_figure.py use; run this again when they change.
 The results go in docs/figures/blender_renders/<panel>.png; those two scripts then draw them instead of the MuJoCo cut-outs.
 Which rollouts, frames and panel sizes: configs/figures/teaser.yaml and method.yaml (OOP refactor step 10); the pose export and the
-scene: crossenbodiment/blender.py (BlenderScene). Inputs are read through crossenbodiment.paths.read_path ($CE_OUTPUTS_ROOT), the
+scene: crossembodiment/blender.py (BlenderScene). Inputs are read through crossembodiment.paths.read_path ($CE_OUTPUTS_ROOT), the
 package is written under $CE_RESULTS_ROOT (default: outputs/).
 usage: uv run python scripts/export_blender_package.py"""
 import shutil, sys
@@ -12,9 +12,9 @@ import numpy as np
 import yaml
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO))
-from crossenbodiment import paths                                         # noqa: E402
-from crossenbodiment.blender import BlenderScene, panel                   # noqa: E402
-from crossenbodiment.camera import BLENDER_AZIMUTH                        # noqa: E402
+from crossembodiment import paths                                         # noqa: E402
+from crossembodiment.blender import BlenderScene, panel                   # noqa: E402
+from crossembodiment.camera import BLENDER_AZIMUTH                        # noqa: E402
 
 TEASER = yaml.safe_load((paths.FIGURE_CONFIGS / "teaser.yaml").read_text())
 METHOD = yaml.safe_load((paths.FIGURE_CONFIGS / "method.yaml").read_text())

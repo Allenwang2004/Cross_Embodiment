@@ -19,12 +19,12 @@ from pathlib import Path
 import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
-from crossenbodiment.bodies import BODIES
-from crossenbodiment.paths import CHILD_XML_REL
-from crossenbodiment.metrics import contact_fall_time, mean_body_error, metric_body, phc_success, world_positions
-from crossenbodiment import paths
-from crossenbodiment.experiment import Experiment, workers
-from crossenbodiment.results import Checks, save_npz, write_json
+from crossembodiment.bodies import BODIES
+from crossembodiment.paths import CHILD_XML_REL
+from crossembodiment.metrics import contact_fall_time, mean_body_error, metric_body, phc_success, world_positions
+from crossembodiment import paths
+from crossembodiment.experiment import Experiment, workers
+from crossembodiment.results import Checks, save_npz, write_json
 # refactor step 8: runs (and, for summary, per_run.npz) are read under paths.outputs_root() ($CE_OUTPUTS_ROOT), results written under
 # paths.results_root() ($CE_RESULTS_ROOT); both REPO/outputs by default
 SET = "default"
@@ -64,9 +64,9 @@ body = {}
 
 
 def prepare():
-    # refactor step 9: crossenbodiment/bodybuild GainScaler (scale_xml = scripts/scale_body_gains.py --kp --kd, which this ran as a
+    # refactor step 9: crossembodiment/bodybuild GainScaler (scale_xml = scripts/scale_body_gains.py --kp --kd, which this ran as a
     # subprocess; scale_json = the json this wrote inline): the same files byte for byte (tests/golden/verify_bodies.py, part gains)
-    from crossenbodiment.bodybuild.gains import GainScaler
+    from crossembodiment.bodybuild.gains import GainScaler
     for name, a, b in COND[1:]:
         g = GainScaler(a, b)
         for body_ in [x for x in BODY if x != "g1"]:
@@ -128,7 +128,7 @@ def phc_reward(b, c, q):
 
 def one(job):
     import eval_metrics as E
-    from crossenbodiment.metrics import LEGACY_KEYS as KEYS, legacy_metrics as full   # child_52_means' (refactor step 4)
+    from crossembodiment.metrics import LEGACY_KEYS as KEYS, legacy_metrics as full   # child_52_means' (refactor step 4)
     b, name, c, s = job
     if b not in body:
         body[b] = metric_body(E.XML["g1"] if b == "g1" else BODY[b]["xml"], b != "g1")
@@ -142,7 +142,7 @@ def one(job):
 
 
 def analyse():
-    from crossenbodiment.metrics import LEGACY_KEYS as KEYS   # child_52_means.KEYS (refactor step 4)
+    from crossembodiment.metrics import LEGACY_KEYS as KEYS   # child_52_means.KEYS (refactor step 4)
     done = lambda b: EXP.all_done(EXP.runs(body=(b,)))
     BODIES = [b for b in BODY if done(b)]; print("bodies finished:", BODIES, flush=True)
     jobs = [(b, n, c, s) for b in BODIES for n, _, _ in COND for c in CLIPS for s in SEEDS]
@@ -241,7 +241,7 @@ def summary():
 
 def hand_one(job):
     import eval_metrics as E
-    from crossenbodiment.metrics import body_hand_fall as hand_fall   # child_52_means.hand_fall (refactor step 4)
+    from crossembodiment.metrics import body_hand_fall as hand_fall   # child_52_means.hand_fall (refactor step 4)
     b, name, c, s = job
     if b not in body:
         body[b] = metric_body(E.XML["g1"] if b == "g1" else BODY[b]["xml"], b != "g1")
@@ -250,7 +250,7 @@ def hand_one(job):
 
 
 def handfall():
-    """handfall --drop <stem> ...: Fall Time by hand contact (crossenbodiment.metrics.body_hand_fall), frozen and LOES, by motion (NaN for motions whose
+    """handfall --drop <stem> ...: Fall Time by hand contact (crossembodiment.metrics.body_hand_fall), frozen and LOES, by motion (NaN for motions whose
     reference puts the hands on the floor) and by frame -> means_handfall_without_<stems>.json"""
     drop = sys.argv[sys.argv.index("--drop") + 1:] if "--drop" in sys.argv else []
     clips = [c for c in CLIPS if c.split("/")[1] not in drop]

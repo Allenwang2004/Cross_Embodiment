@@ -37,24 +37,24 @@ import numpy as np
 import torch
 
 from single_z_search import device_arg, project_z
-from crossenbodiment.obs import multiplier_or_raw     # noqa: E402  the simulation layer (refactor step 5)
-from crossenbodiment.policy import MotivoPolicy       # noqa: E402
-from crossenbodiment.rollout import BatchRollout      # noqa: E402
-from crossenbodiment.sim import HumenvSim             # noqa: E402
+from crossembodiment.obs import multiplier_or_raw     # noqa: E402  the simulation layer (refactor step 5)
+from crossembodiment.policy import MotivoPolicy       # noqa: E402
+from crossembodiment.rollout import BatchRollout      # noqa: E402
+from crossembodiment.sim import HumenvSim             # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 def set_physics_per_slot(env, qpos_list, nv):
     """AsyncVectorEnv.call broadcasts one argument to every worker; this sends
-    each worker its own qpos over the same pipe protocol (crossenbodiment.sim.HumenvSim.set_physics_per_slot since
+    each worker its own qpos over the same pipe protocol (crossembodiment.sim.HumenvSim.set_physics_per_slot since
     OOP refactor step 5)."""
     HumenvSim(env).set_physics_per_slot(qpos_list, [np.zeros(nv) for _ in qpos_list])
 
 
 def rollout_multi(model, env, z_env, steps, device, obs_mul, init_qpos_list, nv):
     """like single_z_search.rollout(return_obs=True) but with a per-slot start pose (each slot at rest): the observations
-    (raw x obs_mul, float32) after every step. Since OOP refactor step 5 through crossenbodiment.rollout.BatchRollout."""
+    (raw x obs_mul, float32) after every step. Since OOP refactor step 5 through crossembodiment.rollout.BatchRollout."""
     batch = BatchRollout(MotivoPolicy(model, device), HumenvSim(env), multiplier_or_raw(obs_mul), z_env.shape[0], steps,
                          record=("obs",), nv=nv)
     return batch.run(z_env, init_qpos=init_qpos_list, per_slot=True).obs.astype(np.float32)
@@ -106,7 +106,7 @@ def main():
     from metamotivo.fb_cpr.huggingface import FBcprModel
     from model import bfm_align
     from model.obs_scale import build_obs_multiplier
-    from crossenbodiment.align_cost import AlignCostConfig   # obs_scale_parts, as model/simple's ESConfig (refactor step 4)
+    from crossembodiment.align_cost import AlignCostConfig   # obs_scale_parts, as model/simple's ESConfig (refactor step 4)
     import mujoco
 
     cfg = AlignCostConfig()

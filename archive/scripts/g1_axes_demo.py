@@ -38,10 +38,10 @@ from PIL import Image, ImageDraw, ImageFont
 
 REPO = Path(__file__).resolve().parent.parent
 OUT = REPO / "outputs/g1/explain"
-# px, font, cam, project, label, hcat (and FONT, S, K) live in crossenbodiment/draw.py since refactor step 4 (unchanged): robot_pairs.py
+# px, font, cam, project, label, hcat (and FONT, S, K) live in crossembodiment/draw.py since refactor step 4 (unchanged): robot_pairs.py
 # uses them too. px reads draw.K, which this script never changes.
 sys.path.insert(0, str(REPO))
-from crossenbodiment.draw import FONT, K, S, cam, font, hcat, label, project, px   # noqa: E402,F401
+from crossembodiment.draw import FONT, K, S, cam, font, hcat, label, project, px   # noqa: E402,F401
 COL = {"pitch": (0.85, 0.2, 0.2, 1), "roll": (0.2, 0.65, 0.25, 1), "yaw": (0.2, 0.4, 0.9, 1)}
 XYZ = [(210, 25, 25), (20, 150, 50), (25, 70, 220)]
 

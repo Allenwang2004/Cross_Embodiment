@@ -15,8 +15,8 @@ over the 52 motions (band: +- one standard error over motions).
 Checks: LOES's reward after 1,024 = outputs/child_52_rerun/phc_reward.json (from its best.npz); CEM's re-rolled latents reproduce its
 best_so_far reward; the re-scoring's z0 cost = the runs' z0 cost.
 Out: docs/figures/child_convergence_mean.{pdf,png} (5.5 in, 10 pt, cost | reward), outputs/child_convergence/{cost,reward}_all.png
-(52 panels) and data.npz. Colours and labels: crossenbodiment/palette.py; styles: crossenbodiment/figstyle.py (OOP refactor step 10).
-Runs are read through crossenbodiment.paths.read_path ($CE_OUTPUTS_ROOT), outputs/... written under $CE_RESULTS_ROOT and the figure
+(52 panels) and data.npz. Colours and labels: crossembodiment/palette.py; styles: crossembodiment/figstyle.py (OOP refactor step 10).
+Runs are read through crossembodiment.paths.read_path ($CE_OUTPUTS_ROOT), outputs/... written under $CE_RESULTS_ROOT and the figure
 under $CE_FIGURES_ROOT (defaults: outputs/, docs/figures).
 usage: uv run python scripts/plot_child_convergence.py [--no-cem-cost]   (--no-cem-cost: draw before CEM's re-scoring has finished)"""
 import csv, json, sys
@@ -25,9 +25,9 @@ from pathlib import Path
 import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO))
-from crossenbodiment import paths                                          # noqa: E402
-from crossenbodiment.figstyle import FigureStyle                           # noqa: E402
-from crossenbodiment.palette import INK, Palette                           # noqa: E402
+from crossembodiment import paths                                          # noqa: E402
+from crossembodiment.figstyle import FigureStyle                           # noqa: E402
+from crossembodiment.palette import INK, Palette                           # noqa: E402
 RR, CP = paths.read_path("outputs/child_52_rerun"), paths.read_path("outputs/child_52_cem_phc"); OUT = paths.write_path("outputs/child_convergence")
 # legend names (user, 11/10): LOES -> Ours, CEM -> BFM-Zero
 METHODS = tuple((a, Palette.label(k), Palette.hex(k)) for a, k in (("es", "loes"), ("random", "random"), ("cem", "cem_phc"), ("cmaes", "cmaes")))
@@ -125,7 +125,7 @@ def plot_grid(D, x, key, ylab):
 
 
 def main():
-    from crossenbodiment.paths import CHILD_52_TASK, read_clips   # configs/clips/child_52_task.txt = outputs/child_52/clips.txt (refactor step 4)
+    from crossembodiment.paths import CHILD_52_TASK, read_clips   # configs/clips/child_52_task.txt = outputs/child_52/clips.txt (refactor step 4)
     clips = read_clips(CHILD_52_TASK); OUT.mkdir(parents=True, exist_ok=True)
     with Pool(8) as p:
         res = p.map(one, clips, chunksize=1)

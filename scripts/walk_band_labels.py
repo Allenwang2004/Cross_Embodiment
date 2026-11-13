@@ -3,13 +3,13 @@
 large enough for a full-width figure in the paper's supplementary material (user, 11/13): two-line labels "L x / W y" (the child: "Child")
 under each body's solid pose, font size --size px (64 px is ~8 pt at \\textwidth for the 4,200 px image).
 -> docs/figures/reshaped_bodies_band.png.  usage: uv run python scripts/walk_band_labels.py [--size 64]
-Inputs are read through crossenbodiment.paths.read_path ($CE_OUTPUTS_ROOT), the figure goes to $CE_FIGURES_ROOT (default docs/figures)."""
+Inputs are read through crossembodiment.paths.read_path ($CE_OUTPUTS_ROOT), the figure goes to $CE_FIGURES_ROOT (default docs/figures)."""
 import json, re, sys
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO))
-from crossenbodiment import paths                                         # noqa: E402
+from crossembodiment import paths                                         # noqa: E402
 BAND = paths.read_path("outputs/walk_bodies/band")
 SIZE = int(sys.argv[sys.argv.index("--size") + 1]) if "--size" in sys.argv else 64
 src = Image.open(paths.read_path("outputs/walk_bodies/walk_band.png")).convert("RGB")

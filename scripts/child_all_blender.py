@@ -5,14 +5,14 @@ seemed to do better).
 
 Runs, seed 0 (the figures' seed): LOES = outputs/child_52_rerun/<clip>_es_s0 (our cost, best after 1,024 rollouts), z0 = its origin_z rollout,
 CEM (BFM-Zero) = outputs/child_52_cem_phc/<clip>_cem_s0 (BFM-Zero's tracking reward, best after 1,024). Trajectories in the survey
-alignment (references from their second frame), packaged by crossenbodiment.clips.ClipBundle (as scripts/strobe_final_blender.py's
+alignment (references from their second frame), packaged by crossembodiment.clips.ClipBundle (as scripts/strobe_final_blender.py's
 "child_52" source + its CEM panel).
 Frames: 6 poses; where z0 falls mid-motion (pelvis below half the child target's, starting after frame 45, at least 9 frames), 15 apart
-from 40 frames before that fall, as scripts/body_all_blender.py; otherwise evenly over the clip (crossenbodiment.strobe around_fall /
+from 40 frames before that fall, as scripts/body_all_blender.py; otherwise evenly over the clip (crossembodiment.strobe around_fall /
 whole_clip). One fixed view (azimuth 140), no heading alignment. Preview quality (96 samples, 0.6 x resolution).
 Order: by CEM's MPJPE minus LOES's (seed 0), largest first (where LOES beats CEM most). Metrics (seed 0 and the 5-seed means) from
 outputs/child_52_rerun/per_run.npz (z0, LOES) and outputs/child_52_cem_phc/per_run.npz (CEM), q[t] against ref[t + 1].
-Out: outputs/child_all52/{overview_<k>.jpg (9 motions a page), index.md, renders/, trajectories/, scene.json} (crossenbodiment.sheet
+Out: outputs/child_all52/{overview_<k>.jpg (9 motions a page), index.md, renders/, trajectories/, scene.json} (crossembodiment.sheet
 ContactSheet / write_index_md for the pages).
 usage: uv run python scripts/child_all_blender.py [export] [render] [pages]   (none: all three); --threads N, --labels zstar,... for render
 11/10: LOES first drawn from outputs/child_52 (the older runs, scored one frame late) by mistake; re-made from outputs/child_52_rerun."""
@@ -22,12 +22,12 @@ import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO / "scripts")); sys.path.insert(1, str(REPO))
 import strobe_final_blender as F                                         # noqa: E402
-from crossenbodiment import paths                                        # noqa: E402
-from crossenbodiment.blender import BlenderScene                         # noqa: E402
-from crossenbodiment.clips import CHILD_TARGET, ClipBundle, task_of      # noqa: E402
-from crossenbodiment.palette import Palette                              # noqa: E402
-from crossenbodiment.sheet import ContactSheet, write_index_md           # noqa: E402
-from crossenbodiment.strobe import around_fall, mid_falls, whole_clip   # noqa: E402
+from crossembodiment import paths                                        # noqa: E402
+from crossembodiment.blender import BlenderScene                         # noqa: E402
+from crossembodiment.clips import CHILD_TARGET, ClipBundle, task_of      # noqa: E402
+from crossembodiment.palette import Palette                              # noqa: E402
+from crossembodiment.sheet import ContactSheet, write_index_md           # noqa: E402
+from crossembodiment.strobe import around_fall, mid_falls, whole_clip   # noqa: E402
 
 OUT_REL = "outputs/child_all52"; OUT = paths.write_path(OUT_REL); N, STEP, BEFORE, START, MINLEN, ROWS = 6, 15, 40, 45, 9, 9
 THREADS = int(sys.argv[sys.argv.index("--threads") + 1]) if "--threads" in sys.argv else 32

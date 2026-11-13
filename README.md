@@ -36,7 +36,7 @@ export CUDA_VISIBLE_DEVICES=2 MUJOCO_EGL_DEVICE_ID=2 MUJOCO_GL=egl HF_HUB_OFFLIN
 ## Layout
 
 ```
-crossenbodiment/      the library (docs/architecture.md)
+crossembodiment/      the library (docs/architecture.md)
   paths.py            every location in the repository; the outputs / results / figures roots ($CE_OUTPUTS_ROOT, ...)
   bodies.py           BodyRegistry (configs/bodies.yaml): bodies, their XMLs and references, the root scale s; RobotSpec
   methods.py          MethodSpec registry: canonical method keys, flags, settings, the run-directory key per experiment
@@ -112,13 +112,13 @@ uv run python scripts/body_52_test.py analyse
 The experiment drivers (`child_52_rerun.py`, `child_52_cem_phc.py`, `child_52_lso.py`, `loes_noanchor.py`, `body_52_test.py`,
 `g1_small_test.py`, `tall_body_52.py`, `amass_baselines.py`, `kpkd_test.py` and the follow-up studies) each print their own
 command lines (`commands`, `evalcmds`), re-roll (`prepare`) and `analyse`; docs/workflow.md lists them. The methods' flags are
-in `crossenbodiment/methods.py` (`METHODS[key].flags`, `COMMON`).
+in `crossembodiment/methods.py` (`METHODS[key].flags`, `COMMON`).
 
 ## Where results go
 
 * A search run: `outputs/<experiment>/[<body>/]<stem>_<run key>_s<seed>/` (summary.json, curve.csv, best_z.npy, best.npz,
   origin_z.npz = z0's rollout, z_trace.npz; latent sequences: mu_trace.npz, rollouts.npz). The run keys are the old ones
-  (`es`, `cem`, `lsor`, ...): `crossenbodiment.methods.method_of(experiment, key)` says which method each is there.
+  (`es`, `cem`, `lsor`, ...): `crossembodiment.methods.method_of(experiment, key)` says which method each is there.
 * Re-rolls: `outputs/<experiment>/[<body>/]rollouts/<stem>[_<key>]/` (z.npy, index.json, eval.csv, eval_qpos.npz).
 * Analyses: `outputs/<experiment>/{per_run.npz, results.json, means.json, README.md}`; with `CE_OUTPUTS_ROOT` / `CE_RESULTS_ROOT`
   set, read from one tree and written into another (inside the repository).

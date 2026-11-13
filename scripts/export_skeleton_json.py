@@ -8,7 +8,7 @@ world transform for every body (mj_forward at qpos=0), and only the resulting
 flat world positions/orientations get handed to Blender. This keeps the MJCF
 parsing decoupled from any assumptions about how Blender will build the rig.
 
-OOP refactor step 9: the code is crossenbodiment/bodybuild/skeleton.py (dump_skeleton, the pipeline's "skeleton" step of
+OOP refactor step 9: the code is crossembodiment/bodybuild/skeleton.py (dump_skeleton, the pipeline's "skeleton" step of
 scripts/build_body.py); this is its old CLI, same flags, same file.
 """
 
@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from crossenbodiment.bodybuild.skeleton import _mat_to_quat, body_parent_name, dump_skeleton  # noqa: E402,F401
+from crossembodiment.bodybuild.skeleton import _mat_to_quat, body_parent_name, dump_skeleton  # noqa: E402,F401
 
 
 def main():

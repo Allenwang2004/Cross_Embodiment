@@ -1,4 +1,4 @@
-"""Tests of the body and method registries (crossenbodiment/, OOP refactor step 2, docs/refactor/PLAN.md).
+"""Tests of the body and method registries (crossembodiment/, OOP refactor step 2, docs/refactor/PLAN.md).
 
 The registries are data meant to replace literals without changing a bit, so every value is checked against what the
 current code uses and what the existing runs recorded:
@@ -7,7 +7,7 @@ current code uses and what the existing runs recorded:
     the limited leg and the gain variants: scale(body, clip) == the pos_div single_z_search.py / lso_search.py wrote into the
     runs' summary.json (==, to the bit); the robots: == RobotMap(name).s
   * paths.py's spellings = the literals of the code they replace
-  * every (experiment, run-directory key) of crossenbodiment/methods.py RUNS: one existing run's summary.json has the
+  * every (experiment, run-directory key) of crossembodiment/methods.py RUNS: one existing run's summary.json has the
     method's settings
 Existing runs are READ ONLY: outputs/ folders that are not linked into this worktree are read from the main tree (MAIN).
 
@@ -25,12 +25,12 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
-MAIN = Path(os.environ.get("CROSSENBODIMENT_MAIN", "/home/allen19/crossenbodiment"))   # where the runs live (read only)
+MAIN = Path(os.environ.get("CROSSENBODIMENT_MAIN", "/home/allen19/crossembodiment"))   # where the runs live (read only)
 GOLDEN = REPO / "outputs/refactor_golden/baseline"                                       # tests/golden's baseline runs
 
-from crossenbodiment import paths  # noqa: E402
-from crossenbodiment.bodies import BODIES, KINDS, robot_specs  # noqa: E402
-from crossenbodiment.methods import COMMON, METHODS, RUNS  # noqa: E402
+from crossembodiment import paths  # noqa: E402
+from crossembodiment.bodies import BODIES, KINDS, robot_specs  # noqa: E402
+from crossembodiment.methods import COMMON, METHODS, RUNS  # noqa: E402
 
 WALK = "move-ego-0-2/move-ego-0-2_1"                     # every body has its reference (outputs/walk_bodies)
 AMASS = "Male2Walking__B9_-__Walk_turn_left_90"          # the golden AMASS case's clip
@@ -59,7 +59,7 @@ def test_paths_match_the_literals():
     assert paths.ADULT_XML_REL == exact_obs.ADULT_XML == "assets/robots/adult/robot.xml"
     assert paths.ADULT_XML == robots.ADULT_XML
     assert paths.CHILD_XML_REL == "assets/robots_torque/child/robot_torque_full.xml"
-    src = (REPO / "crossenbodiment/eval_metrics.py").read_text()          # scripts/eval_metrics.py until refactor step 8 (it re-exports it)
+    src = (REPO / "crossembodiment/eval_metrics.py").read_text()          # scripts/eval_metrics.py until refactor step 8 (it re-exports it)
     assert f'"child": "{paths.CHILD_XML_REL}"' in src
     m = re.search(r'add_argument\("--metamotivo", default="([^"]+)"\)', (REPO / "scripts/single_z_search.py").read_text())
     assert m and m.group(1) == paths.MOTIVO_CKPT == "facebook/metamotivo-M-1"
@@ -267,7 +267,7 @@ def test_methods_match_runs():
 
 
 def test_method_keys():
-    from crossenbodiment.methods import method_of, run_keys
+    from crossembodiment.methods import method_of, run_keys
     assert method_of("outputs/child_52_rerun", "cem").key == "cem_ours"
     assert method_of("outputs/body_52/<body>", "cem").key == method_of("outputs/child_52_cem_phc", "cem").key == "cem_phc"
     assert method_of("outputs/child_52_lso", "lsor").key == "lsor_bfm"
@@ -286,7 +286,7 @@ def test_method_keys():
 
 def test_step11_names():
     """step 11: one name per method / root scale in the code, the old names still read (run keys, yaml keys, palette keys)"""
-    from crossenbodiment.methods import AMBIGUOUS, RUNS, canonical, experiment_keys, key_in, method_of
+    from crossembodiment.methods import AMBIGUOUS, RUNS, canonical, experiment_keys, key_in, method_of
     for experiment, (_, keys) in RUNS.items():                          # key_in inverts method_of; experiment_keys lists them
         for k, m in keys.items():
             assert method_of(experiment, k).key == m and key_in(experiment, m) == k, (experiment, k, m)
@@ -302,17 +302,17 @@ def test_step11_names():
         except KeyError:
             pass
     assert experiment_keys("outputs/tall_body_52")["cem_phc"] == "cem" and key_in("outputs/child_52_lso", "lsor_w005") == "lsor_w005"
-    from crossenbodiment.experiment import Experiment
+    from crossembodiment.experiment import Experiment
     assert Experiment("outputs/body_52").key("lsor_w005") == "lsor" and Experiment("outputs/child_52_rerun").key("cem_ours") == "cem"
     for b in BODIES:                                                    # BodySpec's root-scale fields and their yaml-key aliases
         assert (b.s, b.s_rule, b.s_default) == (b.scale, b.scale_rule, b.scale_default), b.name
-    from crossenbodiment.palette import OLD_KEYS, OLD_VARIANT_KEYS, Palette
+    from crossembodiment.palette import OLD_KEYS, OLD_VARIANT_KEYS, Palette
     for old, new in OLD_KEYS.items():
         assert Palette.method(old) is Palette.method(new) and Palette.method(new).key == new
     for (old, v), new in OLD_VARIANT_KEYS.items():
         assert Palette.method(old, v) is Palette.method(*new)
     assert Palette.hex("z0", "k_scale") == Palette.hex("frozen", "k_scale") == "#eb6834"
-    from crossenbodiment import costs, obs, paths as P
+    from crossembodiment import costs, obs, paths as P
     assert costs.Position(None, 2.5).pos_div == 2.5 and obs.CHILD_EXACT_S == obs.CHILD_SCALE == BODIES.scale("child")
     assert P.origin_z is P.task_z0 and P.z0_rollout("x") == "x/origin_z.npz" and P.Z0_KEY == "origin_z"
 

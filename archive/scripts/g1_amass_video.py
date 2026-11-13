@@ -13,8 +13,8 @@ import numpy as np
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
 from model.robots import ROBOTS                                             # noqa: E402
-from crossenbodiment.survey import ADULT, ADULT_H   # noqa: E402  survey_body_videos' (refactor step 4)
-from crossenbodiment.palette import BLUE, GREY, RED   # noqa: E402  survey_body_videos' (refactor step 4)
+from crossembodiment.survey import ADULT, ADULT_H   # noqa: E402  survey_body_videos' (refactor step 4)
+from crossembodiment.palette import BLUE, GREY, RED   # noqa: E402  survey_body_videos' (refactor step 4)
 SIZE = {"g1": 1.0, "h1": 1.26, "apollo": 1.34}
 
 

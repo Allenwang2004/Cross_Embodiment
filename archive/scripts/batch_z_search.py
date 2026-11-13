@@ -134,7 +134,7 @@ def search_one(model, env, fk, obs_mul, cfg, z0, qpos_ref, gens, pairs, sigma, l
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--dataset", default="datasets/crossenbodiment-10bodies")
+    p.add_argument("--dataset", default="datasets/crossembodiment-10bodies")
     p.add_argument("--tasks-file", default=None,
                    help="default <dataset>/splits/move_tasks.txt")
     p.add_argument("--trials", type=int, default=1,

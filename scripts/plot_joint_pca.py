@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
-from crossenbodiment.geometry import sphere16   # noqa: E402  16 z / |z| (refactor step 3)
+from crossembodiment.geometry import sphere16   # noqa: E402  16 z / |z| (refactor step 3)
 SURF, INK, INK2, INK3 = "#fcfcfb", "#0b0b0b", "#52514e", "#8a8983"
 N = ["z0", "rot0.5_0", "rot1_0", "rot2_0", "rot5_0", "rot10_0", "rot20_0", "rot30_0"]
 L = ["0", "0.5", "1", "2", "5", "10", "20", "30"]

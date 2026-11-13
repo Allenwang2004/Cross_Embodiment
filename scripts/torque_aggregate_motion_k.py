@@ -39,7 +39,7 @@ code as the one-clip route (torque.symmetrize_k). See its docstring for why the 
 symmetry (k_predicted_subtree agrees L/R to 0.026%) makes this the correct
 reading and the per-actuator spread the artefact.
 
-OOP refactor step 9: the code is crossenbodiment/bodybuild/torque.py TorqueCalibrator (aggregate, write_xml with
+OOP refactor step 9: the code is crossembodiment/bodybuild/torque.py TorqueCalibrator (aggregate, write_xml with
 write_scaled_xml, motion_choice: the "aggregate" and "physics" steps of scripts/build_body.py); this file is its old CLI,
 same flags, same _ratios_aggregate.csv and XML. --joint-dynamics is what every body uses (armature x Ir, damping x
 sqrt(k Ir), stiffness x k from the adult; see torque.py).
@@ -58,7 +58,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from crossenbodiment.bodybuild.torque import (TorqueCalibrator, keep_mask, print_symmetry_report,  # noqa: E402,F401
+from crossembodiment.bodybuild.torque import (TorqueCalibrator, keep_mask, print_symmetry_report,  # noqa: E402,F401
                                               read_matrix, symmetrize_k, write_scaled_xml)
 
 ROOT = Path(__file__).resolve().parent.parent

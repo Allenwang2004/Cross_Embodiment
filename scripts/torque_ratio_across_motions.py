@@ -11,10 +11,10 @@ motion is changing which joints carry the load, and a single scaled MJCF cannot
 serve every motion equally.
 
 Same measurement as the per-joint script (both use joint_torques / fit_ratio of
-crossenbodiment/bodybuild/torque.py), so the k column of any single motion here reproduces that
+crossembodiment/bodybuild/torque.py), so the k column of any single motion here reproduces that
 script's _ratios.csv for the same clip. No per-joint figures are drawn.
 
-OOP refactor step 9: the code is crossenbodiment/bodybuild/torque.py TorqueCalibrator.ratio_matrix (the "torque_ratio" step
+OOP refactor step 9: the code is crossembodiment/bodybuild/torque.py TorqueCalibrator.ratio_matrix (the "torque_ratio" step
 of scripts/build_body.py); this file is its old CLI, same flags, same files. Always pass --outdir <mode>/<body>.
 
 Outputs (default outputs/torque_ratio_across_motions/<mode>/):
@@ -35,7 +35,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from crossenbodiment.bodybuild.torque import (TorqueCalibrator, correlate, draw_corr, first_clip,  # noqa: E402,F401
+from crossembodiment.bodybuild.torque import (TorqueCalibrator, correlate, draw_corr, first_clip,  # noqa: E402,F401
                                               k_vector, rankdata)
 
 ROOT = Path(__file__).resolve().parent.parent

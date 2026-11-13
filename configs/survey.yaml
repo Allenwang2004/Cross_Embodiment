@@ -1,5 +1,5 @@
 # survey.yaml -- the user survey's humanoid bodies (scripts/survey_body_videos.py BODY until OOP refactor step 4), loaded by
-# crossenbodiment/survey.py, which rebuilds the old BODY dict from it exactly (tests/test_moves.py). Clip stems:
+# crossembodiment/survey.py, which rebuilds the old BODY dict from it exactly (tests/test_moves.py). Clip stems:
 # configs/clips/user_survey.txt.
 #
 # Per survey name (the name the survey's folders use: outputs/user_survey/<name>, outputs/user_survey_search/<name>):

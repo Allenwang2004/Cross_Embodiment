@@ -19,7 +19,7 @@ import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.append(str(REPO))
-DS = REPO / "datasets/crossenbodiment-child-balanced"
+DS = REPO / "datasets/crossembodiment-child-balanced"
 SRC = REPO / "outputs/b500_targets"
 
 
@@ -83,8 +83,8 @@ def main():
             global_head_best=ga["best"].get("head"), global_pos_best=ga["best"].get("pos"),
             global_cost_z0=ga["origin_z"]["cost"], global_cost_best=ga["best"]["cost"],
             stage1_bfm_z0=S["bfm"]["origin_z"]["bfm"], stage1_bfm_best=S["bfm"]["best"]["bfm"],
-            ref_motion=str(Path("datasets/crossenbodiment-child-balanced") / r["retargeted_motion"]),
-            origin_z=str(Path("datasets/crossenbodiment-child-balanced") / r["origin_z"]),
+            ref_motion=str(Path("datasets/crossembodiment-child-balanced") / r["retargeted_motion"]),
+            origin_z=str(Path("datasets/crossembodiment-child-balanced") / r["origin_z"]),
             search_dir=str(d.relative_to(REPO)), manifest_id=r["id"])
         rows.append(rec)
 

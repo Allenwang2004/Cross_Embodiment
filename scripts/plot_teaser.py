@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """plot_teaser.py -- the paper's teaser (single-column page, 5.5 in wide): one adult motion, one latent space, a searched latent per physical condition. The search paths on the sphere are schematic.
 Rollouts are the survey's recorded ones (outputs/user_survey), nothing is re-simulated. Payload walks move-ego-0-2_4, the others move-ego-0-2_2: same task, different clip.
-The panels (conditions, titles, clips, frames, scale) are in configs/figures/teaser.yaml, the colours in crossenbodiment/palette.py
-(CONDITIONS, INK["paper"]), the style and canvas in crossenbodiment/figstyle.py (OOP refactor step 10). Figures are written to
+The panels (conditions, titles, clips, frames, scale) are in configs/figures/teaser.yaml, the colours in crossembodiment/palette.py
+(CONDITIONS, INK["paper"]), the style and canvas in crossembodiment/figstyle.py (OOP refactor step 10). Figures are written to
 $CE_FIGURES_ROOT (default docs/figures); the renders and cut-outs they draw are read from docs/figures.
 
   render   bodies as cut-outs on one scale: docs/figures/teaser_parts/<name>_<frame>.png
@@ -26,9 +26,9 @@ from PIL import Image
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from figure_bodies import BG, BODY_RGBA, place, poses                # noqa: E402
 sys.path.insert(1, str(Path(__file__).resolve().parent.parent))
-from crossenbodiment import paths                                     # noqa: E402
-from crossenbodiment.figstyle import FigureStyle, box as _box, txt as _txt   # noqa: E402
-from crossenbodiment.palette import ACCENTS, CONDITIONS, INK, hex_rgba01   # noqa: E402
+from crossembodiment import paths                                     # noqa: E402
+from crossembodiment.figstyle import FigureStyle, box as _box, txt as _txt   # noqa: E402
+from crossembodiment.palette import ACCENTS, CONDITIONS, INK, hex_rgba01   # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent; FIG = paths.FIGURES; PARTS = FIG / "teaser_parts"; RENDERS = FIG / "blender_renders"; S = paths.read_path("outputs/user_survey")
 CFG = yaml.safe_load((paths.FIGURE_CONFIGS / "teaser.yaml").read_text())

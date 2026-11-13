@@ -16,7 +16,7 @@ usage: uv run python scripts/accad_locomotion.py [--min-sec 5]   (another minimu
 import glob, re, json, os, sys, numpy as np, mujoco
 from pathlib import Path
 from multiprocessing import Pool
-R = "/home/allen19/crossenbodiment"
+R = "/home/allen19/crossembodiment"
 def one(mp4):
     name = os.path.basename(mp4)[:-4]; q = np.load(f"{R}/amass_data/amass_origin_motion/ACCAD/{name}.npz")["qpos"]
     m = mujoco.MjModel.from_xml_path(R + "/assets/robots/adult/robot.xml"); d = mujoco.MjData(m)

@@ -11,9 +11,9 @@ from pathlib import Path
 import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
-from crossenbodiment import paths                                         # noqa: E402
-from crossenbodiment.metrics import mean_body_error, world_positions      # noqa: E402
-from crossenbodiment.results import write_json                            # noqa: E402
+from crossembodiment import paths                                         # noqa: E402
+from crossembodiment.metrics import mean_body_error, world_positions      # noqa: E402
+from crossembodiment.results import write_json                            # noqa: E402
 # OOP refactor (ported from the main tree, 11/13): the runs and amass_baselines.py --set bfm's results.json are read under
 # paths.outputs_root() ($CE_OUTPUTS_ROOT, default outputs/), thresholds.json / .md written under $CE_RESULTS_ROOT (paths.write_path)
 OUT_REL = "outputs/amass_baselines_bfm"; OUT = paths.read_path(OUT_REL); H = (0.5, 0.75, 1.0)

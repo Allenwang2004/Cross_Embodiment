@@ -1,4 +1,4 @@
-"""Tests of crossenbodiment/geometry.py (OOP refactor step 3, docs/refactor/PLAN.md): every shared function against VERBATIM
+"""Tests of crossembodiment/geometry.py (OOP refactor step 3, docs/refactor/PLAN.md): every shared function against VERBATIM
 copies of the code it replaced (frozen below, from commit a997a23), on fixed random inputs, compared exactly (np.array_equal /
 ==, so NaN or a last-bit difference fails). Also: the old names still exist and are the shared functions, and the copies kept
 apart on purpose really differ (so merging them would have changed bits).
@@ -20,7 +20,7 @@ for p in (str(REPO / "scripts"), str(REPO)):
 import mujoco  # noqa: E402
 import numpy as np  # noqa: E402
 
-from crossenbodiment import geometry as G  # noqa: E402
+from crossembodiment import geometry as G  # noqa: E402
 
 ADULT_XML = REPO / "assets/robots/adult/robot.xml"
 CHILD_XML = REPO / "assets/robots_torque/child/robot_torque_full.xml"

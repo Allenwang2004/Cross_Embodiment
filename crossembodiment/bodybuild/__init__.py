@@ -1,4 +1,4 @@
-"""crossenbodiment.bodybuild -- making a new body (OOP refactor step 9; the runbook is docs/new_body.md, the CLI scripts/build_body.py).
+"""crossembodiment.bodybuild -- making a new body (OOP refactor step 9; the runbook is docs/new_body.md, the CLI scripts/build_body.py).
 
 One class per job:
   BodyBuilder (builders.py)   load the adult -> edit -> ground the pelvis -> robot.xml + an honest parameter.json
@@ -25,7 +25,7 @@ skeleton.dump_skeleton / load_root_rest_height. Every one is the old code moved 
 (tests/test_bodybuild.py, tests/golden/verify_bodies.py).
 
 Importing the package imports nothing heavy: the names below are loaded from their module on first use (module __getattr__), so
-`from crossenbodiment.bodybuild.beta import BETA_AXES` (model/dataset.py) stays light; the other modules import mujoco and numpy.
+`from crossembodiment.bodybuild.beta import BETA_AXES` (model/dataset.py) stays light; the other modules import mujoco and numpy.
 """
 import importlib
 

@@ -9,7 +9,7 @@ number format (tests/test_records.py: write-then-read round trips, and bytes equ
   best_z.npy       single_z_search, robot_z_search                  (1, 256) float32: the best latent
   best.npz         single_z_search (qpos, fps 30.0, [dtw_path])     the best latent's rollout
                    robot_z_search (qpos, qpos_smpl, fz, fps 30, [dtw_path])
-  origin_z.npz     the same, of z0 (crossenbodiment.paths.Z0_ROLLOUT; "origin_z" is z0's on-disk name, summary.json key too)
+  origin_z.npz     the same, of z0 (crossembodiment.paths.Z0_ROLLOUT; "origin_z" is z0's on-disk name, summary.json key too)
   z_trace.npz      both: gen (int32, from -1), z_mean, z_best (float32)
   curve.csv        csv.DictWriter, one row per generation (single latent) / iteration (latent sequence) (floats as str():
                    repr), the columns of the first row

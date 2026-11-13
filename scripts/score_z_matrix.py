@@ -84,7 +84,7 @@ def main():
     from metamotivo.fb_cpr.huggingface import FBcprModel
     from model import bfm_align
     from model.obs_scale import build_obs_multiplier
-    from crossenbodiment.align_cost import AlignCostConfig   # obs_scale_parts, as model/simple's ESConfig (refactor step 4)
+    from crossembodiment.align_cost import AlignCostConfig   # obs_scale_parts, as model/simple's ESConfig (refactor step 4)
     import mujoco
 
     cfg = AlignCostConfig()

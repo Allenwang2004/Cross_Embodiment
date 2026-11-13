@@ -30,7 +30,7 @@ import mujoco
 import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
-from crossenbodiment import paths                                         # noqa: E402
+from crossembodiment import paths                                         # noqa: E402
 # OOP refactor (ported from the main tree, 11/12): the runs are read under paths.outputs_root() ($CE_OUTPUTS_ROOT, default outputs/),
 # the tables written under $CE_RESULTS_ROOT (paths.write_path, default outputs/); the clip lists are configs/clips' copies (step 4).
 OUT_REL = "outputs/phc_reward_tables"; O = paths.outputs_root()

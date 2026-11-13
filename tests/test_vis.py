@@ -40,7 +40,7 @@ for p in (str(REPO / "scripts"), str(REPO)):
 import numpy as np  # noqa: E402
 
 BASE = "8e9dc99"                                              # the commit before step 10
-MAIN = Path(os.environ.get("CROSSENBODIMENT_MAIN", "/home/allen19/crossenbodiment"))   # the main tree (read only)
+MAIN = Path(os.environ.get("CROSSENBODIMENT_MAIN", "/home/allen19/crossembodiment"))   # the main tree (read only)
 WORK = REPO / "outputs/refactor_tests/test_vis"
 RNG = lambda k=0: np.random.default_rng(20261114 + k)        # noqa: E731
 
@@ -102,7 +102,7 @@ def import_script(name, argv=None):
 # ------------------------------------------------------------------ palette
 
 def test_palette_render_blender_colors():
-    from crossenbodiment.palette import BLENDER, BLENDER_BG
+    from crossembodiment.palette import BLENDER, BLENDER_BG
     tree = ast.parse((REPO / "scripts/render_blender.py").read_text()); colors = {}; bg = None
     for node in tree.body:
         if isinstance(node, ast.Assign) and isinstance(node.targets[0], ast.Name):
@@ -118,7 +118,7 @@ def test_palette_render_blender_colors():
 
 def test_palette_forms_agree():
     """the hex, video RGBA and Blender sRGB forms of one entry are the same colour within the rounding their scripts used"""
-    from crossenbodiment.palette import METHODS, VARIANTS, hex_rgb
+    from crossembodiment.palette import METHODS, VARIANTS, hex_rgb
     for m in list(METHODS.values()) + list(VARIANTS.values()):
         if m.hex and m.blender and m.blender != "body":
             assert np.abs(np.array(m.blender_rgb) - np.array(hex_rgb(m.hex)) / 255).max() <= 0.0051, m
@@ -128,7 +128,7 @@ def test_palette_forms_agree():
 
 def test_palette_script_tables():
     """every script's colours / labels as computed now = its 8e9dc99 literals"""
-    from crossenbodiment import palette as P
+    from crossembodiment import palette as P
     old = old_literals("scripts/plot_child_convergence.py", ["METHODS"])
     assert import_script("plot_child_convergence").METHODS == old["METHODS"]
     old = old_literals("scripts/child_topview.py", ["LINES"])
@@ -164,7 +164,7 @@ def test_palette_script_tables():
     assert (P.GREY, P.GHOST, P.RED, P.BLUE) == (old["GREY"], old["GHOST"], old["RED"], old["BLUE"])
     old = old_literals("scripts/robot_overlay.py", ["COLORS", "W", "H"])
     assert P.OVERLAY == old["COLORS"] and type(P.OVERLAY[0]) is tuple
-    from crossenbodiment.video import OVERLAY_SIZE
+    from crossembodiment.video import OVERLAY_SIZE
     assert OVERLAY_SIZE == (old["W"], old["H"])
     old = old_literals("scripts/figure_bodies.py", ["BG", "BODY_RGBA"])
     fb = import_script("figure_bodies")
@@ -224,7 +224,7 @@ def test_figstyle_helpers_match_closures():
     import matplotlib.pyplot as plt
     from functools import partial
     from matplotlib.patches import FancyArrowPatch, FancyBboxPatch
-    from crossenbodiment.figstyle import FigureStyle, arrow, box, txt
+    from crossembodiment.figstyle import FigureStyle, arrow, box, txt
     INK = "#22252a"; FS = 9.0
 
     def old_fig():
@@ -274,7 +274,7 @@ def test_figstyle_helpers_match_closures():
 
 def test_figstyle_context_restores():
     import matplotlib
-    from crossenbodiment.figstyle import FigureStyle
+    from crossembodiment.figstyle import FigureStyle
     before = dict(matplotlib.rcParams)
     with FigureStyle.paper({"font.size": 10}, svg=False) as s:
         assert matplotlib.rcParams["font.family"] == ["STIXGeneral"] and matplotlib.rcParams["font.size"] == 10 and "svg.fonttype" not in s.rc
@@ -292,8 +292,8 @@ def _gl(k):
 
 
 def test_camera_project_vs_copies():
-    from crossenbodiment.camera import ViewSpec, project, project_point
-    ns = old_defs("crossenbodiment/draw.py", ["project"], {"np": np})
+    from crossembodiment.camera import ViewSpec, project, project_point
+    ns = old_defs("crossembodiment/draw.py", ["project"], {"np": np})
     for k in range(5):
         r, f, rng = _gl(k); cpos = np.array(r.scene.camera[0].pos); pts = [cpos + 4 * f + rng.standard_normal(3) for _ in range(7)]
         W, H = 1920, 1080
@@ -308,7 +308,7 @@ def test_camera_project_vs_copies():
 
 
 def test_camera_presets():
-    from crossenbodiment.camera import BLENDER_STROBE, BODY_OVERLAY_DEFAULT, body_overlay, robot_overlay, survey_track
+    from crossembodiment.camera import BLENDER_STROBE, BODY_OVERLAY_DEFAULT, body_overlay, robot_overlay, survey_track
     for h in (1.26, 1.74, 2.07, 2.47, 1.32 * 1.26, 0.9):
         k = max(h, 1.74) / 1.26
         assert survey_track(h).to_track() == dict(distance=round(2.8 * k, 2), elevation=-12, azimuth=140, lookat_z=round(0.55 * k, 2))
@@ -336,8 +336,8 @@ class _Scene:
 
 
 def test_strobe_layout_vs_old_loops():
-    from crossenbodiment.geometry import root_yaw as yaw
-    from crossenbodiment.strobe import StrobeLayout, path_heading, recipe_layout, strobe_size
+    from crossembodiment.geometry import root_yaw as yaw
+    from crossembodiment.strobe import StrobeLayout, path_heading, recipe_layout, strobe_size
     AZ = 125.0; r = RNG(1); T = 300
     q = np.concatenate([np.cumsum(r.standard_normal((T, 2)) * 0.05, 0), r.random((T, 1)), r.standard_normal((T, 4))], 1)
     q[:, 3:7] /= np.linalg.norm(q[:, 3:7], axis=1, keepdims=True); ya = yaw(q[::-1].copy())
@@ -375,7 +375,7 @@ def test_strobe_layout_vs_old_loops():
 
 
 def test_strobe_windows_vs_child_all():
-    from crossenbodiment.strobe import around_fall, mid_falls, stretches, whole_clip
+    from crossembodiment.strobe import around_fall, mid_falls, stretches, whole_clip
     ns = old_defs("scripts/child_all_blender.py", ["stretches"], {})
     N, STEP, BEFORE, START, MINLEN = 6, 15, 40, 45, 9
     for k in range(20):
@@ -393,7 +393,7 @@ def test_strobe_windows_vs_child_all():
 
 def test_pose_spec_vs_export_blender_package():
     import mujoco
-    from crossenbodiment.blender import BlenderScene, contact_frames, heading, load_model
+    from crossembodiment.blender import BlenderScene, contact_frames, heading, load_model
     src = old_source("scripts/export_blender_package.py")
     ns = {"np": np, "mujoco": mujoco, "sys": sys, "REPO": REPO, "meshes": {},
           "GEOM": {mujoco.mjtGeom.mjGEOM_SPHERE: "sphere", mujoco.mjtGeom.mjGEOM_CAPSULE: "capsule", mujoco.mjtGeom.mjGEOM_CYLINDER: "cylinder",
@@ -423,7 +423,7 @@ def test_pose_spec_vs_export_blender_package():
 
 def test_blender_scene_files_and_render_argv():
     from unittest import mock
-    from crossenbodiment import blender
+    from crossembodiment import blender
     d = WORK / "scene"; d.mkdir(parents=True, exist_ok=True)
     sc = blender.BlenderScene(frames=[0, 20], body_scale=1.0); sc.add_panel("p", dict(figure="x", poses=[])); sc.meshes["g1_a__v"] = np.ones((3, 3), np.float32)
     sc.write(d, placeholder=True)
@@ -446,7 +446,7 @@ def test_blender_scene_files_and_render_argv():
 # ------------------------------------------------------------------ clips
 
 def test_strobe_source_routing():
-    from crossenbodiment.clips import strobe_source
+    from crossembodiment.clips import strobe_source
     def old(src, clip, body):            # strobe_final_blender.trajectories at BASE, the paths only
         if src not in ("child_52", "c540", "tall_body_52") and not src.startswith(("body_52/", "child_52_s", "kpkd:")):
             return ("copy", f"{src}/{clip}")
@@ -465,7 +465,7 @@ def test_strobe_source_routing():
 
 
 def test_clip_bundle_vs_old_trajectories():
-    from crossenbodiment.clips import ClipBundle
+    from crossembodiment.clips import ClipBundle
     d = WORK / "clips"; (d / "run").mkdir(parents=True, exist_ok=True); r = RNG(3)
     ref_a, ref_b = r.standard_normal((101, 76)), r.standard_normal((101, 76)).astype(np.float32)
     np.savez(d / "adult.npz", qpos=ref_a); np.savez(d / "body.npz", qpos=ref_b)
@@ -494,7 +494,7 @@ def test_clip_bundle_vs_old_trajectories():
 
 def test_contact_sheet_vs_old_pages():
     from PIL import Image, ImageDraw, ImageFont
-    from crossenbodiment.sheet import ContactSheet, hcat, write_index_md
+    from crossembodiment.sheet import ContactSheet, hcat, write_index_md
     d = WORK / "sheet"; d.mkdir(parents=True, exist_ok=True); r = RNG(5); paths = []
     for i in range(6):
         p = d / f"in{i}.png"; Image.fromarray((r.random((90 + 7 * i, 160 + 11 * i, 3)) * 255).astype(np.uint8)).save(p); paths.append(p)
@@ -531,7 +531,7 @@ def test_contact_sheet_vs_old_pages():
 
 def test_frame_bands_vs_old():
     from PIL import Image, ImageDraw, ImageFont
-    from crossenbodiment import video
+    from crossembodiment import video
     ns = old_defs("scripts/render_panels.py", ["label_px"], {"Image": Image, "ImageDraw": ImageDraw, "ImageFont": ImageFont, "np": np, "FONT": video.FONT})
     ns2 = old_defs("scripts/robot_overlay.py", ["legend"], {"Image": Image, "ImageDraw": ImageDraw, "ImageFont": ImageFont, "np": np, "FONT": video.FONT})
     img = (RNG(7).random((540, 960, 3)) * 255).astype(np.uint8)
@@ -555,8 +555,8 @@ def test_video_renderer_vs_survey_replay():
 
 def _video_vs_replay():
     import importlib.util
-    from crossenbodiment.camera import ViewSpec
-    from crossenbodiment.video import VideoRenderer
+    from crossembodiment.camera import ViewSpec
+    from crossembodiment.video import VideoRenderer
     top = MAIN / "outputs/user_survey"; clip = top / "child/trajectories/move-ego-0-2_2"
     if not (clip / "video.json").exists():
         raise unittest.SkipTest("the survey's child clip is missing")

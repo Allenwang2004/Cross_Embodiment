@@ -7,11 +7,11 @@ them back. Every value is the one survey_body_videos.py had (tests/test_moves.py
   CLIPS       the 11 survey stems (configs/clips/user_survey.txt)
   ADULT       the adult's XML (paths.ADULT_XML_REL); ADULT_H its stature, 1.74 m
   BODY        {survey name: dict(xml, ref, h[, clips])} built from configs/survey.yaml: xml is the registry body's physics_xml
-              (crossenbodiment/bodies.py) for child, heavy_arm (= payload) and limit_leg, and the old literal for the deleted
+              (crossembodiment/bodies.py) for child, heavy_arm (= payload) and limit_leg, and the old literal for the deleted
               survey bodies fat and tall (see configs/survey.yaml: the survey's tall is not the registry's)
   SUFFIXES    the run-folder suffixes run_of chooses from
   run_of      which search the survey videos use for (name, stem)
-The colours are in crossenbodiment/palette.py.
+The colours are in crossembodiment/palette.py.
 """
 from __future__ import annotations
 

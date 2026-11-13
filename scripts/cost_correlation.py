@@ -25,13 +25,13 @@ from pathlib import Path
 import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "scripts"))
-from crossenbodiment.metrics import metric_body   # noqa: E402  one Body per (xml, smpl) and process (refactor step 3)
-from crossenbodiment.geometry import sphere16   # noqa: E402  16 z / |z| (refactor step 3)
-from crossenbodiment.bodies import BODIES
-from crossenbodiment.paths import CHILD_XML_REL
-from crossenbodiment import paths
-from crossenbodiment.experiment import Experiment, workers
-from crossenbodiment.results import ReportWriter, save_npz, write_json
+from crossembodiment.metrics import metric_body   # noqa: E402  one Body per (xml, smpl) and process (refactor step 3)
+from crossembodiment.geometry import sphere16   # noqa: E402  16 z / |z| (refactor step 3)
+from crossembodiment.bodies import BODIES
+from crossembodiment.paths import CHILD_XML_REL
+from crossembodiment import paths
+from crossembodiment.experiment import Experiment, workers
+from crossembodiment.results import ReportWriter, save_npz, write_json
 # refactor step 8: runs and re-rolls are read under paths.outputs_root() ($CE_OUTPUTS_ROOT), results (and prepare's z.npy) written
 # under paths.results_root() ($CE_RESULTS_ROOT); both REPO/outputs by default
 RR = paths.output("child_52_rerun"); OUT = paths.output("cost_corr"); RES = paths.result("cost_corr"); XML = CHILD_XML_REL
@@ -40,7 +40,7 @@ W_HEAD, W_POS, W_ANCHOR = 1.0, 0.1, 0.3
 
 
 def clips():
-    from crossenbodiment.paths import CHILD_52_TASK, read_clips   # configs/clips/child_52_task.txt = outputs/child_52/clips.txt (refactor step 4)
+    from crossembodiment.paths import CHILD_52_TASK, read_clips   # configs/clips/child_52_task.txt = outputs/child_52/clips.txt (refactor step 4)
     return read_clips(CHILD_52_TASK)
 
 

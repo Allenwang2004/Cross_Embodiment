@@ -3,14 +3,14 @@
 choose examples from, with z0's falls DURING the motion picked out (user, 11/10: falls right at the start are not wanted).
 
 Data: the 52-motion runs (outputs/body_52/<body>, seed 0, LOES's best after 2,048 rollouts), packaged in the survey format and frame
-alignment -> outputs/<body>_all52/trajectories/<clip> (crossenbodiment.clips.ClipBundle). reference_body: the body's search target
+alignment -> outputs/<body>_all52/trajectories/<clip> (crossembodiment.clips.ClipBundle). reference_body: the body's search target
 (limited leg: the motion with the right leg bent; payload: the adult's motion).
 Falls: the pelvis below half the target's pelvis height at the same frame. A mid-motion fall: such a stretch that starts after 1.5 s
 (frame 45) and lasts at least 0.3 s (9 frames). Frames: 6 poses 15 frames apart from 40 frames before z0's first mid-motion fall;
-without one, evenly over the clip (crossenbodiment.strobe). Order: z0 falls mid-motion and LOES is not down during it; z0 falls
+without one, evenly over the clip (crossembodiment.strobe). Order: z0 falls mid-motion and LOES is not down during it; z0 falls
 mid-motion and LOES is down too; no mid-motion fall of z0 (by MPJPE drop). View: one fixed world view (azimuth 140, the survey
-videos') for every panel (crossenbodiment.strobe.recipe_panels, export_strobe_blender.py's clip_panels before step 10).
-Preview quality (96 samples, 0.6 x resolution). Pages overview_<k>.jpg, 9 motions each (crossenbodiment.sheet); index.md lists all 52.
+videos') for every panel (crossembodiment.strobe.recipe_panels, export_strobe_blender.py's clip_panels before step 10).
+Preview quality (96 samples, 0.6 x resolution). Pages overview_<k>.jpg, 9 motions each (crossembodiment.sheet); index.md lists all 52.
 usage: uv run python scripts/body_all_blender.py <limit_leg|payload> [export] [render] [pages]   (none: all three)"""
 import json, os, sys
 from pathlib import Path
@@ -18,12 +18,12 @@ import numpy as np
 import yaml
 
 REPO = Path(__file__).resolve().parent.parent; sys.path.insert(0, str(REPO))
-from crossenbodiment import paths                                         # noqa: E402
-from crossenbodiment.blender import BlenderScene                          # noqa: E402
-from crossenbodiment.clips import ClipBundle, task_of                     # noqa: E402
-from crossenbodiment.palette import Palette                               # noqa: E402
-from crossenbodiment.sheet import ContactSheet, write_index_md            # noqa: E402
-from crossenbodiment.strobe import around_fall, recipe_panels, stretches, whole_clip   # noqa: E402
+from crossembodiment import paths                                         # noqa: E402
+from crossembodiment.blender import BlenderScene                          # noqa: E402
+from crossembodiment.clips import ClipBundle, task_of                     # noqa: E402
+from crossembodiment.palette import Palette                               # noqa: E402
+from crossembodiment.sheet import ContactSheet, write_index_md            # noqa: E402
+from crossembodiment.strobe import around_fall, recipe_panels, stretches, whole_clip   # noqa: E402
 
 BODY = sys.argv[1]; assert BODY in ("limit_leg", "payload")
 FOLDER = {"limit_leg": "limit_leg_task52", "payload": "heavy_arm_task52"}[BODY]; TAG = {"limit_leg": "limit_leg", "payload": "heavy_arm"}[BODY]

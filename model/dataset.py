@@ -2,7 +2,7 @@
 
 Two datasets exist and they are not interchangeable:
 
-`datasets/crossenbodiment-10bodies` (current)
+`datasets/crossembodiment-10bodies` (current)
     540 clips x 10 bodies = 5400 rows, built over the per-body artifacts from
     docs/new_body.md. Every row carries a retargeted_motion, so qpos_ref is
     real and the L_align term in model/simple/train.py's objective is live. The rows
@@ -10,7 +10,7 @@ Two datasets exist and they are not interchangeable:
     a trainer has to roll each row out on its own body's MJCF, not on one
     global cfg.target_xml.
 
-`datasets/crossenbodiment-1-datasets` (legacy, what the published baseline used)
+`datasets/crossembodiment-1-datasets` (legacy, what the published baseline used)
     1530 rows, all `child`, and retargeted_motion was deleted from it in favour
     of model/bilevel's runtime retargeting -- so qpos_ref is None for every row,
     functional_equivalence returns 0.0, and L_align is identically zero there. The
@@ -31,8 +31,8 @@ import numpy as np
 # beta is this 8-dim vector read straight out of a body's parameter.json (NOT
 # skeleton.json -- that is the skeleton-export schema with a "bodies" list, see
 # scripts/export_skeleton_json.py). One list for the whole repository since OOP refactor
-# step 9: crossenbodiment/bodybuild/beta.py (scripts/scale_robot.py AXES is the same object).
-from crossenbodiment.bodybuild.beta import BETA_AXES  # noqa: E402,F401
+# step 9: crossembodiment/bodybuild/beta.py (scripts/scale_robot.py AXES is the same object).
+from crossembodiment.bodybuild.beta import BETA_AXES  # noqa: E402,F401
 
 
 def load_beta(morphology_json_path) -> np.ndarray:
@@ -47,7 +47,7 @@ def load_task_list(path) -> list:
 class CrossEmbodimentDataset:
     def __init__(self, dataset_dir, task_filter=None):
         """task_filter: optional iterable of reward_name strings (e.g. from
-        datasets/crossenbodiment-1-datasets/splits/train_tasks.txt or
+        datasets/crossembodiment-1-datasets/splits/train_tasks.txt or
         test_tasks.txt, see scripts/split_tasks.py) -- only rows whose
         reward_name is in this set are kept. Use this to keep train/test
         task splits from leaking into each other."""

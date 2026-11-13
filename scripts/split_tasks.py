@@ -17,7 +17,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 TASKS_FILE = REPO_ROOT / "docs" / "humenv_all_tasks_official.txt"
-SPLIT_DIR = REPO_ROOT / "datasets" / "crossenbodiment-1-datasets" / "splits"
+SPLIT_DIR = REPO_ROOT / "datasets" / "crossembodiment-1-datasets" / "splits"
 
 
 def main():

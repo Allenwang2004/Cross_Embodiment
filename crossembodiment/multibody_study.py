@@ -2,7 +2,7 @@
 seeds, budgets, analysis-E arms and folders. Moved out of the driver in OOP refactor step 4, unchanged; multibody_corr.py imports
 it back, plot_multibody_E.py imports it from here.
 
-Not crossenbodiment.bodies: these are the experiment's 32 bodies of 10/10 (assets/robots/<body>, most of them deleted since:
+Not crossembodiment.bodies: these are the experiment's 32 bodies of 10/10 (assets/robots/<body>, most of them deleted since:
 outputs/body_shapes_deleted_2026-11-11.txt), named as in outputs/multibody_corr; BODIES here is that list, not the registry.
 
   OUT, LOG                  outputs/multibody_corr, outputs/train_logs/multibody_corr (absolute)
