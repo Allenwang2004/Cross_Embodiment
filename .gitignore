@@ -119,3 +119,6 @@ mujoco_Humanoid_motionretargeting/
 /utils
 /MUJOCO_LOG.TXT
 /docs/figures/Screenshot*
+
+# the paper draft stays local: this repository is public
+/docs/latex/
