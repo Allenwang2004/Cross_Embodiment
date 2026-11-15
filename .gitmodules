@@ -1,1 +1,7 @@
 
+[submodule "assets/robots/menagerie"]
+	path = assets/robots/menagerie
+	url = https://github.com/google-deepmind/mujoco_menagerie
+[submodule "assets/robots/limx_humanoid"]
+	path = assets/robots/limx_humanoid
+	url = https://github.com/limxdynamics/humanoid-description

@@ -62,6 +62,7 @@ import torch
 from PIL import Image, ImageDraw
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+from crossembodiment.geometry import sphere16   # noqa: E402  16 z / |z| (refactor step 3)
 
 
 def logspaced(count, n):
@@ -86,17 +87,9 @@ def logspaced(count, n):
     return sorted(out)
 
 
-def label(frame, text, sub=None):
-    """Burn the checkpoint's identity into its own panel -- a grid of otherwise
-    identical humanoids is unreadable without it, and a legend outside the
-    video cannot survive being clipped into a gif or a slide."""
-    im = Image.fromarray(frame)
-    d = ImageDraw.Draw(im)
-    d.rectangle([0, 0, im.width, 26], fill=(252, 252, 251))
-    d.text((6, 6), text, fill=(11, 11, 11))
-    if sub:
-        d.text((6, 30), sub, fill=(82, 81, 78))
-    return np.asarray(im)
+# label (the title band burnt into each panel) lives in crossembodiment/draw.py as frame_label since refactor step 4 (unchanged);
+# imported back for main() and `from rollout_z_trace import label`
+from crossembodiment.draw import frame_label as label   # noqa: E402,F401
 
 
 def main():
@@ -139,8 +132,7 @@ def main():
     from metamotivo.fb_cpr.huggingface import FBcprModel
 
     from model.obs_scale import build_obs_multiplier
-    from model.simple.config import ESConfig
-    from model.simple.train import compute_batch_cost
+    from crossembodiment.align_cost import AlignCostConfig, compute_batch_cost   # out of model/simple (refactor step 4)
     from single_z_search import rollout
 
     trace_path = Path(args.trace)
@@ -191,7 +183,7 @@ def main():
     lam_a, lam_p = summary.get("lambda_align", 1.0), summary.get("lambda_phys", 1.0)
     obj_name = {"align": "L_align", "phys": "L_phys", "bfm": "1-cos(B)", "mse": "MSE"}.get(objective, "sum")
 
-    cfg = ESConfig(device=args.device)
+    cfg = AlignCostConfig()
     cfg.phys_weights = summary["phys_weights"]
     cfg.phys_fall_ref = summary["phys_fall_ref"]
     cfg.lambda_align = cfg.lambda_phys = 1.0
@@ -229,13 +221,13 @@ def main():
 
     # the new cost and the similarity measures neither cost optimises directly (mse_vs_align_test.py)
     from model import losses, kinematics as kin
-    from mse_vs_align_test import metrics as sim_metrics
+    from crossembodiment.metrics import pose_similarity as sim_metrics   # mse_vs_align_test.metrics (refactor step 4)
     mses = [losses.tracking_mse(fk, qpos[i].astype(np.float64), ref)[0] for i in range(n)]
     sims = [sim_metrics(fk, qpos[i].astype(np.float64), ref.astype(np.float64), losses, kin) for i in range(n)]
     aw = summary.get("anchor_weight") or 0.0
     anc = np.load(REPO_ROOT / summary["anchor"]).reshape(-1) if aw else None
     if anc is not None:
-        anc = 16 * anc / np.linalg.norm(anc)
+        anc = sphere16(anc)
 
     _, aligns, physes = compute_batch_cost(fk, cfg, qpos, [ref] * n)
     bfm_cost = None
@@ -266,7 +258,7 @@ def main():
                               else float(mses[i]) if objective == "mse"
                               else float(lam_a * aligns[i] + lam_p * physes[i]),
                          mse=float(mses[i]), **sims[i],
-                         anchor_term=float(aw * (np.linalg.norm(16 * sel_z[i] / np.linalg.norm(sel_z[i]) - anc) / 16) ** 2)
+                         anchor_term=float(aw * (np.linalg.norm(sphere16(sel_z[i]) - anc) / 16) ** 2)
                          if anc is not None else 0.0,
                          cos_z0=float(cos_z0[i]),
                          travel=float(np.linalg.norm(q[-1, :2] - q[0, :2])),

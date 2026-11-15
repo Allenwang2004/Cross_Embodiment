@@ -1,0 +1,27 @@
+# survey.yaml -- the user survey's humanoid bodies (scripts/survey_body_videos.py BODY until OOP refactor step 4), loaded by
+# crossembodiment/survey.py, which rebuilds the old BODY dict from it exactly (tests/test_moves.py). Clip stems:
+# configs/clips/user_survey.txt.
+#
+# Per survey name (the name the survey's folders use: outputs/user_survey/<name>, outputs/user_survey_search/<name>):
+#   body   the body in configs/bodies.yaml; its physics_xml is the survey's xml. null: a body no longer in the registry, whose
+#          xml is given here
+#   xml    only for bodies without a registry entry
+#   ref    the folder of the clip the overlay video draws as the grey ghost: the body's retargeted motion (child / fat / tall)
+#          or the adult's original motion (heavy_arm, limit_leg: NOT the limited leg's registry reference, its bent-leg clip)
+#   h      stature (m): the cameras are the child's (1.26 m) scaled by it
+#   clips  stems this body walks instead of the survey's (heavy_arm: its move-ego-0-2_2 search never got the walk right)
+#
+# fat and tall are the survey's OLD bodies (assets/robots_torque/fat, assets/robots_torque/tall, data/fat, data/tall). Their XMLs
+# were deleted on 11/11 (outputs/body_shapes_deleted_2026-11-11.txt); the entries are kept as they were, so the survey scripts
+# behave exactly as before, failing where they did: survey_body_videos.py fat|tall and package_survey.py models() (it copies every
+# body's XML) stop at the missing file. The survey's "tall" is NOT the registry's "tall" (an alias of len1.4_wid0.8, the new
+# teaser body), and is deliberately not mapped to it.
+
+adult_h: 1.74                    # the adult's stature (ADULT_H); the adult's XML is paths.ADULT_XML_REL
+
+bodies:
+  child:     {body: child, ref: data/child/retargeting_motion, h: 1.26}
+  fat:       {body: null, xml: assets/robots_torque/fat/robot_torque_full.xml, ref: data/fat/retargeting_motion, h: 1.74}
+  tall:      {body: null, xml: assets/robots_torque/tall/robot_torque_full.xml, ref: data/tall/retargeting_motion, h: 2.07}
+  heavy_arm: {body: payload, ref: data/origin_motion, h: 1.74, clips: {move-ego-0-2_2: move-ego-0-2_4}}
+  limit_leg: {body: limit_leg, ref: data/origin_motion, h: 1.74}

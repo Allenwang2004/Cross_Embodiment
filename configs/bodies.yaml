@@ -1,0 +1,168 @@
+# bodies.yaml -- every body the live code drives Meta Motivo on (OOP refactor step 2, docs/refactor/PLAN.md), loaded by
+# crossembodiment/bodies.py (BodyRegistry). Data only: nothing here changes what a script does; tests/test_registry.py checks every
+# path and every root scale against the code and the existing runs.
+#
+# Fields (paths repository-relative; {name} = the body's name, {clip} = "<task>/<stem>" for a task clip or the ACCAD name for an AMASS
+# clip, {stem} = the clip's <stem>):
+#   kind         smpl_scaled  the adult's skeleton at another size, with its own retargeted references (adult = the identity)
+#                smpl_variant the adult's size with a changed body (mass, joint ranges)
+#                gain_variant a body above with its joint gains scaled (generated from gain_variants: below)
+#                robot        a non-SMPL humanoid (model/robots.py ROBOTS; RobotSpec in crossembodiment/bodies.py)
+#   label        the name the scripts pass as --body (single_z_search.py / lso_search.py) or --robot; default: the name
+#   shape_xml    the body's geometry (assets/robots/<body>/robot.xml; robots: ROBOTS[r]["xml"])
+#   physics_xml  what is simulated (the --xml of the searches; robots: ROBOTS[r]["scene"])
+#   smpl         SMPL topology (humenv's observation, eval_metrics.Body(xml, True))
+#   ref_task     the reference the body tracks on a task clip; ref_amass on an AMASS clip (null: none made or used)
+#   parent       the body it was made from
+#   aliases      other names (old output folders, the asset folder); unique across the roster
+#   s_rule / s   the root scale s (ExactObs's observation mapping; the adult-equivalent metres of the position term, of PHC's lengths
+#                and of the metrics), exactly as the current code gets it:
+#                  fixed       the literal s below
+#                  clip_ratio  scripts/single_z_search.py's rule (and amass_baselines.py scale()) for one clip: the median over
+#                              frames of the reference's root x, y over the adult clip's (where |adult| > 1e-3); constant per body to
+#                              ~1e-16, not to the bit, so it is computed per clip. s_default is the value without a clip:
+#                              body_52_test.py passes lso_search.py --scale 1 for the adult-size variants
+#                gain variants take their parent's s, reference and label (gains move no geometry; kpkd_test.py passes --body <parent label>)
+#
+# "tall" is an alias of len1.4_wid0.8 in the new code only (the teaser's tall thin body). The old body "tall"
+# (assets/robots_torque/tall, data/tall) that scripts/survey_body_videos.py and body_reward_eval.py still name was deleted on
+# 11/11 (outputs/body_shapes_deleted_2026-11-11.txt); those scripts are left as they are.
+
+bodies:
+  adult:
+    kind: smpl_scaled
+    display: Adult
+    shape_xml: assets/robots/adult/robot.xml
+    physics_xml: assets/robots/adult/robot.xml
+    smpl: true
+    ref_task: data/origin_motion/{clip}.npz
+    ref_amass: amass_data/amass_origin_motion/ACCAD/{clip}.npz
+    s_rule: fixed
+    s: 1.0                       # the reference itself (the clip ratio is exactly 1.0)
+
+  child:
+    kind: smpl_scaled
+    display: Child
+    parent: adult
+    shape_xml: assets/robots/child/robot.xml
+    physics_xml: assets/robots_torque/child/robot_torque_full.xml
+    smpl: true
+    ref_task: data/child/retargeting_motion/{clip}.npz
+    ref_amass: amass_data/amass_retargeting_motion/ACCAD/{clip}.npz
+    s_rule: fixed
+    s: 0.611036                  # ExactObs's default (model/exact_obs.py), NOT recomputed: single_z_search.py keeps it for --body child
+    aliases: [child_kp1_kd1]     # outputs/kpkd/child_kp1_kd1
+
+  # the 8 isometric bodies of scripts/make_scaled_bodies.py (11/11; = scripts/build_body.py scaled-set): every length x len, every girth x len * wid
+  len0.6_wid0.8: &scaled
+    kind: smpl_scaled
+    display: len 0.6 x wid 0.8
+    parent: adult
+    shape_xml: assets/robots/{name}/robot.xml
+    physics_xml: assets/robots_torque/{name}/robot_torque_full.xml
+    smpl: true
+    ref_task: data/{name}/retargeting_motion/{clip}.npz
+    ref_amass: null
+    s_rule: clip_ratio
+  len0.6_wid1.2: {<<: *scaled, display: len 0.6 x wid 1.2}
+  len0.8_wid0.8: {<<: *scaled, display: len 0.8 x wid 0.8}
+  len0.8_wid1.2: {<<: *scaled, display: len 0.8 x wid 1.2}
+  len1.2_wid0.8: {<<: *scaled, display: len 1.2 x wid 0.8}
+  len1.2_wid1.2: {<<: *scaled, display: len 1.2 x wid 1.2}
+  len1.4_wid0.8:
+    <<: *scaled
+    display: Tall (len 1.4 x wid 0.8)
+    ref_amass: data/{name}/amass_retargeting_motion/ACCAD/{clip}.npz     # scripts/qpos_retarget.py (amass_baselines.py)
+    aliases: [tall]
+  len1.4_wid1.2: {<<: *scaled, display: len 1.4 x wid 1.2}
+
+  payload:
+    kind: smpl_variant
+    display: Payload (right hand x 80)
+    label: adult_heavyRWristHand_x80
+    parent: adult
+    shape_xml: assets/robots/adult_heavyRWristHand_x80/robot.xml
+    physics_xml: assets/robots/adult_heavyRWristHand_x80/robot.xml
+    smpl: true
+    ref_task: data/origin_motion/{clip}.npz                # tracks the adult's own motion (body_52_test.py, kpkd_test.py)
+    ref_amass: amass_data/amass_origin_motion/ACCAD/{clip}.npz
+    s_rule: clip_ratio
+    s_default: 1.0
+    aliases: [heavy_arm, adult_heavyRWristHand_x80, heavy_arm_kp1_kd1]
+
+  limit_leg:
+    kind: smpl_variant
+    display: Limited leg (right leg locked, bent)
+    label: adult_lockRleg_bent_lim
+    parent: adult
+    shape_xml: assets/robots/adult_lockRleg_bent_lim/robot.xml
+    physics_xml: assets/robots/adult_lockRleg_bent_lim/robot.xml
+    smpl: true
+    ref_task: data/adult_lockRleg_bent_lim/retargeting_motion/{clip}.npz     # the bent-leg reference (scripts/lock_joint_body.py --user-lock)
+    ref_amass: null
+    s_rule: clip_ratio
+    s_default: 1.0
+    aliases: [adult_lockRleg_bent_lim, limit_leg_kp1_kd1]
+
+  # robots: model/robots.py ROBOTS (xml, scene, gains_json); s = RobotMap(r).s, the leg-length ratio robot / SMPL adult
+  g1:
+    kind: robot
+    display: Unitree G1
+    shape_xml: assets/robots/g1/g1.xml
+    physics_xml: assets/robots/g1/scene.xml
+    smpl: false
+    ref_task: outputs/g1/roundtrip/{stem}/g1.npz             # model/robots.py target_path (scripts/robot_roundtrip.py)
+    ref_amass: null
+    gains: assets/robots/g1/gains_perjoint.json
+    s_rule: fixed
+    s: 0.8212611427612194        # = RobotMap("g1").s to the bit; the literal of kpkd_test.py, g1_small_test.py, loes_noanchor.py
+    aliases: [g1_kp1_kd1]
+  h1:
+    kind: robot
+    display: Unitree H1
+    shape_xml: assets/robots/h1/scene.xml
+    physics_xml: assets/robots/h1/scene.xml
+    smpl: false
+    ref_task: outputs/h1/roundtrip/{stem}/robot.npz
+    ref_amass: null
+    gains: assets/robots/h1/gains_perjoint.json
+    s_rule: fixed
+    s: 1.0310746177455896        # RobotMap("h1").s (no literal in the code: the robot scripts compute it)
+  apollo:
+    kind: robot
+    display: Apptronik Apollo
+    shape_xml: assets/robots/apollo/scene.xml
+    physics_xml: assets/robots/apollo/scene.xml
+    smpl: false
+    ref_task: outputs/apollo/roundtrip/{stem}/robot.npz
+    ref_amass: null
+    gains: assets/robots/apollo/gains_perjoint.json
+    s_rule: fixed
+    s: 1.103120466562799         # RobotMap("apollo").s
+
+# gain variants, generated as <parent>_<condition> (scripts/kpkd_test.py COND: kp and kd scaled apart, 11/06-08; the k-scale test,
+# scripts/scale_body_gains.py --m: kp x k, kd x sqrt(k), torque limit x k, 11/03; both = crossembodiment/bodybuild GainScaler). Each takes its parent's shape_xml, reference, s and
+# label; only physics_xml (human bodies) or gains (robots) changes. kp1_kd1 is the parent itself (its alias <parent>_kp1_kd1).
+gain_variants:
+  conditions:
+    kp0.8_kd1.2: {kp: 0.8, kd: 1.2}
+    kp1.2_kd0.8: {kp: 1.2, kd: 0.8}
+    kp0.8_kd0.8: {kp: 0.8, kd: 0.8}
+    kp1.2_kd1.2: {kp: 1.2, kd: 1.2}
+    k0.8: {k: 0.8}
+    k1.2: {k: 1.2}
+  parents:
+    child:
+      conditions: [kp0.8_kd1.2, kp1.2_kd0.8, kp0.8_kd0.8, kp1.2_kd1.2, k0.8, k1.2]
+      physics_xml: assets/robots_torque/child_{cond}/robot_torque_full.xml
+    limit_leg:
+      conditions: [kp0.8_kd1.2, kp1.2_kd0.8, kp0.8_kd0.8, kp1.2_kd1.2]
+      physics_xml: assets/robots/adult_lockRleg_bent_lim_{cond}/robot.xml
+      aliases: ["adult_lockRleg_bent_lim_{cond}"]
+    payload:
+      conditions: [kp0.8_kd1.2, kp1.2_kd0.8, kp0.8_kd0.8, kp1.2_kd1.2]
+      physics_xml: assets/robots/adult_heavyRWristHand_x80_{cond}/robot.xml
+      aliases: ["heavy_arm_{cond}", "adult_heavyRWristHand_x80_{cond}"]    # outputs/kpkd/heavy_arm_<cond>
+    g1:
+      conditions: [kp0.8_kd1.2, kp1.2_kd0.8, kp0.8_kd0.8, kp1.2_kd1.2, k0.8, k1.2]
+      gains: assets/robots/g1/gains_perjoint_{cond}.json

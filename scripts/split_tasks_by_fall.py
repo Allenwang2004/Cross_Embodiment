@@ -116,7 +116,7 @@ will not average out.
 Usage (from project root):
     uv run scripts/spilt_tasks.py
     uv run scripts/spilt_tasks.py --threshold 0.05
-    uv run scripts/spilt_tasks.py --dataset datasets/crossenbodiment-10bodies
+    uv run scripts/spilt_tasks.py --dataset datasets/crossembodiment-10bodies
 
     # the pre-move two-way partition: no move group, upright keeps its 30 tasks
     uv run scripts/spilt_tasks.py --move-prefix ""
@@ -223,7 +223,7 @@ def report_gap(stats: dict, threshold: float) -> None:
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--dataset", default="datasets/crossenbodiment-10bodies")
+    p.add_argument("--dataset", default="datasets/crossembodiment-10bodies")
     p.add_argument("--threshold", type=float, default=0.05,
                    help="mean P.fall on the reference above which a task is "
                         "'ground'. The measured distribution has a 6.5x gap "

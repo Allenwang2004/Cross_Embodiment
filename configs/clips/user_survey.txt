@@ -1,0 +1,11 @@
+move-ego-0-2_2
+move-ego-0-4_8
+crawl-0.4-2-d_8
+rotate-x-5-0.8_9
+rotate-x--5-0.8_4
+rotate-y-5-0.8_7
+rotate-z--5-0.8_6
+jump-2_6
+jump-2_7
+headstand_4
+crouch-0_8

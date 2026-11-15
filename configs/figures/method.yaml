@@ -1,0 +1,42 @@
+# The method figure's motion panels (OOP refactor step 10; before it, constants in the scripts).
+#   scripts/export_blender_package.py   the Blender panels method_* -> outputs/blender_package (render_blender.py -> docs/figures/blender_renders)
+#   scripts/plot_method_figure.py       the MuJoCo cut-outs (render: cutouts) and the figure (draw / simple / first)
+# Paths are repository-relative ("outputs/..." read through crossembodiment.paths.read_path); {run} is the clip below.
+run: move-ego-0-4_8
+units_per_m: 42.0                # figure units (0.01 in) per metre of body
+result: [60, 102, 144, 186, 228, 270]   # the result strips' frames (6 poses, fading 0.62 * (1 - i / 5))
+stand: 165
+pose_dx_u: 18                    # figure units between the result strips' poses
+first: [60, 165, 270]            # the first layout of the method figure (plot_method_figure.py first), on the same run as the newer layout
+new_body_t: 150                  # a still frame of move-ego-0-0_2 (the "New body" box: each body standing still, user, 11/11)
+models:
+  adult: outputs/user_survey/models/adult.xml
+  child: outputs/user_survey/models/child.xml
+  g1: outputs/user_survey/models/g1/scene.xml
+blender:
+  # the fall of z0 on each new body (6 poses up to its lowest point)
+  fall:
+    - {name: method_fall_child, model: child, qpos: "outputs/user_survey/child/trajectories/{run}/z0.npz", tag: child}
+    - {name: method_fall_g1, model: g1, qpos: outputs/g1/search/move-ego-90-4_9_s0/origin_z.npz, tag: g1}
+  fall_u: [110, 63, 7]           # width, height, feet height (figure units)
+  # the result strips (and the adult's reference)
+  strips:
+    - {name: method_adult, model: adult, qpos: "outputs/user_survey/child/trajectories/{run}/reference_adult.npz", tag: adult, u: [130, 100, 8]}
+    - {name: method_child, model: child, qpos: "outputs/user_survey/child/trajectories/{run}/best.npz", tag: child, u: [128, 98, 8]}
+    - {name: method_g1, model: g1, qpos: "outputs/user_survey/g1/trajectories/{run}/best.npz", tag: g1, u: [128, 98, 8]}
+  # the first layout's cut-outs (transparent background): one panel per pose of `first`
+  first:
+    - {name: adult, model: adult, qpos: "outputs/user_survey/child/trajectories/{run}/reference_adult.npz", tint: 0.5}
+    - {name: child, model: child, qpos: "outputs/user_survey/child/trajectories/{run}/best.npz", tint: 0.0}
+    - {name: g1, model: g1, qpos: "outputs/user_survey/g1/trajectories/{run}/best.npz", tint: 0.0}
+  # the "New body" box: frame new_body_t of the stand-still task motion move-ego-0-0_2 (the child's retargeted reference; the G1's
+  # target from the SMPL round trip), arms down, as the first layout's other cut-outs
+  stand:
+    - {name: child, model: child, qpos: data/child/retargeting_motion/move-ego-0-0/move-ego-0-0_2.npz}
+    - {name: g1, model: g1, qpos: outputs/g1/roundtrip/move-ego-0-0_2/g1.npz}
+  first_u: [100, 100, 12]
+# plot_method_figure.py render: the MuJoCo cut-outs (frames result + stand) of these rollouts on these models
+cutouts:
+  adult: {xml: assets/robots/adult/robot.xml, qpos: "outputs/user_survey/child/trajectories/{run}/reference_adult.npz"}
+  child: {xml: assets/robots_torque/child/robot_torque_full.xml, qpos: "outputs/user_survey/child/trajectories/{run}/best.npz"}
+  g1: {xml: assets/robots/g1/scene.xml, qpos: "outputs/user_survey/g1/trajectories/{run}/best.npz"}

@@ -84,10 +84,10 @@ def main():
     from metamotivo.fb_cpr.huggingface import FBcprModel
     from model import bfm_align
     from model.obs_scale import build_obs_multiplier
-    from model.simple.config import ESConfig
+    from crossembodiment.align_cost import AlignCostConfig   # obs_scale_parts, as model/simple's ESConfig (refactor step 4)
     import mujoco
 
-    cfg = ESConfig(device=args.device)
+    cfg = AlignCostConfig()
     model = FBcprModel.from_pretrained(args.metamotivo).to(args.device); model.eval()
     rows = []
     t0 = time.time()

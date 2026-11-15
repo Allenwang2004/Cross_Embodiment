@@ -20,7 +20,7 @@ import torch
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.append(str(REPO))
-DS = REPO / "datasets/crossenbodiment-child-balanced"
+DS = REPO / "datasets/crossembodiment-child-balanced"
 OUT = REPO / "outputs/exact_obs"
 
 
@@ -31,7 +31,10 @@ def main():
     from model.dataset import CrossEmbodimentDataset
     from model.exact_obs import ExactObs
     from model.simple.train import make_body_ctx, compute_batch_cost
-    from model.simple.train_es import set_init_qpos
+    from crossembodiment.obs import ExactObs as ExactObsMapper, MultiplierObs, RawObs   # the simulation layer (refactor step 5)
+    from crossembodiment.policy import MotivoPolicy
+    from crossembodiment.rollout import BatchRollout
+    from crossembodiment.sim import HumenvSim
     dev = "cuda" if torch.cuda.is_available() else "cpu"
     OUT.mkdir(parents=True, exist_ok=True)
     ck = sorted((REPO / "outputs/simple_es/child_balanced/b500_global_anchor").glob("update_*.pt"))[-1]
@@ -48,6 +51,8 @@ def main():
     env_c1, _ = make_humenv(num_envs=1, task=None, xml=str(DS / xml_rel), state_init="Default")
     env_a1, _ = make_humenv(num_envs=1, task=None, xml=str(REPO / "assets/robots/adult/robot.xml"), state_init="Default")
     mul = ctx["obs_mul"]; nv = ctx["fk"].nv; bs = cfg.batch_size
+    policy = MotivoPolicy(model, dev)
+    mappers = {"none": RawObs(), "mult": MultiplierObs(mul), "exact": ExactObsMapper.wrap(X, in_env=False)}
 
     smp = {i: ds[at[(rows[i]["task"], rows[i]["trial"])]] for i in te}
     Bg_mult, Bg_exact = {}, {}
@@ -64,25 +69,13 @@ def main():
             t0 = time.time()
             part = jobs[a:a + bs]; pad = part + [part[-1]] * (bs - len(part))
             Z = torch.tensor(np.stack([labels[l][i] for i, l in pad]), dtype=torch.float32, device=dev)
-            env = ctx["env"]; env.reset()
-            obs = set_init_qpos(env, [smp[i]["qpos_ref"][0] for i, _ in pad], nv)
-            qpos = np.stack([smp[i]["qpos_ref"][0] for i, _ in pad]); qvel = np.zeros((bs, nv))
-            Q, OM, OE = [], [], []
-            for t in range(cfg.steps_per_episode):
-                raw = obs["proprio"]
-                if mode == "none":
-                    o = raw
-                elif mode == "mult":
-                    o = raw * mul
-                else:
-                    o = np.stack([X(qpos[k], qvel[k]) for k in range(bs)])
-                mu = model._actor(model._normalize(torch.as_tensor(o, dtype=torch.float32, device=dev)), Z,
-                                  model.cfg.actor_std).mean
-                obs, _, _, _, info = env.step(mu.detach().cpu().numpy())
-                qpos, qvel = info["qpos"].copy(), info["qvel"].copy()
-                Q.append(qpos); OM.append(obs["proprio"] * mul)
-                OE.append(np.stack([X(qpos[k], qvel[k]) for k in range(bs)]))
-            Q, OM, OE = np.stack(Q, 1), np.stack(OM, 1).astype(np.float32), np.stack(OE, 1)
+            # every slot from its own reference's frame 0 at rest (train_es.set_init_qpos's per-slot protocol, then get_obs);
+            # the actor sees the mode's observation (exact: computed here in the main process); the multiplier and the exact
+            # observation of every new state are recorded whatever the actor saw (crossembodiment.rollout, refactor step 5)
+            ro = BatchRollout(policy, HumenvSim(ctx["env"]), mappers[mode], bs, cfg.steps_per_episode, record=("qpos",),
+                              extra_obs={"mult": mappers["mult"], "exact": mappers["exact"]}, nv=nv
+                              ).run(Z, init_qpos=[smp[i]["qpos_ref"][0] for i, _ in pad], per_slot=True)
+            Q, OM, OE = ro.qpos, ro.extra["mult"].astype(np.float32), ro.extra["exact"]
             _, la, _ = compute_batch_cost(ctx["fk"], cfg, Q, [smp[i]["qpos_ref"] for i, _ in pad])
             Bm = bfm_align.embed(model, OM.reshape(-1, 358), dev).reshape(bs, Q.shape[1], -1)
             Be = bfm_align.embed(model, OE.reshape(-1, 358), dev).reshape(bs, Q.shape[1], -1)

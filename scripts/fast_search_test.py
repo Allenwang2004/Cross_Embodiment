@@ -18,6 +18,8 @@ from pathlib import Path
 import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO))
+from crossembodiment.geometry import sphere16   # noqa: E402  16 z / |z| (refactor step 3)
 OUT = REPO / "outputs/fast_search"
 LOG = REPO / "outputs/train_logs/fast_search"
 PER_CAT = 2
@@ -26,7 +28,7 @@ GENS, PAIRS = 10, 8
 
 def ld(p):
     v = np.load(p).reshape(-1).astype(np.float64)
-    return 16 * v / np.linalg.norm(v)
+    return sphere16(v)
 
 
 def pick():

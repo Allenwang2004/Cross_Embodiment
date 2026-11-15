@@ -1,0 +1,69 @@
+# resolved by render_strobe.py: base config + overlays + command line
+task_name: g1_move-ego-0-4
+xml_path: assets/robots_torque/child/robot_torque_full.xml
+seed: 0
+reference_clip: data/child/retargeting_motion/headstand/headstand_2.npz
+init_from_reference: true
+nominal_latent: data/origin_z/headstand/headstand_2.npy
+adapted_latent: outputs/my_search/headstand_2/best_z.npy
+nominal_qpos: null
+adapted_qpos: null
+baseline:
+  label: adult
+  qpos: data/origin_motion/headstand/headstand_2.npz
+  xml: assets/robots/adult/robot.xml
+  latent: null
+project_latent: false
+rollout:
+  steps: 120
+  obs_scale: exact
+camera:
+  type: orbit_auto
+  distance: 5
+  elevation: 0.0
+  azimuth_offset: 90.0
+  lookat_height: 0.6
+  track_body: null
+  plan_window: strobe
+strobe:
+  start_step: 15
+  end_step: 55
+  interval: 5
+  shift_px: 20
+  x_offset_px: -30
+  target_frames: null
+  threshold: 5.0
+  # For the adult render
+  # start_color:
+  # - 1.0
+  # - 0.88
+  # - 0.66
+  # - 0.7
+  # final_color:
+  # - 0.627
+  # - 0.47
+  # - 0.318
+  # - 1.0
+  # For the robot render
+  start_color:
+  - 0.43
+  - 0.56
+  - 0.66
+  - 0.7
+  final_color:
+  - 0.29
+  - 0.30
+  - 0.32
+  - 1.0
+  middle_color: null
+  crop_floor: false
+  crop_floor_frac: 0.12
+replay:
+  clip: outputs/g1/trajectories/move-ego-0-4_8
+render:
+  width: 1280
+  height: 720
+  fps: 30
+  white_background: false
+  burn_in_frame_index: true
+  out_dir: outputs/figures/strobe

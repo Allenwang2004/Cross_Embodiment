@@ -3,7 +3,7 @@
 # or when they all finish. Fields are pulled one at a time -- a single sed over
 # the whole eval line mis-captured `test cost` because the line carries two
 # "angle N" fields and the greedy match took the wrong one.
-cd /home/allen19/crossenbodiment
+cd /home/allen19/crossembodiment
 declare -A best
 best[child-lr3e-4]=0.3674
 best[child-lr1e-3-pairs32]=0.3635

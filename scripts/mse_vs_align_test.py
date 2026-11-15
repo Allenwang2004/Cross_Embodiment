@@ -2,7 +2,7 @@
 """mse_vs_align_test.py -- does searching on the new MSE cost give motions that look more like the reference
 than searching on L_align?
 
-Clips from the 540 (crossenbodiment-child-torque), --per-group per motion group (seed 0; "ground" =
+Clips from the 540 (crossembodiment-child-torque), --per-group per motion group (seed 0; "ground" =
 lieonground / sitonground / split / crouch, never searched before). Each searched twice from its own z0, same
 settings except the objective: exact observations, + 0.3 (|z - z0| / 16)^2, 8 pairs (16 rollouts) per
 generation, --gens generations.
@@ -24,6 +24,7 @@ import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.append(str(REPO))
+from crossembodiment.geometry import sphere16   # noqa: E402  16 z / |z| (refactor step 3; 16 (z / |z|) is the same bits: 16 = 2^4)
 OUT = REPO / "outputs/mse_vs_align"
 LOG = REPO / "outputs/train_logs/mse_vs_align"
 ARMS = ("align", "mse")
@@ -38,7 +39,7 @@ def group(task):
 
 
 def pick(per_group):
-    man = [json.loads(l) for l in open(REPO / "datasets/crossenbodiment-child-torque/manifest.jsonl")]
+    man = [json.loads(l) for l in open(REPO / "datasets/crossembodiment-child-torque/manifest.jsonl")]
     by = defaultdict(list)
     for m in man:
         by[group(m["reward_name"])].append((m["reward_name"], str(m["trial"])))
@@ -74,23 +75,8 @@ def run(args):
           f"{sum(p.returncode != 0 for p in procs)} failed) ===", flush=True)
 
 
-def metrics(fk, q, ref, losses, kin):
-    T = min(len(q), len(ref)); q, ref = q[:T], ref[:T]
-    names = [fk.body(i).name for i in range(1, fk.nbody)]
-    pa, qa = kin.batch_forward_pose(fk, q, names)
-    pb, qb = kin.batch_forward_pose(fk, ref, names)
-    ha, hb = losses.root_heading(qa[kin.ROOT_BODY]), losses.root_heading(qb[kin.ROOT_BODY])
-
-    def local(p, h):
-        c, s = np.cos(h), np.sin(h)
-        return np.stack([c * p[:, 0] + s * p[:, 1], -s * p[:, 0] + c * p[:, 1], p[:, 2]], -1)
-
-    r = kin.ROOT_BODY
-    loc = np.mean([np.linalg.norm(local(pa[n] - pa[r], ha) - local(pb[n] - pb[r], hb), axis=-1).mean() for n in names])
-    glob = np.mean([np.linalg.norm(pa[n] - pb[n], axis=-1).mean() for n in names])
-    dq = (q[:, 7:] - ref[:, 7:] + np.pi) % (2 * np.pi) - np.pi
-    return dict(joint_deg=float(np.degrees(np.abs(dq)).mean()), mpjpe_loc=100 * float(loc), mpjpe_glob=100 * float(glob),
-                head_deg=float(np.degrees(np.abs(np.angle(np.exp(1j * (ha - hb))))).mean()))
+# metrics lives in crossembodiment/metrics.py as pose_similarity since refactor step 4 (unchanged); imported back for report()
+from crossembodiment.metrics import pose_similarity as metrics   # noqa: E402,F401
 
 
 def report(args):
@@ -113,7 +99,7 @@ def report(args):
             m["L_align"] = float(losses.functional_equivalence(fk, q, ref, W, 1 / 30)[0])
             m["mse"] = float(losses.tracking_mse(fk, q, ref)[0])
             m["dist_z0"] = float(np.linalg.norm(np.load(OUT / name / stem / "best_z.npy").reshape(-1)
-                                                - 16 * (lambda v: v / np.linalg.norm(v))(np.load(REPO / f"data/origin_z/{t}/{stem}.npy").reshape(-1)))) if name in ARMS else 0.0
+                                                - sphere16(np.load(REPO / f"data/origin_z/{t}/{stem}.npy").reshape(-1)))) if name in ARMS else 0.0
             rows[stem][name] = m
     json.dump(rows, open(OUT / "metrics.json", "w"), indent=1)
     keys = ["L_align", "mse", "joint_deg", "mpjpe_loc", "mpjpe_glob", "head_deg", "dist_z0"]

@@ -8,9 +8,12 @@ distance between their searched latents. No projection, so every distance is the
 Latents are on the radius-16 sphere: two random latents are ~22.6 apart, opposite ones 32.
 """
 import itertools
+import sys
 from pathlib import Path
 import numpy as np
 REPO = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO))
+from crossembodiment.geometry import sphere16, sphere16_rows   # noqa: E402  16 z / |z| (refactor step 3)
 SURF, INK, INK2, INK3 = "#fcfcfb", "#0b0b0b", "#52514e", "#8a8983"
 N = ["z0", "rot0.5_0", "rot1_0", "rot2_0", "rot5_0", "rot10_0", "rot20_0", "rot30_0"]
 L = ["z0", "+0.5", "+1", "+2", "+5", "+10", "+20", "+30"]
@@ -18,7 +21,7 @@ L = ["z0", "+0.5", "+1", "+2", "+5", "+10", "+20", "+30"]
 
 def ld(p):
     v = np.load(p).reshape(-1).astype(np.float64)
-    return 16 * v / np.linalg.norm(v)
+    return sphere16(v)
 
 
 S = [ld(REPO / f"outputs/latent_transfer/move-ego-0-2_4/starts/{n}.npy") for n in N]
@@ -26,7 +29,7 @@ Z = [ld(REPO / f"outputs/latent_transfer_own/move-ego-0-2_4/align/{n}/best_z.npy
 P = list(itertools.combinations(range(8), 2))
 x = np.array([np.linalg.norm(S[i] - S[j]) for i, j in P])
 y = np.array([np.linalg.norm(Z[i] - Z[j]) for i, j in P])
-rng = np.random.default_rng(0); R = rng.standard_normal((4000, 256)); R = 16 * R / np.linalg.norm(R, axis=1, keepdims=True)
+rng = np.random.default_rng(0); R = rng.standard_normal((4000, 256)); R = sphere16_rows(R)
 rand = float(np.linalg.norm(R[:2000] - R[2000:], axis=1).mean())
 
 import matplotlib; matplotlib.use("Agg"); import matplotlib.pyplot as plt

@@ -17,7 +17,22 @@ Spec (JSON):
 "track": {"distance", "elevation", "azimuth", "lookat_z"[, "follow": "first"]}: a free camera on each body's
 centre of mass, or with "follow": "first" on the first panel's for every panel (drift stays visible).
 
+"mesh": true (spec-wide, or per panel): dress the body in the SMPL mesh deformed to its own proportions and hide
+its capsules (scripts/smpl_skin.py; visual only; mesh panels are drawn without shadows, which band the skin).
+"mesh_rgba" sets the skin colour (spec-wide or per panel).
+
+"size": panel side in pixels (default 1080; keep the whole grid within ~4096 x 2160 so ordinary players open it,
+e.g. 2 x 2 or 3 x 1 / 3 x 2 panels at 1080).
+"label_px": title size in pixels for a TrueType label (default: size / 30 above size 480, PIL's small bitmap font
+at 480 and below);
+"captions": false: no title / subtitle band at all (e.g. survey videos); titles may then be omitted.
+"rgba": [r, g, b, a] (per panel): draw the body flat in that colour, e.g. the overlay videos' grey / red / blue.
+"quality": the mp4's imageio-ffmpeg quality, 0-10 (default 8 at size >= 1080, else 5).
+
 Writes <out> (mp4) and <out>.png (contact sheet: three moments, panels across).
+The rendering is crossembodiment.video.VideoRenderer.render_spec (OOP refactor step 10: the side-by-side and overlay videos share its
+painting and writer settings). Spec paths are repository-relative ("outputs/..." read through $CE_OUTPUTS_ROOT, the video written
+under $CE_RESULTS_ROOT; defaults outputs/) or absolute; --out writes the video elsewhere.
 """
 from __future__ import annotations
 
@@ -29,13 +44,11 @@ from pathlib import Path
 
 os.environ.setdefault("MUJOCO_GL", "egl")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-import imageio.v2 as imageio
-import mujoco
-import numpy as np
-from PIL import Image
-
-from rollout_z_trace import label
+REPO_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))   # the repository root, appended as rollout_z_trace did
+if REPO_DIR not in sys.path:
+    sys.path.append(REPO_DIR)
+from crossembodiment.draw import frame_label as label   # noqa: E402,F401  rollout_z_trace.label (refactor step 4)
+from crossembodiment.video import FONT, VideoRenderer, label_px   # noqa: E402,F401  (render_humanoids.py imports FONT from here)
 
 REPO = Path(__file__).resolve().parent.parent
 
@@ -43,63 +56,10 @@ REPO = Path(__file__).resolve().parent.parent
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("spec")
+    ap.add_argument("--out", default=None, help="write the video here instead of the spec's out")
     a = ap.parse_args()
     spec = json.loads(Path(a.spec).read_text())
-    size, cam, cols = spec.get("size", 320), spec.get("camera", "front_side"), spec.get("cols", 4)
-    trajs = [np.load(REPO / p["qpos"])["qpos"] for p in spec["panels"]]
-    T = max(len(q) for q in trajs)
-    tr = spec.get("track")
-    lead = None
-    if tr and tr.get("follow") == "first":
-        # every panel's camera follows the FIRST panel's centre of mass (the reference), so a rollout
-        # that drifts or turns away shows up as a body leaving the centre instead of being re-centred
-        m0 = mujoco.MjModel.from_xml_path(str(REPO / spec["panels"][0]["xml"])); d0 = mujoco.MjData(m0)
-        lead = []
-        for t in range(T):
-            d0.qpos[:] = trajs[0][min(t, len(trajs[0]) - 1)]; mujoco.mj_forward(m0, d0)
-            lead.append(d0.subtree_com[1][:2].copy())
-    panels = []
-    for p, q in zip(spec["panels"], trajs):
-        m = mujoco.MjModel.from_xml_path(str(REPO / p["xml"]))
-        d = mujoco.MjData(m)
-        r = mujoco.Renderer(m, height=size, width=size)
-        # spec["track"]: a free camera that follows the body's centre of mass
-        # with ONE distance / angle / look-at height shared by every panel, so
-        # bodies of different heights stay whole in frame and keep their true
-        # relative size. The XML's named cameras sit at a fixed 0.8 m and cut
-        # the head off anything adult-sized.
-        fc = None
-        if tr:
-            fc = mujoco.MjvCamera()
-            fc.type = mujoco.mjtCamera.mjCAMERA_FREE
-            fc.distance, fc.elevation, fc.azimuth = tr["distance"], tr["elevation"], tr["azimuth"]
-        frames = []
-        for t in range(T):
-            d.qpos[:] = q[min(t, len(q) - 1)]
-            mujoco.mj_forward(m, d)
-            if fc is not None:
-                c = lead[t] if lead is not None else d.subtree_com[1]
-                fc.lookat[:] = [c[0], c[1], tr["lookat_z"]]
-                r.update_scene(d, camera=fc)
-            else:
-                r.update_scene(d, camera=cam)
-            frames.append(label(r.render().copy(), p["title"], p.get("sub", "")))
-        r.close()
-        panels.append(frames)
-    cols = min(cols, len(panels))
-    rows = int(np.ceil(len(panels) / cols))
-    blank = np.full_like(panels[0][0], 252)
-    grid = []
-    for t in range(T):
-        band = [np.concatenate([panels[i][t] if i < len(panels) else blank
-                                for i in range(r * cols, r * cols + cols)], axis=1) for r in range(rows)]
-        grid.append(np.concatenate(band, axis=0))
-    out = REPO / spec["out"]
-    out.parent.mkdir(parents=True, exist_ok=True)
-    imageio.mimsave(out, grid, fps=spec.get("fps", 30.0))
-    ts = [int(T * f) for f in (0.2, 0.5, 0.85)]
-    sheet = np.concatenate([np.concatenate([p[t] for p in panels], axis=1) for t in ts], axis=0)
-    Image.fromarray(sheet).save(str(out) + ".png")
+    out = VideoRenderer().render_spec(spec, out=a.out)
     print(f"-> {out}\n-> {out}.png")
 
 

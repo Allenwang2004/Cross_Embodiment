@@ -7,7 +7,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-DS=datasets/crossenbodiment-child-balanced
+DS=datasets/crossembodiment-child-balanced
 OUT=outputs/simple_es/child_balanced
 LOG=outputs/train_logs/child_balanced
 mkdir -p "$LOG"
@@ -17,7 +17,7 @@ CUDA_VISIBLE_DEVICES=${GPU:-1} nohup setsid uv run python -m model.simple.train_
   --updates 600 --pairs 16 --batch-size 128 --sigma 0.05 \
   --lr 3e-4 --alpha 1.0 --lambda-z 0 \
   --eval-every 25 --eval-clips 64 --no-progress \
-  --project crossenbodiment-simple \
+  --project crossembodiment-simple \
   --clip-list "$DS/splits/headstand_only_clips.txt" \
   --clip-categories "$DS/splits/headstand_only_categories.txt" \
   --heldout-clip-frac 0.2 \

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """b500_align_search.py -- one search per clip, straight from z0 (no bfm stage), anchored to z0.
 
---clips b500: the b500 clips (outputs/b500_targets/sup_dataset); c540: the 540 of crossenbodiment-child-torque.
+--clips b500: the b500 clips (outputs/b500_targets/sup_dataset); c540: the 540 of crossembodiment-child-torque.
 --objective align: L_align (losses.functional_equivalence); mse: losses.tracking_mse (pose + ee + root + heading);
             bfm_global: 1 - cos(B(s), B(g)) + 1.0 * (1 - cos dheading) / 2 + 0.1 * |root xy - ref| (m), the old
             two-stage "global" cost in one stage -- cosine alone cannot see heading or root x, y (the proprio is in the
@@ -21,7 +21,7 @@ import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent
 INDEX = REPO / "outputs/b500_targets/sup_dataset/index.jsonl"
-C540 = REPO / "datasets/crossenbodiment-child-torque/manifest.jsonl"
+C540 = REPO / "datasets/crossembodiment-child-torque/manifest.jsonl"
 PAIRS = 8
 
 

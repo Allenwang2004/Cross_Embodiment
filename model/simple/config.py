@@ -8,7 +8,7 @@ class TrainConfig:
     # 540 clips x 10 bodies, built by scripts/build_dataset.py. The bodies come
     # from the manifest, one per row, and splits/train_bodies.txt says which 8
     # of them are trained on -- train.py never reads target_xml any more.
-    dataset_dir: str = "datasets/crossenbodiment-10bodies"
+    dataset_dir: str = "datasets/crossembodiment-10bodies"
     # One update = one body (see train.py "One body per update"). "cycle" walks
     # the 8 training bodies in order so a run of N updates gives each of them
     # exactly N/8; "random" draws i.i.d., which lets short runs be unbalanced.
@@ -157,7 +157,7 @@ class TrainConfig:
     # between bodies with different cost scales -- read `by_body/<label>/*`
     # for a trend within a body and treat the pooled ones as a sanity check.
     use_wandb: bool = True
-    wandb_project: str = "crossenbodiment-simple"
+    wandb_project: str = "crossembodiment-simple"
     wandb_run_name: Optional[str] = None
 
     # Held-out evaluation during training. The body axis is the only split, so
@@ -195,7 +195,7 @@ class ESConfig:
     ES needs one scalar per rollout, so none of them have an analogue.
     """
     metamotivo_repo: str = "facebook/metamotivo-M-1"
-    dataset_dir: str = "datasets/crossenbodiment-10bodies"
+    dataset_dir: str = "datasets/crossembodiment-10bodies"
     # How many bodies one update's batch covers, 0 = all training bodies. This
     # is the file's whole premise (train_es.py "One motion, every body"): a batch
     # is clips_per_update clips x this many bodies, same z0, different beta, so
@@ -500,7 +500,7 @@ class ESConfig:
     eval_seed: int = 12345
 
     use_wandb: bool = True
-    wandb_project: str = "crossenbodiment-simple"
+    wandb_project: str = "crossembodiment-simple"
     wandb_run_name: Optional[str] = None
     progress: bool = True
     log_every: int = 1
@@ -517,7 +517,7 @@ class ZMapConfig:
     trains the SAME LatentAdapter, on a labelled target instead of a physics
     objective, so a checkpoint from here is loadable by the rollout paths.
     """
-    dataset_dir: str = "datasets/crossenbodiment-10bodies"
+    dataset_dir: str = "datasets/crossembodiment-10bodies"
     device: str = "cuda:0"
 
     adapter_hidden_dims: List[int] = dataclasses.field(default_factory=lambda: [256, 512, 512, 256])
@@ -541,7 +541,7 @@ class ZMapConfig:
     preload_device: bool = True
 
     use_wandb: bool = True
-    wandb_project: str = "crossenbodiment-simple"
+    wandb_project: str = "crossembodiment-simple"
     wandb_run_name: Optional[str] = None
     progress: bool = True
     log_every: int = 20

@@ -70,105 +70,10 @@ SURFACE = "#fcfcfb"
 SHADE = "#f0efe9"
 
 
-def joint_torques(xml, qpos, dt, *, mode="gravity"):
-    """Per-joint torque demand for the 69 actuated hinges. Returns (T,69), ncon.
-
-    mode:
-      "gravity" — qfrc_bias at qvel=0: the PURE gravity torque of the pose
-                  (verified: switch opt.gravity off and qfrc_bias is exactly 0).
-                  It does NOT include the joint springs -- those live in
-                  qfrc_passive, a separate field, and they are not small here
-                  (|passive|/|gravity| median 1.12 on adult). Subtracting them
-                  to get the true static demand costs the clean ratio: limb k
-                  moves 0.213 -> 0.152 and joints at R^2>=0.99999 drop 50 -> 5,
-                  because child jnt_stiffness was scaled by ~0.135 while its
-                  gravity torque scales by ~0.213, so the two terms mix
-                  pose-dependently. What this mode measures is therefore the
-                  gravity term alone, which is the part that HAS a ratio.
-                  This is the only one of the three that contains NO constraint
-                  force, so it is the only clean ratio test on these clips: the
-                  child's retargeted feet are in contact on every single frame
-                  (ground-correction plants them), so anything derived from
-                  mj_inverse is contaminated on every frame and contaminated
-                  differently on the two bodies (child ncon median 6 vs adult 3).
-      "quasi"   — mj_inverse with qvel=qacc=0. Adds the constraint force back.
-      "full"    — mj_inverse with the differenced qvel/qacc. Closest to the real
-                  demand in principle, but on a retargeted clip the differenced
-                  qacc is unreliable and contacts amplify it (see
-                  notebooks/actuator.py --verify).
-    """
-    model = mujoco.MjModel.from_xml_path(str(xml))
-    data = mujoco.MjData(model)
-    names = [mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_ACTUATOR, i)
-             or f"act{i}" for i in range(model.nu)]
-    dofs = [model.jnt_dofadr[model.actuator_trnid[i, 0]] for i in range(model.nu)]
-    # forcerange is in pre-gear actuator units; gear is 1 here, but divide anyway
-    # so a future non-unit gear does not silently corrupt the comparison.
-    gear = model.actuator_gear[:, 0]
-
-    if mode == "gravity":
-        T = len(qpos) 
-        tau = np.zeros((T, model.nv))
-        ncon = np.zeros(T, dtype=int)
-        for t in range(T):
-            data.qpos[:] = qpos[t]
-            data.qvel[:] = 0.0          # qvel=0 -> qfrc_bias is gravity + springs
-            mujoco.mj_forward(model, data)
-            tau[t] = data.qfrc_bias
-            ncon[t] = data.ncon         # recorded for the plot, not used in the fit
-    # else:
-    #     # imported lazily: notebooks/actuator.py is only needed by quasi/full,
-    #     # and the default gravity mode must run even when it is absent.
-    #     from notebooks.actuator import differentiate_trajectory, inverse_dynamics
-
-    #     qvel, qacc = differentiate_trajectory(model, qpos, dt)
-    #     tau, ncon = inverse_dynamics(model, data, qpos, qvel, qacc,
-    #                                  quasi_static=(mode == "quasi"))
-
-    return tau[:, dofs] / gear, ncon, names, model
-
-
-def fit_ratio(x, y):
-    """Least-squares k for y ~ k*x through the origin, plus R^2 about that fit.
-
-    Through the origin, not a free intercept: the claim being tested is
-    "child torque is a fixed multiple of adult torque", and a fitted offset
-    would let a joint pass with a constant bias it has no physical reason to
-    carry. R^2 is 1 - SSE/SS_total-about-zero, so it is comparable to that claim.
-    """
-    denom = float(np.dot(x, x))
-    if denom < 1e-18:
-        return np.nan, np.nan
-    k = float(np.dot(x, y) / denom)
-    sse = float(np.sum((y - k * x) ** 2))
-    sst = float(np.sum(y ** 2))
-    return k, (1.0 - sse / sst if sst > 1e-18 else np.nan)
-
-
-def predicted_ratios(m_adult, m_child):
-    """Per-joint child/adult gravity-torque ratio predicted from the two models.
-
-    Gravity torque about a hinge is (downstream subtree mass) x g x (lever arm
-    from the joint axis to that subtree's centre of mass), so the ratio needs no
-    scaling exponent guessed a priori -- both factors are read straight out of a
-    forward pass on each model. Same construction as
-    utils/actuator.py:derive_actuator_scale in "inertia" mode, but with arm^1
-    rather than arm^2, because this predicts a gravity torque and not an
-    equivalent rotational inertia.
-    """
-    da, dc = mujoco.MjData(m_adult), mujoco.MjData(m_child)
-    mujoco.mj_forward(m_adult, da)
-    mujoco.mj_forward(m_child, dc)
-    out = np.full(m_adult.nu, np.nan)
-    for i in range(m_adult.nu):
-        ja, jc = m_adult.actuator_trnid[i, 0], m_child.actuator_trnid[i, 0]
-        ba, bc = m_adult.jnt_bodyid[ja], m_child.jnt_bodyid[jc]
-        arm_a = np.linalg.norm(da.subtree_com[ba] - da.xanchor[ja])
-        arm_c = np.linalg.norm(dc.subtree_com[bc] - dc.xanchor[jc])
-        num = m_child.body_subtreemass[bc] * arm_c
-        den = m_adult.body_subtreemass[ba] * arm_a
-        out[i] = num / den if den > 1e-12 else np.nan
-    return out
+# OOP refactor step 9: the fitting math lives in crossembodiment/bodybuild/torque.py (TorqueCalibrator uses it for every motion);
+# this script keeps its one-clip figures and imports it from there (torque_ratio_across_motions.py and
+# torque_aggregate_motion_k.py import it from the package too).
+from crossembodiment.bodybuild.torque import fit_ratio, joint_torques, predicted_ratios  # noqa: E402,F401
 
 
 def draw_joint(name, ta, tc, contact, k, r2, out_path,

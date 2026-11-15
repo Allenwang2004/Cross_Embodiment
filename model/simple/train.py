@@ -197,10 +197,10 @@ ending early mid-rollout just resets that slot and keeps stepping; we don't
 special-case it since cfg.steps_per_episode is short enough that this is rare
 and losing part of one sub-episode to a reset boundary doesn't bias the batch).
 
-NOTE on the L_align term: it is live again. datasets/crossenbodiment-1-datasets (the
+NOTE on the L_align term: it is live again. datasets/crossembodiment-1-datasets (the
 old single-body manifest) has no retargeted_motion, so qpos_ref was None on
 every row and L_align was identically zero. The default dataset is now
-datasets/crossenbodiment-10bodies, where every one of the 5400 rows carries a
+datasets/crossembodiment-10bodies, where every one of the 5400 rows carries a
 per-body retargeted reference produced by docs/new_body.md Step 2, so
 functional_equivalence has something to compare against on all of them.
 
@@ -210,7 +210,7 @@ robot_<label>.xml skeleton used for the live rollout (target_xml in
 config.py) -- so L_align is comparing two trajectories on the same bone lengths,
 as intended.
 
-Usage (from project root, once datasets/crossenbodiment-1-datasets exists):
+Usage (from project root, once datasets/crossembodiment-1-datasets exists):
     uv run model/simple/train.py
     uv run model/simple/run_train.py --gpu 1
 """
@@ -574,51 +574,9 @@ def ppo_update(cfg, model, adapter, value_net, optimizer, ep, z0_t, beta_t, rewa
     return out
 
 
-def _phys_weight_table(cfg):
-    """cfg.phys_weights -> a weights dict, or None for physics_penalty's own
-    default. See losses.PHYS_WEIGHT_TABLES."""
-    w = losses.PHYS_WEIGHT_TABLES.get(getattr(cfg, "phys_weights", "default"))
-    return None if w is losses.PHYS_DEFAULT_WEIGHTS else w
-
-
-def compute_batch_cost(fk_model, cfg, qpos_beta, qpos_refs, return_terms=False):
-    """qpos_beta: (B, T, nq) numpy. qpos_refs: length-B list, entries may be
-    None (see losses.functional_equivalence). L_align/L_phys use forward kinematics
-    per-trajectory (not batched), looped here since it's cheap vs simulation.
-    Returns per-item cost/L_align/L_phys arrays, shape (B,); with return_terms,
-    a fourth element, the length-B list of L_phys's unweighted per-term dicts
-    (free -- physics_penalty already returns them, and re-deriving them costs a
-    second forward-kinematics pass per trajectory)."""
-    B = qpos_beta.shape[0]
-    costs = np.empty(B, dtype=np.float32)
-    align_totals = np.empty(B, dtype=np.float32)
-    l_physes = np.empty(B, dtype=np.float32)
-
-    d_weights = {
-        "root": cfg.d_root_weight,
-        "ee": cfg.d_ee_weight,
-        "contact": cfg.d_contact_weight,
-        "pose": cfg.d_pose_weight,
-        "velocity": cfg.d_velocity_weight,
-    }
-    dt = 1.0 / cfg.control_fps
-    phys_w = _phys_weight_table(cfg)
-    fall_ref = getattr(cfg, "phys_fall_ref", False)
-    term_list = []
-    for i in range(B):
-        align_total, _ = losses.functional_equivalence(
-            fk_model, qpos_beta[i], qpos_refs[i], d_weights, dt,
-            discount=getattr(cfg, "align_discount", 1.0))
-        l_phys, terms = losses.physics_penalty(
-            fk_model, qpos_beta[i], weights=phys_w, dt=dt,
-            qpos_ref=qpos_refs[i] if fall_ref else None)
-        costs[i] = cfg.lambda_align * align_total + cfg.lambda_phys * l_phys
-        align_totals[i] = align_total
-        l_physes[i] = l_phys
-        term_list.append(terms)
-    if return_terms:
-        return costs, align_totals, l_physes, term_list
-    return costs, align_totals, l_physes
+# _phys_weight_table and compute_batch_cost live in crossembodiment/align_cost.py (OOP refactor step 4, unchanged);
+# imported here so `from model.simple.train import compute_batch_cost` and this trainer keep working
+from crossembodiment.align_cost import _phys_weight_table, compute_batch_cost  # noqa: E402,F401
 
 
 def plot_loss_curve(loss_history, align_history, l_phys_history, out_path, body_history=None):
@@ -667,8 +625,16 @@ def plot_loss_curve(loss_history, align_history, l_phys_history, out_path, body_
 
 
 def _exact_obs(xml, ref_xml):
+    """ExactObs with THIS body's root scale. ExactObs defaults to the child's 0.611036, which is only right for the
+    child; every body's retarget scaled the root by its own skeleton rest-height ratio against the adult
+    (scripts/qpos_retarget.py), so the reverse mapping must use the same ratio (child: 0.6110358, as before)."""
     from model.exact_obs import ExactObs
-    return ExactObs(xml, ref_xml)
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    from qpos_retarget import load_root_rest_height
+    body = Path(xml).resolve().parent.name
+    s = (load_root_rest_height(REPO_ROOT / f"assets/robots/{body}/skeleton.json")
+         / load_root_rest_height(REPO_ROOT / "assets/robots/adult/skeleton.json"))
+    return ExactObs(xml, ref_xml, scale=s)
 
 
 def make_body_ctx(cfg, dataset_dir, label, xml_rel):

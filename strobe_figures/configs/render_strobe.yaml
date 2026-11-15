@@ -1,0 +1,123 @@
+# configs/render_strobe.yaml
+# ---------------------------------------------------------------------------
+# Configuration for the standalone strobe / filmstrip figure generator.
+#
+# Everything the renderer needs is declared here: which motion task and model
+# to render, where the two latents (nominal z0 and adapted z*) come from, how
+# the camera orbits the motion path, and how ghost poses are captured and
+# composited. No XML paths or camera coordinates are hardcoded in the code.
+#
+# Every value can be overridden on the CLI of render_strobe.py, either with an
+# explicit flag (--camera-type, --shift-px, ...) or generically with
+# --set dotted.key=value.
+#
+# Paths are resolved relative to the repository root unless absolute.
+# ---------------------------------------------------------------------------
+
+# ---- Task & model ---------------------------------------------------------
+task_name: "limit_leg_move-ego-0-4"                 # label used in output file names
+xml_path: "assets/robots_torque/child/robot_torque_full.xml"   # humanoid model
+seed: 0
+
+# Optional reference clip (qpos .npz from the retargeting pipeline). When set,
+# latent rollouts start from its first frame instead of humenv's T-pose.
+reference_clip: "data/child/retargeting_motion/headstand/headstand_2.npz"
+init_from_reference: true
+
+# ---- Latent sources -------------------------------------------------------
+# Each latent is either a path to a .npy / .npz holding a 256-D vector
+# (npz keys tried in order: z, best_z, latent) or an inline 256-D list.
+nominal_latent: "data/origin_z/headstand/headstand_2.npy"          # z0
+adapted_latent: "outputs/my_search/headstand_2/best_z.npy"      # z*
+
+# Optional precomputed qpos trajectories (T, nq), e.g. the eval clips under
+# outputs/x9_full_eval/<clip>/{origin_z.npz,best.npz}. When given, the frames
+# are replayed kinematically and the actor rollout is skipped entirely.
+nominal_qpos: null
+adapted_qpos: null
+
+# ---- Baseline: the original source motion -------------------------------
+# The untouched motion before any z search: data/origin_motion holds the adult
+# skeleton replaying the default latent (README: "Adult motions, adult
+# latents"). Rendered as the left-most video panel *and* its own strobe
+# figure, so a figure reads  original adult | z0 on the target body |
+# z* after search. Set both qpos and latent to null to drop the panel and
+# keep a 2-up video.
+baseline:
+  label: "adult"                       # panel / file-name label
+  # adult rollout of this clip (adult clips run longer than child rollouts)
+  qpos: "data/origin_motion/headstand/headstand_2.npz"
+  xml: "assets/robots/adult/robot.xml"             # model for this panel only
+  latent: null                         # or rollout this latent instead
+
+# true -> project z onto the radius-16 sphere the actor was trained on
+# (|z| = sqrt(256) = 16, the convention of every z in this repo).
+project_latent: false
+
+rollout:
+  steps: 120                      # rollout length for latent-driven rendering
+  obs_scale: "exact"              # exact | fixed | auto | none
+
+# ---- Camera controls ------------------------------------------------------
+camera:
+  type: "orbit_auto"              # orbit_auto | tracking | fixed
+  distance: 5                   # distance from the lookat point (m)
+  elevation: 0.0                # camera elevation (deg)
+  azimuth_offset: 90.0            # deg relative to the motion heading
+                                  #   0   = behind the motion path
+                                  #   90  = side-on to the motion path
+                                  #   180 = facing the motion
+  lookat_height: 0.6              # lookat point raised above the root (m)
+  track_body: null                # body name to follow (default: root body)
+  plan_window: "strobe"           # orbit planning frames: "strobe" = only the
+                                  #   captured window (a long clip must not pull
+                                  #   the camera past the poses); "full" = the
+                                  #   whole clip, the original behaviour
+
+# ---- Strobe / filmstrip ---------------------------------------------------
+strobe:
+  start_step: 174                   # first captured frame
+  end_step: 210                   # last captured frame
+                                  #   null = through the last frame of each
+                                  #   source (adult clips run longer than the
+                                  #   child rollouts, so a fixed end cuts them)
+  interval: 9                    # steps between captured ghost poses
+  shift_px: 0                    # horizontal pixel shift per ghost pose
+  x_offset_px: 0                   # slide the whole ghost trail; 0 = the trail
+  target_frames: null             # explicit frame list overrides interval
+                                  #   midpoint sits on the camera axis (the
+                                  #   centred layout), positive = right, so it
+                                  #   is a displacement from centre, never a
+                                  #   pixel coordinate. Spacing is untouched.
+  threshold: 5.0                  # foreground mask threshold vs background
+  start_color: [1.0, 0.88, 0.66, 0.7]   # RGBA of the initial pose
+  final_color: [0.627, 0.47, 0.318, 1.0]   # RGBA of the final pose
+  middle_color: null                     # optional 3rd gradient stop (RGBA)
+  crop_floor: false                # whiten the ground band (floor clutter)
+  crop_floor_frac: 0.12           # height fraction whitened at the bottom
+
+# ---- Replay inputs (used by replay_strobe.py only) -----------------------
+# Folder of recorded trajectories (reference_adult.npz / z0.npz / best.npz /
+# reference_body.npz + video.json). The positional argument still overrides
+# it, so `python replay_strobe.py` alone renders this clip.
+replay:
+  clip: "outputs/limit_leg/trajectories/move-ego-0-4_8"
+  # Optional: replace that file-name convention with any labels, files and
+  # panel order. An `xml` here forces that source's MuJoCo model and wins over
+  # video.json; omit it and video.json / models/<body>.xml decide.
+  # sources:
+  #   - { label: "adult", qpos: "reference_adult.npz", xml: "models/adult.xml" }
+  #   - { label: "z0",     qpos: "z0.npz" }
+  #   - { label: "zstar",  qpos: "best.npz",  xml: "models/heavy_arm.xml" }
+
+# ---- Output / rendering ---------------------------------------------------
+render:
+  width: 1280
+  height: 720
+  fps: 30
+  white_background: false          # white studio: white floor, no shadows/sky
+  burn_in_frame_index: true       # stamp each video panel with its step index
+                                  # (green = a step the strobe window captures,
+                                  #  so start_step / interval are readable off
+                                  #  the footage); the PNGs stay unmarked
+  out_dir: "outputs/figures/strobe"

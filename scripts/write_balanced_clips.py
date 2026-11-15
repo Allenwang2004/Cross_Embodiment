@@ -24,7 +24,7 @@ not a rule buried in two places.
 
 Usage:
     uv run scripts/write_balanced_clips.py --csv outputs/initial_cost/child/z0_cost.csv \
-        --body child --min-task-cost 0.3 --out-dir datasets/crossenbodiment-child-torque/splits \
+        --body child --min-task-cost 0.3 --out-dir datasets/crossembodiment-child-torque/splits \
         --tag child_balanced
 """
 
@@ -79,7 +79,7 @@ def main():
                         "ones the cost CSV was measured on. Top-up runs add trials _10.. after the "
                         "CSV was written, and those are the clips the rebalance is made of")
     p.add_argument("--data-dir", default="data")
-    p.add_argument("--out-dir", default="datasets/crossenbodiment-child-torque/splits")
+    p.add_argument("--out-dir", default="datasets/crossembodiment-child-torque/splits")
     p.add_argument("--tag", default="child_balanced")
     args = p.parse_args()
 
